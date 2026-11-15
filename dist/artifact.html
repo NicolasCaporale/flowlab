@@ -3156,7 +3156,7 @@ function analyzeBoxing(prog, info, cs) {
   const roots = new Set(sinks.map(find));
   for (const [k, t] of elem) if (BOX_J[t] && t !== 'String' && roots.has(find(k))) GEN.boxed.add(k);
 }
-/* Java: elemento di un array Integer[] (per == si usa Objects.equals) */
+/* Java: elemento di un array Integer[] (per == si usa equals) */
 const boxedElem = (n, sc) => { const x = strip(n); return !!x && x.k === 'var' && !!x.indices && !!sc.func && GEN.boxed.has(sc.func.id + ':' + x.name.toLowerCase()); };
 /* durante l'assegnazione il tipo atteso permette di scrivere new ArrayList<Integer>() anche se nel diagramma c'è new ArrayList() */
 function withExpect(sc, t, fn) { const old = sc.expect; sc.expect = t; try { return fn(); } finally { sc.expect = old; } }
@@ -4158,11 +4158,14 @@ LANGS.java = cFamily({
   pi: 'Math.PI',
   strLit: (s) => escStr(s, '"'),
   toStr: (x, t, e) => (e.p <= P.add ? `(${e.s})` : e.s),
-  // valori di tipo T (oggetti): Objects.equals e compareTo
+  // valori di tipo T (oggetti): metodi dell'oggetto, come per le Stringhe: a.equals(b), a.compareTo(b) < 0
+  // (il confronto con null resta == / !=)
   cmpT(op, l, r) {
-    if (op === '==') return { s: `Objects.equals(${l.s}, ${r.s})`, p: P.atom };
-    if (op === '!=') return { s: `!Objects.equals(${l.s}, ${r.s})`, p: P.un };
-    return { s: `${l.p < P.atom ? `(${l.s})` : l.s}.compareTo(${r.s}) ${op} 0`, p: P.rel };
+    if (l.s === 'null' || r.s === 'null') return null;
+    const ls = l.p < P.atom ? `(${l.s})` : l.s;
+    if (op === '==') return { s: `${ls}.equals(${r.s})`, p: P.atom };
+    if (op === '!=') return { s: `!${ls}.equals(${r.s})`, p: P.un };
+    return { s: `${ls}.compareTo(${r.s}) ${op} 0`, p: P.rel };
   },
   strCmp(op, l, r) {
     const ls = l.p < P.atom ? `(${l.s})` : l.s;
@@ -4331,11 +4334,13 @@ LANGS.csharp = cFamily({
   strLit: (s) => escStr(s, '"'),
   concatPrefix: '""',
   toStr: (x, t, e) => (e.p <= P.add ? `(${e.s})` : e.s),
-  // valori di tipo T: Equals e CompareTo
+  // valori di tipo T: metodi dell'oggetto, a.Equals(b), a.CompareTo(b) < 0 (il confronto con null resta == / !=)
   cmpT(op, l, r) {
-    if (op === '==') return { s: `Equals(${l.s}, ${r.s})`, p: P.atom };
-    if (op === '!=') return { s: `!Equals(${l.s}, ${r.s})`, p: P.un };
-    return { s: `${l.p < P.atom ? `(${l.s})` : l.s}.CompareTo(${r.s}) ${op} 0`, p: P.rel };
+    if (l.s === 'null' || r.s === 'null') return null;
+    const ls = l.p < P.atom ? `(${l.s})` : l.s;
+    if (op === '==') return { s: `${ls}.Equals(${r.s})`, p: P.atom };
+    if (op === '!=') return { s: `!${ls}.Equals(${r.s})`, p: P.un };
+    return { s: `${ls}.CompareTo(${r.s}) ${op} 0`, p: P.rel };
   },
   strCmp(op, l, r) {
     if (op === '==' || op === '!=') return null;
