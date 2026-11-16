@@ -4,9 +4,9 @@
         <attribute name="name" value="Ricerca parziale e totale in un vettore"/>
         <attribute name="authors" value="Nicola Vacca"/>
         <attribute name="about" value="Voti di 10 studenti (da 2 a 10): ricerca totale (quanti uguali, minori, maggiori) e ricerca parziale (primo indice da idxStart, oppure -1), con funzioni sul vettore."/>
-        <attribute name="saved" value="2026-11-16 07:41:31 PM"/>
+        <attribute name="saved" value="2026-11-16 08:05:06 PM"/>
         <attribute name="created" value="Zmxvd2xhYjticm93c2VyOzIwMjYtMTEtMTMgMDc6MjY6MzcgUE07MQ=="/>
-        <attribute name="edited" value="Zmxvd2xhYjticm93c2VyOzIwMjYtMTEtMTYgMDc6NDE6MzEgUE07MQ=="/>
+        <attribute name="edited" value="Zmxvd2xhYjticm93c2VyOzIwMjYtMTEtMTYgMDg6MDU6MDYgUE07MQ=="/>
     </attributes>
     <function name="Main" type="None" variable="">
         <parameters/>
@@ -38,12 +38,14 @@
                 <assign variable="votiReale[i]" expression="voti[i]"/>
                 <assign variable="i" expression="i+1"/>
             </while>
-            <comment text="Ricerca totale"/>
-            <output expression="&quot;Ricerca totale - voto: &quot;" newline="False"/>
+            <comment text="Ricerca totale sui voti interi"/>
+            <output expression="&quot;Ricerca totale su vettore di Interi&quot;" newline="True"/>
             <declare name="votoIntero" type="Integer" array="False" size="" flowlab-const="True"/>
             <assign variable="votoIntero" expression="6"/>
             <assign variable="cont" expression="ricercaTotale(voti, N_STUDENTI, votoIntero, UGUALE)"/>
             <output expression="&quot;Voto uguale a &quot; &amp; votoIntero &amp; &quot;: &quot; &amp; cont &amp; &quot; studenti&quot;" newline="True"/>
+            <comment text="Ricerca totale sui voti reali"/>
+            <output expression="&quot;Ricerca totale su vettore di Reali&quot;" newline="True"/>
             <declare name="votoReale" type="Real" array="False" size="" flowlab-const="True"/>
             <assign variable="votoReale" expression="6.0"/>
             <assign variable="cont" expression="ricercaTotale(votiReale, N_STUDENTI, votoReale, UGUALE)"/>
