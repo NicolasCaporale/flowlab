@@ -35,6 +35,14 @@
   };
   const SPEEDS = [{ ms: 0, label: 'Istantanea' }, { ms: 40, label: 'Veloce' }, { ms: 280, label: 'Media' }, { ms: 750, label: 'Lenta' }];
   const renderer = new RenderLib.Renderer();
+  /* ---- viste: il foglio principale (MAIN) e le viste ausiliarie, finestre mobili con un altro
+     diagramma o un'altra parte dello stesso. La vista attiva (V) ha il suo stato in st (diagramma,
+     selezione, zoom, punti di inserimento…); le altre lo tengono da parte in v.state */
+  const VKEYS = ['fi', 'uml', 'sel', 'usel', 'zoom', 'ins', 'edges', 'compact', 'compactFid'];
+  const FOLLOW = ['fi', 'uml', 'compact', 'compactFid', 'zoom']; // una vista «Continua» copia questi dal foglio principale
+  const MAIN = { main: true, id: 0, state: {}, chart: null, wrap: null };
+  const views = [MAIN];
+  let V = MAIN;
 
   /* ------------------------------ Utilità -------------------------------- */
   let toastTimer = null;
@@ -245,7 +253,7 @@
     st.uml = v === 'objects';
     if (v === 'objects') ensureView();
     render();
-    $('#canvasWrap').scrollTo(0, 0);
+    V.wrap.scrollTo(0, 0);
   }
   function renderViewSwitch() {
     $('#viewFn').setAttribute('aria-checked', String(!isOO()));
@@ -281,9 +289,9 @@
       h('div', { class: 'impls' },
         ...impls.map((g) => h('button', { class: 'btn small', type: 'button', onclick: () => showFunc(st.prog.functions.indexOf(g)) }, `${M.classOf(st.prog, g).name}.${g.name}()`)),
         h('button', { class: 'btn small', type: 'button', onclick: () => { if (!isRunning()) editFunction(st.prog.functions.indexOf(f)); } }, 'Modifica il metodo…')));
-    const holder = $('#chart'); holder.innerHTML = ''; holder.append(card);
+    const holder = V.chart; holder.innerHTML = ''; holder.append(card);
   }
-  function showUml() { st.uml = true; st.sel = null; render(); $('#canvasWrap').scrollTo(0, 0); }
+  function showUml() { if (V.sync) setSync(V, false); st.uml = true; st.sel = null; render(); V.wrap.scrollTo(0, 0); }
   /* moduli condensati nel diagramma delle classi (si ricordano per nome) */
   function toggleModule(name) {
     if (st.modCollapsed.has(name)) st.modCollapsed.delete(name); else st.modCollapsed.add(name);
@@ -298,13 +306,13 @@
 
   /* --------------------------- Disegno ----------------------------------- */
   let codeTimer = null;
-  function render() {
-    ensureView();
-    const holder = $('#chart');
+  /* disegna il diagramma della vista attiva */
+  function renderChart() {
+    const holder = V.chart;
     if (isUml()) {
       const out = UmlLib.render(st.prog, st.usel, { collapsed: st.modCollapsed });
       st.ins = []; st.edges = [];
-      holder.innerHTML = out.svg;
+      holder.innerHTML = vsvg(out.svg);
       applyZoom();
     } else if (isOO() && func().abstract) {
       abstractCard(func());
@@ -316,18 +324,67 @@
       const out = renderer.func(f, st.expanded, Object.assign(isOO() ? { owner: c ? c.name : '', isMain: st.fi === 0 } : {}, { compact: !!st.compact }));
       st.ins = out.ins;
       st.edges = out.edges;
-      holder.innerHTML = out.svg;
+      holder.innerHTML = vsvg(out.svg);
       applyZoom();
-      decorate();
     }
-    syncCompactBtn();
-    renderFuncSelect();
-    renderViewSwitch();
+    if (!V.main) renderViewHead(V);
+  }
+  /* nelle viste ausiliarie i marcatori delle frecce hanno id propri */
+  const vsvg = (s) => (V.main ? s : s.replace(/id="(ah|uml-inh|uml-open)"/g, `id="$1-v${V.id}"`).replace(/url\(#(ah|uml-inh|uml-open)\)/g, `url(#$1-v${V.id})`));
+  function render() {
+    ensureView();
+    renderChart();
+    // le parti dell'interfaccia fuori dal foglio (selettore, vista, Compatta) seguono sempre il foglio principale
+    withView(MAIN, () => { syncCompactBtn(); renderFuncSelect(); renderViewSwitch(); });
+    for (const v of views) if (v !== V) withView(v, renderChart);
+    decorate();
     $('#undoBtn').disabled = !st.undo.length;
     $('#redoBtn').disabled = !st.redo.length;
     $('#progName').textContent = st.prog.attrs.name || 'Programma senza nome';
     clearTimeout(codeTimer); codeTimer = setTimeout(() => { renderCode(); autosave(); }, 120);
+    scheduleSync();
   }
+  /* ---- cambio della vista attiva ---- */
+  function saveViewState(v) {
+    for (const k of VKEYS) v.state[k] = st[k];
+    const f = st.prog && st.prog.functions[st.fi]; v.state.fid = f && f.id;
+  }
+  function loadViewState(v) {
+    if (v.sync) {
+      if (v.state.fid !== MAIN.state.fid || v.state.uml !== MAIN.state.uml) { v.state.sel = null; v.state.usel = null; }
+      for (const k of FOLLOW) v.state[k] = MAIN.state[k];
+      v.state.fid = MAIN.state.fid;
+    }
+    for (const k of VKEYS) st[k] = v.state[k];
+    // il programma può essere cambiato (funzioni aggiunte o tolte, Annulla): il diagramma si ritrova dal suo id
+    const fs = st.prog.functions;
+    let i = v.state.fid ? fs.findIndex((f) => f.id === v.state.fid) : -1;
+    if (i < 0) i = Math.max(0, Math.min(st.fi || 0, fs.length - 1));
+    st.fi = i;
+  }
+  function activate(v) {
+    if (!v || v === V) return;
+    saveViewState(V);
+    V = v;
+    loadViewState(v);
+  }
+  function withView(v, fn) {
+    if (v === V) return fn();
+    const prev = V;
+    activate(v);
+    try { return fn(); } finally { if (views.includes(prev)) activate(prev); else activate(MAIN); }
+  }
+  /* la vista su cui si lavora: clic, tastiera e comandi agiscono su di lei */
+  function focusView(v) {
+    if (!v) return;
+    activate(v);
+    for (const x of views) if (!x.main) x.win.classList.toggle('vactive', x === V);
+    document.body.classList.toggle('auxactive', !V.main);
+  }
+  /* vista che contiene un elemento della pagina */
+  const viewOfEl = (el) => views.find((v) => v.chart && v.chart.contains(el)) || null;
+  /* stato di una vista anche quando non è attiva */
+  const vget = (v, k) => (v === V ? st[k] : v.state[k]);
   /* vista compatta: solo per i diagrammi di flusso; l'esportazione è sempre estesa */
   function syncCompactBtn() {
     const b = $('#compactBtn'); if (!b) return;
@@ -338,6 +395,7 @@
     b.title = on ? 'Vista estesa: frecce tra tutti i blocchi (Maiusc+K)' : 'Vista compatta: i blocchi in sequenza si toccano (Maiusc+K)';
   }
   function toggleCompact() {
+    if (V.sync) { withView(MAIN, toggleCompact); return; } // una vista «Continua» segue il foglio principale
     if (isUml() || (isOO() && func().abstract)) return;
     st.compact = !st.compact; st.compactFid = func().id;
     render();
@@ -345,34 +403,45 @@
   function decorate() {
     // durante il tragitto del cursore resta acceso il blocco di partenza
     const litId = run.hold ? run.holdFrom : run.curId;
-    $$('#chart .shape').forEach((g) => {
-      const id = g.dataset.id;
-      g.classList.toggle('sel', id === st.sel);
-      // il blocco si illumina solo quando il cursore lo ha raggiunto
-      g.classList.toggle('exec', id === litId && run.state !== 'idle' && run.state !== 'done');
-      g.classList.toggle('err', id === run.errId);
-    });
+    const on = run.state !== 'idle' && run.state !== 'done';
+    for (const v of views) {
+      if (!v.chart) continue;
+      const sel = vget(v, 'sel');
+      $$('.shape', v.chart).forEach((g) => {
+        const id = g.dataset.id;
+        g.classList.toggle('sel', id === sel);
+        // il blocco si illumina solo quando il cursore lo ha raggiunto
+        g.classList.toggle('exec', id === litId && on);
+        g.classList.toggle('err', id === run.errId);
+      });
+    }
   }
   function applyZoom() {
-    const svg = $('#chart svg'); if (!svg) return;
+    const svg = $('svg', V.chart); if (!svg) return;
     svg.setAttribute('width', Math.round(svg.dataset.w * st.zoom));
     svg.setAttribute('height', Math.round(svg.dataset.h * st.zoom));
-    $('#zoomVal').textContent = Math.round(st.zoom * 100) + '%';
+    const lab = V.main ? $('#zoomVal') : V.zoomVal;
+    if (lab) lab.textContent = Math.round(st.zoom * 100) + '%';
   }
-  function setZoom(z) { st.zoom = Math.max(0.3, Math.min(2.5, Math.round(z * 100) / 100)); store.set('zoom', st.zoom); applyZoom(); }
+  function setZoom(z) {
+    if (V.sync) { withView(MAIN, () => setZoom(z)); return; } // una vista «Continua» segue lo zoom del foglio principale
+    st.zoom = Math.max(0.3, Math.min(2.5, Math.round(z * 100) / 100));
+    if (V.main) store.set('zoom', st.zoom); else saveViewsSoon();
+    applyZoom();
+    if (V.main) for (const v of views) if (v.sync) withView(v, applyZoom);
+    scheduleSync();
+  }
   function fitZoom() {
-    const svg = $('#chart svg'); const wrap = $('#canvasWrap');
+    if (V.sync) { withView(MAIN, fitZoom); return; }
+    const svg = $('svg', V.chart); const wrap = V.wrap;
     if (!svg) return;
     const z = Math.min((wrap.clientWidth - 24) / svg.dataset.w, (wrap.clientHeight - 24) / svg.dataset.h, 1.4);
     setZoom(Math.max(0.3, z));
   }
-  function renderFuncSelect() {
-    const sel = $('#funcSel');
+  /* voci di un selettore dei diagrammi: funzioni, oppure diagramma delle classi e metodi */
+  function fillFuncOptions(sel) {
     sel.innerHTML = '';
-    const add = $('#funcAdd'), edit = $('#funcEdit'), del = $('#funcDel');
     if (isOO()) {
-      // diagramma delle classi e, per ogni classe, costruttori e metodi
-      $('#funcLbl').textContent = 'Diagramma';
       sel.append(h('option', { value: 'uml', selected: st.uml }, '▦ Classi (UML)'));
       for (const c of st.prog.classes) {
         const og = h('optgroup', { label: 'Classe ' + M.classTitle(c) + (c.module ? ` · modulo ${c.module.name}` : '') });
@@ -383,6 +452,17 @@
         }
         sel.append(og);
       }
+      return;
+    }
+    st.prog.functions.forEach((f, i) => sel.append(h('option', { value: i, selected: i === st.fi }, i === 0 ? 'Inizio (principale)' : `${f.name}${tplTxt(f)}(${f.params.map((p) => p.name).join(', ')})${f.module ? ' · modulo ' + f.module.name : ''}`)));
+  }
+  function renderFuncSelect() {
+    const sel = $('#funcSel');
+    fillFuncOptions(sel);
+    const add = $('#funcAdd'), edit = $('#funcEdit'), del = $('#funcDel');
+    if (isOO()) {
+      // diagramma delle classi e, per ogni classe, costruttori e metodi
+      $('#funcLbl').textContent = 'Diagramma';
       const cur = !st.uml && M.classOf(st.prog, func());
       add.title = (st.uml ? 'Nuova classe' : `Nuovo metodo nella classe ${cur ? cur.name : ''}`) + ' (N)';
       edit.title = (st.uml ? 'Modifica l\'elemento selezionato nel diagramma' : 'Modifica il metodo') + ' (F2)';
@@ -394,13 +474,12 @@
     $('#funcLbl').textContent = 'Funzione';
     add.title = 'Nuova funzione (N)'; edit.title = 'Modifica funzione o proprietà del programma (F2)'; del.title = 'Elimina funzione (Maiusc+Canc)';
     edit.disabled = false;
-    st.prog.functions.forEach((f, i) => sel.append(h('option', { value: i, selected: i === st.fi }, i === 0 ? 'Inizio (principale)' : `${f.name}${tplTxt(f)}(${f.params.map((p) => p.name).join(', ')})${f.module ? ' · modulo ' + f.module.name : ''}`)));
     del.disabled = st.fi === 0;
   }
-  function showFunc(i) { if (i === st.fi && !st.uml) return; st.fi = i; st.uml = false; st.sel = null; render(); $('#canvasWrap').scrollTo(0, 0); }
+  function showFunc(i) { if (i === st.fi && !st.uml) return; if (V.sync) setSync(V, false); st.fi = i; st.uml = false; st.sel = null; render(); V.wrap.scrollTo(0, 0); }
 
   function autosave() {
-    try { store.set('autosave', { xml: M.serializeFprg(st.prog), fi: st.fi, fileName: st.fileName }); } catch (e) { /* ignora */ }
+    try { store.set('autosave', { xml: M.serializeFprg(st.prog), fi: withView(MAIN, () => st.fi), fileName: st.fileName, views: viewsData() }); } catch (e) { /* ignora */ }
   }
 
   /* ------------------------ Mini icone delle forme ------------------------ */
@@ -1372,19 +1451,19 @@
     openPop(e.clientX, e.clientY, menuBox);
   }
   function svgPoint(e) {
-    const svg = $('#chart svg'); const r = svg.getBoundingClientRect();
+    const svg = $('svg', V.chart); const r = svg.getBoundingClientRect();
     return { x: (e.clientX - r.left) / st.zoom, y: (e.clientY - r.top) / st.zoom };
   }
   /* evidenzia la selezione senza ridisegnare (altrimenti il doppio clic si perde) */
   function decorateUml() {
     const u = st.usel;
-    $$('#chart .ubox').forEach((b) => { const on = !!u && u.cls === b.dataset.cls; b.classList.toggle('cur', on); b.classList.toggle('sel', on && u.kind === 'class'); });
-    $$('#chart .urow').forEach((r) => {
+    $$('.ubox', V.chart).forEach((b) => { const on = !!u && u.cls === b.dataset.cls; b.classList.toggle('cur', on); b.classList.toggle('sel', on && u.kind === 'class'); });
+    $$('.urow', V.chart).forEach((r) => {
       const b = r.closest('.ubox');
       const on = !!u && u.cls === b.dataset.cls && u.kind === r.dataset.kind && (u.kind === 'attr' ? String(u.i) === r.dataset.i : u.fid === r.dataset.fid);
       r.classList.toggle('sel', on);
     });
-    renderFuncSelect();
+    if (V.main) renderFuncSelect();
   }
   /* selezione nel diagramma delle classi */
   function umlSelectFrom(target) {
@@ -1412,10 +1491,12 @@
 
   /* ------------------------ Interazione col disegno ---------------------- */
   let drag = null, suppressClick = false, udrag = null;
-  function bindChart() {
-    const chart = $('#chart');
+  /* eventi del foglio di una vista (principale o ausiliaria) */
+  function bindChart(v) {
+    const chart = v.chart;
     chart.addEventListener('click', (e) => {
       if (suppressClick) { suppressClick = false; return; }
+      focusView(v);
       if (isUml()) {
         const mt = e.target.closest('.umodtog');
         if (mt) { toggleModule(mt.dataset.module); return; }
@@ -1439,6 +1520,7 @@
       decorate();
     });
     chart.addEventListener('dblclick', (e) => {
+      focusView(v);
       if (isUml()) {
         if (e.target.closest('.uadd') || e.target.closest('.umodtog')) return;
         const mc = e.target.closest('.umodc');
@@ -1459,6 +1541,7 @@
       editStmt(ownerOf(id));
     });
     chart.addEventListener('contextmenu', (e) => {
+      focusView(v);
       if (isUml()) {
         e.preventDefault();
         if (isRunning()) { toast('Ferma il programma per modificare il diagramma', 'warn'); return; }
@@ -1472,6 +1555,7 @@
       shapeMenu(gid, e.clientX, e.clientY);
     });
     chart.addEventListener('pointerdown', (e) => {
+      focusView(v);
       if (isUml()) {
         // le classi si spostano trascinandole; un modulo (riquadro o etichetta) si sposta con tutte le sue classi
         if (e.button !== 0 || isRunning() || e.target.closest('.uadd') || e.target.closest('.umodtog')) return;
@@ -1487,6 +1571,15 @@
       const g = e.target.closest('.shape'); if (!g || g.dataset.id.includes(':')) return;
       drag = { id: g.dataset.id, x: e.clientX, y: e.clientY, on: false, ghost: null };
     });
+    v.wrap.addEventListener('wheel', (e) => {
+      if (e.ctrlKey) { e.preventDefault(); focusView(v); setZoom(st.zoom * (e.deltaY < 0 ? 1.1 : 0.9)); return; }
+      // una vista «Continua» non scorre da sola: la rotella fa scorrere il foglio principale
+      if (v.sync) { e.preventDefault(); MAIN.wrap.scrollBy(e.deltaX, e.deltaY); }
+    }, { passive: false });
+    v.wrap.addEventListener('scroll', closePop);
+  }
+  /* trascinamenti (anche da una vista all'altra) */
+  function bindDrag() {
     window.addEventListener('pointermove', (e) => {
       if (udrag) {
         const dx = (e.clientX - udrag.x) / st.zoom, dy = (e.clientY - udrag.y) / st.zoom;
@@ -1517,8 +1610,8 @@
       if (drag.on) {
         drag.ghost.style.left = e.clientX + 14 + 'px'; drag.ghost.style.top = e.clientY + 10 + 'px';
         const el = document.elementFromPoint(e.clientX, e.clientY);
-        $$('#chart .ins.drop').forEach((x) => x.classList.remove('drop'));
-        const ins = el && el.closest && el.closest('#chart .ins');
+        $$('.vchart .ins.drop').forEach((x) => x.classList.remove('drop'));
+        const ins = el && el.closest && el.closest('.vchart .ins');
         if (ins) ins.classList.add('drop');
       }
     });
@@ -1535,15 +1628,16 @@
       d.ghost.remove();
       suppressClick = true; setTimeout(() => { suppressClick = false; }, 50);
       const el = document.elementFromPoint(e.clientX, e.clientY);
-      const ins = el && el.closest && el.closest('#chart .ins');
-      if (ins) moveStmt(d.id, st.ins[+ins.dataset.ins]);
-      $$('#chart .ins.drop').forEach((x) => x.classList.remove('drop'));
+      const ins = el && el.closest && el.closest('.vchart .ins');
+      $$('.vchart .ins.drop').forEach((x) => x.classList.remove('drop'));
+      if (!ins) return;
+      // il blocco si può lasciare anche nel diagramma di un'altra vista
+      const tv = viewOfEl(ins) || V;
+      const pt = (vget(tv, 'ins') || [])[+ins.dataset.ins];
+      if (!pt) return;
+      if (tv !== V && withView(tv, () => roGuard())) return;
+      moveStmt(d.id, pt);
     });
-    $('#canvasWrap').addEventListener('wheel', (e) => {
-      if (!e.ctrlKey) return;
-      e.preventDefault();
-      setZoom(st.zoom * (e.deltaY < 0 ? 1.1 : 0.9));
-    }, { passive: false });
   }
 
   /* ============================ ESECUZIONE =============================== */
@@ -1731,14 +1825,16 @@
     }
   }
 
-  function showCurrent() {
+  /* l'esecuzione si segue nel foglio principale; le altre viste illuminano gli stessi blocchi */
+  function showCurrent() { withView(MAIN, showCurrentMain); }
+  function showCurrentMain() {
     const fid = run.curFrame && run.curFrame.func.id;
     if (fid) {
       const i = st.prog.functions.findIndex((f) => f.id === fid);
       if (i >= 0 && (i !== st.fi || st.uml)) { st.fi = i; st.uml = false; st.sel = null; render(); }
     }
     decorate();
-    const el = $(`#chart .shape[data-id="${CSS.escape(run.curId || '')}"]`);
+    const el = $(`.shape[data-id="${CSS.escape(run.curId || '')}"]`, MAIN.chart);
     if (el) scrollIntoViewIfNeeded(el);
     run.viewFrame = null;
     renderVars();
@@ -1750,8 +1846,11 @@
   function clearTrail() {
     cancelAnimationFrame(trailRaf);
     run.hold = null;
-    const g = $('#chart svg .trail'); if (g) g.innerHTML = '';
-    const ov = $('#chart svg .exc-over'); if (ov) ov.innerHTML = '';
+    for (const v of views) {
+      if (!v.chart) continue;
+      const g = $('svg .trail', v.chart); if (g) g.innerHTML = '';
+      const ov = $('svg .exc-over', v.chart); if (ov) ov.innerHTML = '';
+    }
     run.trailShown = null;
   }
   function findPath(from, to, branch) {
@@ -1771,6 +1870,24 @@
     }
     return null;
   }
+  /* nelle viste ausiliarie con lo stesso diagramma la freccia rossa di un'eccezione compare ferma */
+  function drawAuxExc(t) {
+    const NS = 'http://www.w3.org/2000/svg';
+    for (const v of views) {
+      if (v.main) continue;
+      withView(v, () => {
+        const g = $('svg .trail', V.chart); if (!g) return;
+        g.innerHTML = '';
+        const ov = $('svg .exc-over', V.chart); if (ov) ov.innerHTML = '';
+        if (!t || !t.exc || !t.from || isUml() || func().id !== t.frame.func.id) return;
+        const pts = excPath(t, g); if (pts.length < 2) return;
+        const line = document.createElementNS(NS, 'path');
+        line.setAttribute('class', 'trail-path exc');
+        line.setAttribute('d', pts.map((p, i) => (i ? 'L' : 'M') + p[0] + ' ' + p[1]).join(''));
+        g.append(line);
+      });
+    }
+  }
   function drawTrail() {
     const t = run.trail;
     const animate = run.mode === 'step' || SPEEDS[st.speed].ms > 0;
@@ -1778,10 +1895,11 @@
     run.trailShown = t.step;
     cancelAnimationFrame(trailRaf);
     if (run.hold) { run.hold = null; decorate(); }
-    const g = $('#chart svg .trail'); if (!g) return;
+    drawAuxExc(t);
+    const g = $('svg .trail', V.chart); if (!g) return;
     g.innerHTML = '';
-    const ov = $('#chart svg .exc-over'); if (ov) ov.innerHTML = '';
-    if (!t.from || func().id !== t.frame.func.id) return;
+    const ov = $('svg .exc-over', V.chart); if (ov) ov.innerHTML = '';
+    if (!t.from || isUml() || func().id !== t.frame.func.id) return;
     let pts = [];
     if (t.exc) pts = excPath(t, g); // eccezione: freccia rossa tratteggiata dal blocco da cui arriva al Catch (o al Finally)
     else {
@@ -1829,7 +1947,7 @@
      della funzione da cui risale) all'intestazione del Catch che la cattura o del Finally; il blocco di
      partenza si cerchia di rosso e un'etichetta dice di che eccezione si tratta */
   function excPath(t, g) {
-    const box = (id) => { const el = $(`#chart .shape[data-id="${CSS.escape(id)}"]`); return el ? el.getBBox() : null; };
+    const box = (id) => { const el = $(`.shape[data-id="${CSS.escape(id)}"]`, V.chart); return el ? el.getBBox() : null; };
     const a = box(t.from), b = box(t.to);
     if (!a || !b) return [];
     const NS = 'http://www.w3.org/2000/svg';
@@ -1855,9 +1973,17 @@
     const lane = Math.min(a.x, b.x) - 18;
     return [[a.x, sy], [lane, sy], [lane, hy], [b.x, hy]];
   }
+  /* il blocco è tutto visibile nella vista (rettangolo dello schermo) */
+  function shownIn(v, el) {
+    const r = el.getBoundingClientRect(), w = v.wrap.getBoundingClientRect();
+    return r.width > 0 && r.top >= w.top + 30 && r.bottom <= w.bottom - 30 && r.left >= w.left && r.right <= w.right;
+  }
   function scrollIntoViewIfNeeded(el) {
-    const wrap = $('#canvasWrap');
+    const v = viewOfEl(el) || V, wrap = v.wrap;
     const r = el.getBoundingClientRect(), w = wrap.getBoundingClientRect();
+    // nel foglio principale: se il blocco si vede già in una vista «Continua», non serve scorrere
+    if (v.main && views.some((x) => x.sync && !x.min && (() => { const o = $(`.shape[data-id="${CSS.escape(el.dataset.id)}"]`, x.chart); return o && shownIn(x, o); })())) return;
+    if (v.sync) return;
     if (r.top < w.top + 30 || r.bottom > w.bottom - 30 || r.left < w.left || r.right > w.right) {
       wrap.scrollBy({ top: r.top - w.top - w.height / 2 + r.height / 2, left: r.left - w.left - w.width / 2 + r.width / 2, behavior: SPEEDS[st.speed].ms > 200 ? 'smooth' : 'auto' });
     }
@@ -1919,7 +2045,7 @@
     }
     conWrite('✖ Errore: ' + (e.message || String(e)) + where, true, 'error');
     decorate(); renderVars();
-    const el = run.errId && $(`#chart .shape[data-id="${CSS.escape(run.errId)}"]`);
+    const el = run.errId && $(`.shape[data-id="${CSS.escape(run.errId)}"]`, MAIN.chart);
     if (el) scrollIntoViewIfNeeded(el);
     showPane('console');
     setStatus('error', 'Errore durante l\'esecuzione');
@@ -2308,6 +2434,233 @@
     });
   }
 
+  /* ========================== VISTE AUSILIARIE ===========================
+     finestre mobili con un diagramma del programma, da navigare e modificare come il foglio
+     principale (anche lo stesso diagramma, su un'altra parte). Con «Continua» la vista mostra il
+     seguito del foglio principale: la parte che esce dal fondo della finestra, e scorre con lui;
+     più viste «Continua» si mettono in fila, una dopo l'altra */
+  let viewSeq = 0;
+  const ICON_COMPACT = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect class="cb1" x="6" y="2.5" width="12" height="5" rx="1"/><path class="cb-arrow" d="M12 7.5v3"/><rect class="cb2" x="6" y="10.5" width="12" height="5" rx="1"/><path class="cb-arrow" d="M12 15.5v3"/><rect class="cb3" x="6" y="18.5" width="12" height="3.5" rx="1"/></svg>';
+  const ICON_CLOSE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+  const fidAt = (i) => { const f = st.prog.functions[i]; return f && f.id; };
+  /* o: posizione e stato salvati (fi, uml, zoom, compact, sync, min, x, y, w, h); senza, la vista
+     parte dal diagramma della vista attiva */
+  function openView(o) {
+    o = o || {};
+    const n = views.length - 1;
+    const fi = o.fi != null ? Math.max(0, Math.min(o.fi, st.prog.functions.length - 1)) : st.fi;
+    const v = { id: ++viewSeq, main: false, sync: false, min: false, h: 0,
+      state: { fi, uml: o.fi != null ? !!o.uml : st.uml, sel: null, usel: null, zoom: o.zoom || st.zoom, ins: [], edges: [], compact: o.fi != null ? !!o.compact : !!st.compact, compactFid: fidAt(fi), fid: fidAt(fi) } };
+    v.sel = h('select', { class: 'vsel', 'aria-label': 'Diagramma della vista' });
+    v.compactBtn = h('button', { class: 'iconbtn vcompact', type: 'button', 'aria-pressed': 'false', html: ICON_COMPACT });
+    v.syncBtn = h('button', { class: 'vsync', type: 'button', 'aria-pressed': 'false', title: 'Continua il foglio principale: la vista mostra la parte del diagramma che il foglio non mostra (tagliata in alto se il foglio è scorso in giù, altrimenti quella che esce dal fondo) e scorre con lui' }, v.syncIco = h('span', { 'aria-hidden': 'true' }, '⇣'), ' Continua');
+    v.zoomVal = h('button', { class: 'vzoomval', type: 'button', title: 'Torna al 100%' }, '100%');
+    const zb = (label, title, fn) => h('button', { type: 'button', 'aria-label': title, title, onclick: () => { focusView(v); fn(); } }, label);
+    const minBtn = h('button', { class: 'iconbtn minbtn', type: 'button', title: 'Riduci alla barra del titolo', 'aria-label': 'Riduci la vista', 'aria-expanded': 'true', html: ICON_MIN });
+    const closeBtn = h('button', { class: 'iconbtn vclose', type: 'button', title: 'Chiudi la vista', 'aria-label': 'Chiudi la vista', html: ICON_CLOSE });
+    v.chart = h('div', { class: 'vchart' });
+    v.wrap = h('div', { class: 'vwrap' }, v.chart);
+    v.done = h('div', { class: 'vdone', hidden: true }, 'Il resto del diagramma è già tutto visibile');
+    const head = h('div', { class: 'fwin-head' }, v.sel, v.compactBtn, v.syncBtn, h('span', { class: 'grow' }),
+      h('span', { class: 'vzoom', role: 'group', 'aria-label': 'Zoom della vista' }, zb('−', 'Riduci', () => setZoom(st.zoom / 1.15)), v.zoomVal, zb('+', 'Ingrandisci', () => setZoom(st.zoom * 1.15)), zb('⤢', 'Adatta alla finestra', fitZoom)),
+      minBtn, closeBtn);
+    v.win = h('div', { class: 'fwin auxwin', role: 'region', 'aria-label': 'Vista ausiliaria' }, head, h('div', { class: 'fwin-body' }, v.wrap, v.done));
+    // posizione: di solito nella metà destra del foglio, un po' sfalsata rispetto alle altre viste
+    const col = $('.canvas-col').getBoundingClientRect();
+    const w = o.w || Math.max(360, Math.min(520, col.width * 0.48)), hh = o.h || Math.max(260, col.height - 80);
+    Object.assign(v.win.style, { left: (o.x != null ? o.x : col.right - w - 16 - n * 28) + 'px', top: (o.y != null ? o.y : col.top + 12 + n * 28) + 'px', width: w + 'px', height: hh + 'px', zIndex: ++zTop });
+    v.h = hh;
+    winHost().append(v.win);
+    clampWin(v.win);
+    views.push(v);
+    document.body.classList.add('hasviews');
+    bindChart(v);
+    v.win.addEventListener('pointerdown', () => { v.win.style.zIndex = ++zTop; }, true);
+    head.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0 || e.target.closest('button, select')) return;
+      e.preventDefault();
+      head.setPointerCapture(e.pointerId);
+      const sx = e.clientX, sy = e.clientY, ox = v.win.offsetLeft, oy = v.win.offsetTop;
+      v.win.classList.add('moving');
+      const mv = (ev) => { v.win.style.left = ox + ev.clientX - sx + 'px'; v.win.style.top = oy + ev.clientY - sy + 'px'; clampWin(v.win); };
+      const up = () => { head.removeEventListener('pointermove', mv); head.removeEventListener('pointerup', up); head.removeEventListener('pointercancel', up); v.win.classList.remove('moving'); saveViewsSoon(); };
+      head.addEventListener('pointermove', mv); head.addEventListener('pointerup', up); head.addEventListener('pointercancel', up);
+    });
+    head.addEventListener('dblclick', (e) => { if (!e.target.closest('button, select')) minimizeView(v); });
+    v.sel.addEventListener('change', () => { focusView(v); if (v.sel.value === 'uml') showUml(); else showFunc(+v.sel.value); });
+    v.compactBtn.addEventListener('click', () => { focusView(v); toggleCompact(); });
+    v.syncBtn.addEventListener('click', () => { focusView(v); setSync(v, !v.sync); });
+    v.zoomVal.addEventListener('click', () => { focusView(v); setZoom(1); });
+    minBtn.addEventListener('click', () => minimizeView(v));
+    closeBtn.addEventListener('click', () => closeView(v));
+    if (window.ResizeObserver) new ResizeObserver(() => { if (v.win.isConnected) { scheduleSync(); saveViewsSoon(); } }).observe(v.win);
+    withView(v, renderChart);
+    if (o.sync) setSync(v, true);
+    if (o.min) minimizeView(v, true);
+    decorate();
+    if (!o.restore) focusView(v);
+    saveViewsSoon();
+    return v;
+  }
+  /* intestazione della vista attiva: selettore, Compatta, Continua */
+  function renderViewHead(v) {
+    fillFuncOptions(v.sel);
+    v.sel.title = v.sync ? 'La vista segue il foglio principale: scegliendo un altro diagramma, «Continua» si spegne' : 'Diagramma mostrato nella vista';
+    v.wrap.classList.toggle('uml', isUml());
+    const cb = v.compactBtn, can = !isUml() && !(isOO() && func().abstract);
+    cb.hidden = !can;
+    cb.setAttribute('aria-pressed', String(!!st.compact && can));
+    cb.title = v.sync ? 'Vista compatta o estesa (come nel foglio principale)' : st.compact ? 'Vista estesa: frecce tra tutti i blocchi' : 'Vista compatta: i blocchi in sequenza si toccano';
+    cb.setAttribute('aria-label', cb.title);
+    const o = v.sel.options[v.sel.selectedIndex];
+    v.win.setAttribute('aria-label', 'Vista: ' + (o ? o.textContent : ''));
+  }
+  /* «Continua»: la vista segue il foglio principale (diagramma, zoom, vista compatta) */
+  function setSync(v, on) {
+    v.sync = !!on;
+    v.syncBtn.setAttribute('aria-pressed', String(v.sync));
+    v.win.classList.toggle('sync', v.sync);
+    if (v.sync) {
+      if (v === V) { saveViewState(v); loadViewState(v); renderChart(); } else withView(v, renderChart);
+      decorate();
+      toast('La vista mostra la parte del diagramma che non si vede nel foglio principale e scorre con lui');
+    } else { v.done.hidden = true; v.padB = 0; v.chart.style.paddingBottom = ''; withView(v, () => renderViewHead(v)); }
+    scheduleSync(); saveViewsSoon();
+  }
+  function minimizeView(v, force) {
+    const min = force === undefined ? !v.min : force;
+    if (min === v.min) return;
+    if (min) v.h = v.win.offsetHeight;
+    v.min = min;
+    setMinUi(v.win, min);
+    if (!min) v.win.style.height = v.h + 'px';
+    clampWin(v.win); scheduleSync(); saveViewsSoon();
+  }
+  function closeView(v) {
+    if (V === v) focusView(MAIN);
+    const i = views.indexOf(v); if (i > 0) views.splice(i, 1);
+    v.win.remove();
+    document.body.classList.toggle('hasviews', views.length > 1);
+    scheduleSync(); saveViewsSoon();
+  }
+  /* un altro programma: le viste si chiudono */
+  function resetViews() { focusView(MAIN); for (const v of views.slice(1)) closeView(v); }
+  let syncRaf = 0;
+  function scheduleSync() {
+    if (syncRaf) return;
+    syncRaf = requestAnimationFrame(() => { syncRaf = 0; syncScroll(); });
+  }
+  /* le viste «Continua» mostrano quello che il foglio principale non mostra: se il foglio è scorso
+     in giù, la prima mostra la parte tagliata in alto (fino al punto dove comincia il foglio);
+     le altre, in fila, la parte che esce dal fondo */
+  let needView = false;
+  function syncScroll() {
+    const ms = $('svg', MAIN.chart);
+    let mStart = 0, mEnd = 0, H = 0;
+    if (ms) {
+      const pw = MAIN.wrap.getBoundingClientRect(), pr = ms.getBoundingClientRect();
+      mStart = pw.top + MAIN.wrap.clientTop - pr.top;
+      mEnd = mStart + MAIN.wrap.clientHeight;
+      H = pr.height;
+    }
+    const topCut = !!ms && mStart > 4;
+    let coveredAbove = !topCut, coveredBelow = !ms || mEnd >= H - 4;
+    let prev = MAIN, first = true, n = 0;
+    const marks = new Map(); // segni del punto in comune: vista → { top, bottom }
+    const mark = (v, edge, m) => { if (!marks.has(v)) marks.set(v, {}); marks.get(v)[edge] = m; };
+    for (const v of views) {
+      if (v.main || !v.sync || v.min) continue;
+      const above = first && topCut; first = false;
+      const link = { n: ++n, color: LINK_COLORS[(n - 1) % LINK_COLORS.length], dir: above ? '⇡' : '⇣' };
+      v.win.style.setProperty('--lc', link.color);
+      v.win.classList.toggle('above', above);
+      v.syncIco.textContent = above ? '⇡' : '⇣';
+      const ps = $('svg', prev.chart), vs = $('svg', v.chart);
+      if (!ms || !ps || !vs) { v.done.hidden = true; continue; }
+      const pw = prev.wrap.getBoundingClientRect(), pr = ps.getBoundingClientRect();
+      const ww = v.wrap.getBoundingClientRect(), vr = vs.getBoundingClientRect();
+      // in orizzontale la stessa colonna del disegno resta al centro
+      const cx = pw.left + prev.wrap.clientLeft + prev.wrap.clientWidth / 2 - pr.left;
+      v.wrap.scrollLeft += vr.left - ww.left - v.wrap.clientLeft + cx - v.wrap.clientWidth / 2;
+      if (above) {
+        // in fondo alla vista, il punto del disegno dove comincia il foglio principale
+        v.wrap.scrollTop += vr.top - ww.top - v.wrap.clientTop + mStart - v.wrap.clientHeight;
+        coveredAbove = mStart <= v.wrap.clientHeight;
+        v.done.hidden = true;
+        // punto in comune: il bordo in alto del foglio e lo stesso punto del disegno nella vista
+        mark(MAIN, 'top', Object.assign({ y: 0 }, link));
+        mark(v, 'bottom', Object.assign({ y: vs.getBoundingClientRect().top + mStart - ww.top - v.wrap.clientTop }, link));
+        continue;
+      }
+      // punto del disegno (in pixel sullo schermo) che sta in fondo alla vista precedente
+      const endY = pw.top + prev.wrap.clientTop + prev.wrap.clientHeight - pr.top;
+      // sotto il disegno c'è spazio per scorrere oltre la fine
+      const need = Math.ceil(Math.max(0, endY - vr.height) + v.wrap.clientHeight + 40);
+      if ((v.padB || 0) < need) { v.padB = need + 400; v.chart.style.paddingBottom = v.padB + 'px'; }
+      v.wrap.scrollTop += vr.top - ww.top - v.wrap.clientTop + endY;
+      v.done.hidden = endY < pr.height - 4;
+      if (endY + v.wrap.clientHeight >= H - 4) coveredBelow = true;
+      // punto in comune: il bordo in fondo della vista precedente e lo stesso punto del disegno in questa
+      mark(prev, 'bottom', Object.assign({ y: prev.wrap.clientHeight }, link));
+      mark(v, 'top', Object.assign({ y: vs.getBoundingClientRect().top + endY - ww.top - v.wrap.clientTop }, link));
+      prev = v;
+    }
+    for (const v of views) drawLinks(v, marks.get(v) || {});
+    // pallino sul pulsante «Nuova vista»: una parte del diagramma non si vede da nessuna parte
+    needView = !(coveredAbove && coveredBelow);
+    const b = $('#viewAdd');
+    b.classList.toggle('notify', needView);
+    b.title = needView ? 'Nuova vista «Continua»: mostra la parte del diagramma che non si vede nel foglio principale (Ctrl+Alt+V)' : 'Nuova vista: un\'altra finestra sul programma, per vedere e modificare un altro diagramma o un\'altra parte di questo (Ctrl+Alt+V)';
+    b.setAttribute('aria-label', needView ? 'Nuova vista Continua: una parte del diagramma non si vede' : 'Nuova vista');
+  }
+  /* segno del punto in comune tra due viste collegate da «Continua»: una riga tratteggiata dello
+     stesso colore con il numero della vista, nel punto del disegno dove una finisce e l'altra comincia */
+  const LINK_COLORS = ['#d9480f', '#7048e8', '#2b8a3e', '#c2255c', '#1971c2'];
+  function drawLinks(v, m) {
+    const host = v.main ? $('.canvas-col') : v.wrap.parentNode;
+    v.links = v.links || {};
+    for (const edge of ['top', 'bottom']) {
+      let el = v.links[edge];
+      const k = m[edge];
+      const y = k ? Math.round(k.y) : -1;
+      if (!k || y < -1 || y > v.wrap.clientHeight + 1) { if (el) el.hidden = true; continue; }
+      if (!el) { el = v.links[edge] = h('div', { class: 'vlink', 'aria-hidden': 'true' }, h('span', { class: 'vlink-b' })); host.append(el); }
+      el.hidden = false;
+      el.className = 'vlink ' + edge;
+      el.style.setProperty('--lc', k.color);
+      el.style.top = (v.wrap.offsetTop + v.wrap.clientTop + Math.max(0, Math.min(y, v.wrap.clientHeight))) + 'px';
+      el.style.left = v.wrap.offsetLeft + 'px'; el.style.width = v.wrap.clientWidth + 'px';
+      el.firstChild.textContent = k.dir + ' ' + k.n;
+      if (v.main) { const t = edge === 'top' ? $('#chartTools') : $('.zoombar'); el.firstChild.style.left = Math.max(8, t.offsetLeft + t.offsetWidth + 10 - v.wrap.offsetLeft) + 'px'; }
+      el.title = v.main ? `Qui il foglio continua nella vista ${k.n}` : `Punto in comune con ${k.n === 1 || k.dir === '⇡' ? 'il foglio principale' : 'la vista ' + (k.n - 1)}`;
+    }
+  }
+  /* con il pallino acceso la nuova vista è già «Continua» */
+  function newView() { if (syncRaf) { cancelAnimationFrame(syncRaf); syncRaf = 0; syncScroll(); } openView(needView ? { sync: true } : undefined); }
+  /* le viste si ricordano con il programma aperto (salvataggio automatico) */
+  function viewsData() {
+    return views.filter((v) => !v.main).map((v) => {
+      const id = v === V ? fidAt(st.fi) : v.state.fid;
+      const fi = Math.max(0, st.prog.functions.findIndex((f) => f.id === id));
+      return { fi, uml: !!vget(v, 'uml'), zoom: vget(v, 'zoom'), compact: !!vget(v, 'compact'), sync: v.sync, min: v.min, x: v.win.offsetLeft, y: v.win.offsetTop, w: v.win.offsetWidth, h: v.min ? v.h : v.win.offsetHeight };
+    });
+  }
+  /* la vista attiva è quella in cui si clicca o si porta il cursore della tastiera */
+  function bindViews() {
+    const pick = (e) => {
+      const t = e.target; if (!t || !t.closest) return;
+      const w = t.closest('.auxwin');
+      if (w) focusView(views.find((v) => v.win === w));
+      else if (t.closest('.canvas-col, header.bar')) focusView(MAIN);
+    };
+    document.addEventListener('pointerdown', pick, true);
+    document.addEventListener('focusin', pick, true);
+    $('#viewAdd').addEventListener('click', newView);
+    if (window.ResizeObserver) new ResizeObserver(scheduleSync).observe(MAIN.wrap);
+  }
+  let viewsTimer = 0;
+  function saveViewsSoon() { clearTimeout(viewsTimer); viewsTimer = setTimeout(autosave, 300); }
+
   /* ----------------------------- Salvataggio ----------------------------- */
   function safeName(s) { return (s || 'programma').replace(/[\\/:*?"<>|]+/g, '').replace(/\s+/g, '_').slice(0, 60) || 'programma'; }
   async function download(name, text, mime) {
@@ -2349,6 +2702,7 @@
     let prog;
     try { prog = M.parseFprg(text); } catch (e) { toast(e.message, 'error'); return false; }
     if (isRunning()) stopRun();
+    resetViews();
     const before = keepUndo ? snapshot() : null;
     st.undo = before ? [before] : []; st.redo = []; st.prog = prog; st.fi = 0; st.sel = null; st.fileName = name || null; st.dirty = false; st.sourceUrl = null; st.fileHandle = null;
     run.errId = null; run.mainFrame = null;
@@ -2410,7 +2764,8 @@
     catch (e) { const ta = h('textarea', { class: 'mono', rows: 3, readonly: true, 'aria-label': 'Link al programma' }); ta.value = link; openModal({ title: 'Link al programma', wide: true, body: ta, okText: 'Chiudi', noCancel: true }); setTimeout(() => ta.select(), 50); }
   }
   function fitIfLarge() {
-    const svg = $('#chart svg'); const wrap = $('#canvasWrap');
+    if (!V.main) { withView(MAIN, fitIfLarge); return; }
+    const svg = $('svg', V.chart); const wrap = V.wrap;
     if (!svg) return;
     if (svg.dataset.w * st.zoom > wrap.clientWidth - 24) setZoom(Math.max(0.55, (wrap.clientWidth - 24) / svg.dataset.w));
     wrap.scrollLeft = (wrap.scrollWidth - wrap.clientWidth) / 2;
@@ -2734,12 +3089,13 @@
     confirmBox('Modifiche non salvate', 'Il programma attuale ha modifiche non salvate. Vuoi continuare e perderle?', 'Continua', action);
   }
   function newProgram() {
-    guardDirty(() => { if (isRunning()) stopRun(); st.prog = M.newProgram(); st.fi = 0; st.sel = null; st.uml = isOO(); st.usel = null; st.undo = []; st.redo = []; st.fileName = null; st.dirty = false; run.mainFrame = null; render(); renderVars(); });
+    guardDirty(() => { if (isRunning()) stopRun(); resetViews(); st.prog = M.newProgram(); st.fi = 0; st.sel = null; st.uml = isOO(); st.usel = null; st.undo = []; st.redo = []; st.fileName = null; st.dirty = false; run.mainFrame = null; render(); renderVars(); });
   }
   function loadExample(id) {
     const ex = Examples.get(id); if (!ex) return;
     guardDirty(() => {
       if (isRunning()) stopRun();
+      resetViews();
       st.prog = ex.make(); st.fi = 0; st.sel = null; st.usel = null; st.undo = []; st.redo = []; st.fileName = null; st.dirty = false; run.mainFrame = null; run.errId = null;
       startView();
       conClear(); render(); renderVars(); setTimeout(fitIfLarge, 0);
@@ -2752,7 +3108,7 @@
       const f = func(), c = isOO() ? M.classOf(st.prog, f) : null;
       source = svgFromString(new RenderLib.Renderer().func(f, st.expanded, isOO() ? { owner: c ? c.name : '', isMain: st.fi === 0 } : {}).svg);
     }
-    const svg = (source || $('#chart svg')).cloneNode(true);
+    const svg = (source || $('svg', V.chart)).cloneNode(true);
     svg.setAttribute('width', svg.dataset.w); svg.setAttribute('height', svg.dataset.h);
     svg.insertBefore(h('style', null, css || exportCss()), svg.firstChild);
     $$('.hits, .ctoggle, .uadd, .uhit, .umodtog', svg).forEach((x) => x.remove());
@@ -2931,7 +3287,7 @@
   }
   function exportPng() {
     const s = exportSvg();
-    const svgEl = $('#chart svg');
+    const svgEl = $('svg', V.chart);
     const w = +svgEl.dataset.w, hh = +svgEl.dataset.h, k = 2;
     const img = new Image();
     img.onload = () => {
@@ -3079,13 +3435,14 @@
     ]],
     ['Vista', [
       ['Ctrl+Alt+F  ·  Ctrl+Alt+O', 'Vista Funzioni, vista Oggetti'], ['Alt+1  2  3  4', 'Schede Console, Variabili, Codice, File'], ['Ctrl+B', 'Mostra o nascondi il pannello'],
-      ['Ctrl++  Ctrl+-  Ctrl+0', 'Zoom avanti, indietro, 100%'], ['Maiusc+1', 'Adatta alla finestra'], ['Maiusc+K', 'Vista compatta del diagramma di flusso (i blocchi in sequenza si toccano) / vista estesa'], ['Ctrl+rotella', 'Zoom'],
+      ['Ctrl++  Ctrl+-  Ctrl+0', 'Zoom avanti, indietro, 100%'], ['Maiusc+1', 'Adatta alla finestra'], ['Maiusc+K', 'Vista compatta del diagramma di flusso (i blocchi in sequenza si toccano) / vista estesa'], ['Ctrl+Alt+V', 'Nuova vista: un\'altra finestra sul programma (con «Continua» mostra il seguito del foglio principale)'], ['Ctrl+rotella', 'Zoom'],
       ['F1', 'Guida rapida'], ['Esc', 'Chiudi finestre e menu'],
     ]],
   ];
   /* diagramma precedente o successivo nel selettore */
   function navDiagram(dir) {
-    const sel = $('#funcSel'), n = sel.options.length;
+    const sel = V.main ? $('#funcSel') : V.sel, n = sel.options.length;
+    if (sel.disabled) return;
     if (n < 2) return;
     sel.selectedIndex = (sel.selectedIndex + dir + n) % n;
     sel.dispatchEvent(new Event('change'));
@@ -3138,6 +3495,7 @@
         if (e.code === 'KeyN') return go(newProgram);
         if (e.code === 'KeyF') return go(() => setView('functions'));
         if (e.code === 'KeyO') return go(() => setView('objects'));
+        if (e.code === 'KeyV') return go(newView);
       }
       if (ctrl && !alt && k === 'b') return go(() => $('#sideToggle').click());
       if (alt && !ctrl && /^Digit[1-4]$/.test(e.code)) return go(() => setTab(['console', 'vars', 'code', 'files'][+e.code.slice(5) - 1]));
@@ -3179,7 +3537,7 @@
         if (alt) return go(() => shiftSel(e.key === 'ArrowDown' ? 1 : -1));
         const f = M.findStmt(st.prog, st.sel); if (!f) return;
         const n = f.arr[f.index + (e.key === 'ArrowDown' ? 1 : -1)];
-        if (n) { e.preventDefault(); st.sel = n.id; decorate(); const el = $(`#chart .shape[data-id="${n.id}"]`); if (el) scrollIntoViewIfNeeded(el); }
+        if (n) { e.preventDefault(); st.sel = n.id; decorate(); const el = $(`.shape[data-id="${n.id}"]`, V.chart); if (el) scrollIntoViewIfNeeded(el); }
         return;
       }
       const kind = KEY_KIND[lab];
@@ -3200,14 +3558,14 @@
     $('#helpBtn').addEventListener('click', helpDialog);
     $('#progName').addEventListener('click', () => { if (isRunning()) { toast('Ferma il programma per modificare il diagramma', 'warn'); return; } editProgram(); });
     $('#fileInput').addEventListener('change', (e) => { readFileObj(e.target.files[0]); e.target.value = ''; });
-    $('#funcSel').addEventListener('change', (e) => (e.target.value === 'uml' ? showUml() : showFunc(+e.target.value)));
+    $('#funcSel').addEventListener('change', (e) => { focusView(MAIN); if (e.target.value === 'uml') showUml(); else showFunc(+e.target.value); });
     const busy = () => { if (isRunning()) { toast('Ferma il programma per modificare il diagramma', 'warn'); return true; } return false; };
     $('#funcAdd').addEventListener('click', () => { if (busy()) return; if (!isOO()) editFunction(null); else if (st.uml) classDialog(null); else editFunction(null, { cls: M.classOf(st.prog, func()), ctor: false }); });
     $('#funcEdit').addEventListener('click', () => { if (busy()) return; if (isUml()) editUmlSel(); else if (st.fi === 0) editProgram(); else editFunction(st.fi); });
     $('#funcDel').addEventListener('click', () => { if (busy()) return; if (isUml()) deleteUmlSel(); else deleteFunction(); });
     $('#viewFn').addEventListener('click', () => setView('functions'));
     $('#viewOo').addEventListener('click', () => setView('objects'));
-    $('#backUml').addEventListener('click', showUml);
+    $('#backUml').addEventListener('click', () => { focusView(MAIN); showUml(); });
     $('#runBtn').addEventListener('click', onRunBtn);
     $('#stepBtn').addEventListener('click', onStepBtn);
     $('#overBtn').addEventListener('click', onOverBtn);
@@ -3217,11 +3575,11 @@
     const sp = $('#speed');
     sp.value = st.speed; $('#speedVal').textContent = SPEEDS[st.speed].label;
     sp.addEventListener('input', () => { st.speed = +sp.value; store.set('speed', st.speed); $('#speedVal').textContent = SPEEDS[st.speed].label; });
-    $('#zoomIn').addEventListener('click', () => setZoom(st.zoom * 1.15));
-    $('#zoomOut').addEventListener('click', () => setZoom(st.zoom / 1.15));
-    $('#zoomFit').addEventListener('click', fitZoom);
-    $('#compactBtn').addEventListener('click', toggleCompact);
-    $('#zoomVal').addEventListener('click', () => setZoom(1));
+    $('#zoomIn').addEventListener('click', () => { focusView(MAIN); setZoom(st.zoom * 1.15); });
+    $('#zoomOut').addEventListener('click', () => { focusView(MAIN); setZoom(st.zoom / 1.15); });
+    $('#zoomFit').addEventListener('click', () => { focusView(MAIN); fitZoom(); });
+    $('#compactBtn').addEventListener('click', () => { focusView(MAIN); toggleCompact(); });
+    $('#zoomVal').addEventListener('click', () => { focusView(MAIN); setZoom(1); });
     $('#tabs').addEventListener('keydown', (e) => {
       if (!['ArrowLeft', 'ArrowRight'].includes(e.key)) return;
       const tabs = $$('#tabs [role=tab]'); const i = tabs.findIndex((t) => t.dataset.tab === st.tab);
@@ -3244,7 +3602,7 @@
     $('#txtInput').addEventListener('change', (e) => { for (const f of e.target.files) { const r = new FileReader(); r.onload = () => { st.vfs.set(f.name, r.result); saveVfs(); }; r.readAsText(f); } e.target.value = ''; });
     document.addEventListener('mousedown', (e) => { const p = $('#pop'); if (!p.hidden && !p.contains(e.target)) closePop(); });
     window.addEventListener('resize', closePop);
-    $('#canvasWrap').addEventListener('scroll', closePop);
+    $('#canvasWrap').addEventListener('scroll', () => { closePop(); scheduleSync(); });
     // trascina e rilascia file
     document.addEventListener('dragover', (e) => { if (e.dataTransfer && [...e.dataTransfer.types].includes('Files')) { e.preventDefault(); document.body.classList.add('filedrag'); } });
     document.addEventListener('dragleave', (e) => { if (e.target === document.documentElement || !e.relatedTarget) document.body.classList.remove('filedrag'); });
@@ -3287,7 +3645,8 @@
   }
   function init() {
     ArrayView.configure({ host: () => $('#floatLayer'), nextZ: () => ++zTop });
-    bindUi(); bindChart(); bindKeys(); setupPwa();
+    MAIN.chart = $('#chart'); MAIN.wrap = $('#canvasWrap');
+    bindUi(); bindChart(MAIN); bindDrag(); bindKeys(); setupPwa(); bindViews();
     const saved = store.get('autosave', null);
     let ok = false;
     if (saved && saved.xml) {
@@ -3296,6 +3655,8 @@
     if (!ok) st.prog = Examples.get('media').make();
     startView();
     render(); initLayout(); renderVars(); renderFiles(); setStatus('idle', 'Pronto');
+    // le viste ausiliarie del programma aperto
+    if (ok && Array.isArray(saved.views)) { for (const o of saved.views) openView(Object.assign({}, o, { restore: true })); focusView(MAIN); }
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { render(); fitIfLarge(); });
     setTimeout(fitIfLarge, 0);
     // ?url=…: apre il programma indicato; poi il parametro si toglie dalla barra degli indirizzi,
@@ -3308,7 +3669,7 @@
       try { const u = new URL(location.href); u.searchParams.delete('url'); u.searchParams.delete('fprg'); history.replaceState(null, '', u.href); } catch (e) { /* ignora */ }
     });
     // API minima per i test automatici
-    window.FlowLab = { get state() { return st; }, run, loadText, serialize: () => M.serializeFprg(st.prog), render, setTab, submitInput, setView, showUml, showFunc, openUrl, rawUrl, loadExample: (id) => { st.dirty = false; loadExample(id); } };
+    window.FlowLab = { get state() { return st; }, run, loadText, serialize: () => M.serializeFprg(st.prog), render, setTab, submitInput, setView, showUml, showFunc, openView, get views() { return views; }, focusView, openUrl, rawUrl, loadExample: (id) => { st.dirty = false; loadExample(id); } };
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 })();

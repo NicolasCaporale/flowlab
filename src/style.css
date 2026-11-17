@@ -111,15 +111,15 @@ body.side-hidden #sideToggle { left: auto; right: 3px; transform: translateY(-50
 
 /* ---------- Foglio del diagramma ---------- */
 .canvas-col { position: relative; min-width: 0; min-height: 0; display: grid; grid-template-rows: 1fr auto; }
-#canvasWrap {
+#canvasWrap, .vwrap {
   overflow: auto; min-height: 0; position: relative;
   background-color: var(--paper);
   background-image: linear-gradient(var(--grid-strong) 1px, transparent 1px), linear-gradient(90deg, var(--grid-strong) 1px, transparent 1px),
     linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
   background-size: 100px 100px, 100px 100px, 20px 20px, 20px 20px;
 }
-#chart { display: flex; justify-content: center; min-width: max-content; padding: 12px 12px 80px; }
-#chart svg { display: block; overflow: visible; }
+#chart, .vchart { display: flex; justify-content: center; min-width: max-content; padding: 12px 12px 80px; }
+.vchart svg { display: block; overflow: visible; }
 .zoombar { position: absolute; left: 12px; bottom: 44px; display: flex; gap: 2px; background: var(--panel); border: 1px solid var(--line); border-radius: 9px; padding: 3px; box-shadow: 0 2px 8px rgba(0,0,0,.08); }
 .zoombar button { border: 0; background: transparent; height: 28px; min-width: 28px; border-radius: 6px; cursor: pointer; font-variant-numeric: tabular-nums; }
 .zoombar button:hover { background: var(--line-soft); }
@@ -565,7 +565,7 @@ table.vars .caret-sp { display: inline-block; width: 18px; margin: 0 2px 0 -6px;
 .v-Object { color: var(--s-call); font-weight: 600; }
 table.vars tr.statrow td { font-family: var(--font-ui); font-weight: 700; font-size: 12px; color: var(--muted); background: var(--panel); }
 .ptag.vis { font-family: var(--font-mono); font-size: 11px; text-transform: none; }
-body.umlmode #chart { justify-content: flex-start; }
+body.umlmode #chart, .vwrap.uml .vchart { justify-content: flex-start; }
 
 /* ---------- Ispettore degli oggetti ---------- */
 .ovwin { min-width: 260px; min-height: 130px; display: grid; grid-template-rows: auto minmax(0, 1fr); }
@@ -727,3 +727,49 @@ body.udragging .uml .umod { cursor: grabbing; }
 #compactBtn:hover { border-color: var(--accent); color: var(--accent); }
 #compactBtn svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; }
 #compactBtn[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+
+/* ---------- Viste ausiliarie ---------- */
+.zoombar .zsep { width: 1px; margin: 4px 3px; background: var(--line); }
+#viewAdd { position: relative; display: inline-flex; align-items: center; gap: 5px; padding: 0 8px 0 6px; font-size: 12px; font-weight: 600; }
+#viewAdd svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; }
+.auxwin { min-width: 320px; min-height: 180px; }
+.auxwin .fwin-head { padding: 3px 4px 3px 6px; gap: 4px; }
+.auxwin.vactive { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft), var(--shadow); }
+.auxwin.vactive .fwin-head { background: var(--accent-soft); }
+.auxwin .fwin-body { position: relative; }
+.vsel { height: 28px; min-width: 0; flex: 0 1 auto; max-width: 210px; border-radius: 7px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); padding: 0 6px; font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; }
+.vsel:disabled { opacity: 1; cursor: default; color: var(--muted); }
+.vcompact { width: 28px; height: 28px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); }
+.vcompact[hidden] { display: none; }
+.vcompact svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; }
+.vcompact[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.vsync { height: 28px; padding: 0 9px 0 7px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel); color: var(--ink); font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+.vsync:hover, .vcompact:hover { border-color: var(--accent); }
+.vsync[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.vzoom { display: inline-flex; align-items: center; gap: 0; }
+.vzoom button { border: 0; background: transparent; height: 26px; min-width: 24px; border-radius: 6px; cursor: pointer; color: var(--ink); font: inherit; font-size: 13px; font-weight: 400; font-variant-numeric: tabular-nums; }
+.vzoom button:hover { background: var(--line-soft); }
+.vzoom .vzoomval { min-width: 42px; font-size: 11.5px; }
+.auxwin.sync .vzoom { display: none; }
+.vclose svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
+.auxwin .minbtn, .auxwin .vclose { width: 26px; height: 26px; }
+.vwrap { height: 100%; }
+/* «Continua»: la vista non ha barre di scorrimento e può scorrere oltre la fine del disegno */
+.auxwin.sync .vwrap { overflow: hidden; }
+.auxwin.sync .vsync[aria-pressed="true"] { background: var(--lc, var(--accent)); border-color: var(--lc, var(--accent)); color: #fff; }
+.auxwin.sync .fwin-head { box-shadow: inset 4px 0 0 var(--lc, var(--accent)); }
+/* punto in comune tra il foglio e una vista «Continua» */
+.vlink { position: absolute; height: 0; border-top: 2px dashed var(--lc); z-index: 4; pointer-events: none; }
+.vlink[hidden] { display: none; }
+.vlink.bottom { transform: translateY(-2px); }
+.vlink-b { position: absolute; right: 8px; top: -1px; transform: translateY(-50%); background: var(--lc); color: #fff; border-radius: 10px; padding: 1px 8px; font-size: 11px; font-weight: 700; line-height: 16px; white-space: nowrap; box-shadow: 0 1px 4px rgba(0,0,0,.2); }
+.vlink.top .vlink-b { transform: translateY(0); top: 2px; }
+.vlink.bottom .vlink-b { transform: translateY(-100%); top: -2px; }
+/* nel foglio principale il numero sta a sinistra, accanto ai pulsanti (a destra finirebbe sotto la vista) */
+.canvas-col > .vlink .vlink-b { right: auto; }
+/* pallino: una parte del diagramma non si vede */
+#viewAdd.notify::after { content: ''; position: absolute; top: 1px; right: 1px; width: 9px; height: 9px; border-radius: 50%; background: #e5484d; box-shadow: 0 0 0 2px var(--panel); }
+.vdone { position: absolute; left: 50%; top: 30%; transform: translateX(-50%); max-width: 80%; padding: 8px 14px; border-radius: 9px; background: var(--panel); border: 1px solid var(--line); color: var(--muted); font-size: 12.5px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,.08); pointer-events: none; }
+.vdone[hidden] { display: none; }
+/* con più viste si vede quale riceve i comandi */
+body.hasviews:not(.auxactive) #canvasWrap { box-shadow: inset 0 0 0 2px var(--accent-soft); }
