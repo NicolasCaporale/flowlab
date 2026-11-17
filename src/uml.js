@@ -20,8 +20,8 @@ const UmlLib = (() => {
   function attrText(a) {
     return `${V(a.visibility)} ${a.name}: ${T(a.type)}${a.array ? `[${a.size}]` : ''}${!a.array && String(a.init || '').trim() ? ' = ' + a.init : ''}`;
   }
-  /* la classe eredita direttamente da un'eccezione predefinita? */
-  const excParent = (c) => !!c.parent && !!ModelLib.excClass(c.parent);
+  /* eccezione del programma (eredita, anche da lontano, da Eccezione) */
+  const isExc = (prog, c) => !c.builtin && ModelLib.isExcClass(prog, c);
   function methodText(prog, f) {
     const ps = f.params.map((p) => `${p.name}: ${T(p.type)}${p.array ? `[${','.repeat((p.dims || 1) - 1)}]` : ''}`).join(', ');
     const rl = ModelLib.rets(f);
@@ -41,13 +41,47 @@ const UmlLib = (() => {
       const missing = c.abstract ? [] : ModelLib.missingAbstract(prog, c);
       let w = Math.max(MINW, tw(ModelLib.classTitle(c), FN) + PADX * 2 + 24, ...attrs.map((r) => tw(r.text, FM) + PADX * 2), ...meths.map((r) => tw(r.text, FM) + PADX * 2));
       w = Math.ceil(Math.min(MAXW, w));
-      // eccezione del programma: sopra il nome si legge da quale eccezione predefinita deriva
-      const head = HEAD + (c === main || c.abstract || excParent(c) ? STEREO : 0);
+      // eccezione del programma: sopra il nome «eccezione»
+      const head = HEAD + (c === main || c.abstract || isExc(prog, c) ? STEREO : 0);
       const ah = Math.max(1, attrs.length) * ROW + CPAD * 2 - (attrs.length ? 0 : ROW - 10);
       const mh = Math.max(1, meths.length) * ROW + CPAD * 2 - (meths.length ? 0 : ROW - 10);
-      boxes.set(c.id, { c, x: c.x || 0, y: c.y || 0, w, h: head + ah + mh, head, ah, mh, attrs, meths, main: c === main, missing });
+      boxes.set(c.id, { c, x: c.x || 0, y: c.y || 0, w, h: head + ah + mh, head, ah, mh, attrs, meths, main: c === main, missing, exc: isExc(prog, c) });
     }
     return boxes;
+  }
+  /* eccezioni predefinite da cui il programma eredita (anche da lontano): riquadri in sola lettura.
+     La prima volta che compaiono si mettono nel posto migliore, di solito sopra le sottoclassi; poi
+     restano lì (pos: Map nome → { x, y }, che si sposta trascinando) e non seguono le sottoclassi */
+  function builtinBoxes(prog, boxes, pos) {
+    const used = [];
+    for (const c of prog.classes) if (!c.builtin) for (const k of ModelLib.chainOf(prog, c)) if (k.builtin && !used.includes(k)) used.push(k);
+    if (!used.length) return;
+    const depth = (k) => ModelLib.chainOf(prog, k).length;
+    used.sort((a, b) => depth(b) - depth(a)); // prima le più vicine alle classi del programma
+    const all = () => [...boxes.values()];
+    const hits = (x, y, w, h) => all().some((b) => x < b.x + b.w + 30 && x + w + 30 > b.x && y < b.y + b.h + 30 && y + h + 30 > b.y);
+    for (const k of used) {
+      const attrs = [{ text: `+ messaggio: ${T('String')}`, i: 0, st: false, tip: 'il messaggio dell\'eccezione, in sola lettura' }];
+      const meths = [{ text: `+ ${k.name}()`, ctor: true, tip: 'costruttore: messaggio vuoto' }, { text: `+ ${k.name}(messaggio: ${T('String')})`, ctor: true, tip: 'costruttore: in una sottoclasse si richiama con super(messaggio)' }];
+      const w = Math.ceil(Math.max(MINW, tw(k.name, FN) + PADX * 2 + 24, tw('«eccezione predefinita»', FS) + PADX * 2, ...[...attrs, ...meths].map((r) => tw(r.text, FM) + PADX * 2)));
+      const head = HEAD + STEREO, ah = ROW + CPAD * 2, mh = 2 * ROW + CPAD * 2, h = head + ah + mh;
+      const kids = all().filter((b) => b.c.parent && b.c.parent.toLowerCase() === k.name.toLowerCase());
+      const cx = kids.reduce((t, b) => t + b.x + b.w / 2, 0) / kids.length;
+      const top = Math.min(...kids.map((b) => b.y)), left = Math.min(...kids.map((b) => b.x)), right = Math.max(...kids.map((b) => b.x + b.w));
+      // posti possibili: sopra (centrato e poi spostato a destra e a sinistra), a sinistra, a destra
+      const cands = [];
+      const above = top - h - 60;
+      if (above >= 10) for (let d = 0; d <= 600; d += 40) { cands.push([cx - w / 2 + d, above]); if (d) cands.push([cx - w / 2 - d, above]); }
+      cands.push([left - w - 70, top], [right + 70, top]);
+      for (let d = 40; d <= 1200; d += 40) cands.push([right + 70, top + d], [left - w - 70, top + d]);
+      let p = pos && pos.get(k.name);
+      if (!p) {
+        const at = cands.map(([x, y]) => [Math.round(x), Math.round(y)]).find(([x, y]) => x >= 10 && y >= 10 && !hits(x, y, w, h)) || [Math.round(right + 70), Math.round(Math.max(10, top))];
+        p = { x: at[0], y: at[1] };
+        if (pos) pos.set(k.name, p);
+      }
+      boxes.set(k.id, { c: k, builtin: true, x: p.x, y: p.y, w, h, head, ah, mh, attrs, meths, main: false, missing: [], exc: true });
+    }
   }
 
   /* punto in cui la retta dal centro verso (tx, ty) esce dal riquadro */
@@ -64,6 +98,7 @@ const UmlLib = (() => {
   /* opts.collapsed: nomi dei moduli condensati (un solo riquadro con i nomi delle classi) */
   function render(prog, sel, opts) {
     const boxes = layout(prog);
+    builtinBoxes(prog, boxes, opts && opts.excPos);
     const collapsed = (opts && opts.collapsed) || new Set();
     const mods = ModelLib.modulesOf(prog).filter((x) => x.classes.length);
     // moduli condensati: tutte le loro classi puntano allo stesso riquadro compatto
@@ -90,12 +125,12 @@ const UmlLib = (() => {
     }
     // relazioni: una sola linea per coppia ordinata e tipo; le coppie con più relazioni si scostano
     const rels = [];
-    for (const c of prog.classes) {
+    for (const c of [...prog.classes, ...[...boxes.values()].filter((b) => b.builtin).map((b) => b.c)]) {
       const par = ModelLib.classByName(prog, c.parent);
-      if (par && par !== c && !par.builtin) rels.push({ kind: 'inh', from: c, to: par });
+      if (par && par !== c && boxes.has(par.id)) rels.push({ kind: 'inh', from: c, to: par });
       for (const a of c.attributes) {
         const t = ModelLib.classByName(prog, ExprLib.splitType(a.type).base);
-        if (t && !t.builtin) rels.push({ kind: 'assoc', from: c, to: t, name: a.name, mult: a.array ? '*' : '0..1', st: a.static });
+        if (t && boxes.has(t.id)) rels.push({ kind: 'assoc', from: c, to: t, name: a.name, mult: a.array ? '*' : '0..1', st: a.static });
       }
     }
     const pairCount = new Map();
@@ -145,16 +180,17 @@ const UmlLib = (() => {
     // riquadri
     for (const b of boxes.values()) {
       if (b.compact) continue;
+      if (b.builtin) { shapes.push(builtinBox(b)); continue; }
       const { c, x, y, w } = b;
       const isSel = sel && sel.cls === c.id;
       const warn = b.missing.length ? `${c.name} non definisce ${b.missing.map((m) => m.f.name + '()').join(', ')} (${b.missing.length === 1 ? 'astratto' : 'astratti'} in ${[...new Set(b.missing.map((m) => m.owner.name))].join(', ')}): aggiungi ${b.missing.length === 1 ? 'il metodo' : 'i metodi'} oppure rendi astratta la classe` : '';
-      let g = `<g class="ubox${isSel && sel.kind === 'class' ? ' sel' : ''}${isSel ? ' cur' : ''}${b.main ? ' main' : ''}${c.abstract ? ' abstract' : ''}${warn ? ' warn' : ''}${c.module ? ' mod' : ''}" data-cls="${c.id}">`;
+      let g = `<g class="ubox${isSel && sel.kind === 'class' ? ' sel' : ''}${isSel ? ' cur' : ''}${b.main ? ' main' : ''}${b.exc ? ' exc' : ''}${c.abstract ? ' abstract' : ''}${warn ? ' warn' : ''}${c.module ? ' mod' : ''}" data-cls="${c.id}">`;
       g += c.module ? `<title>${esc(ModelLib.classTitle(c))} — dal modulo ${esc(c.module.name)}, in sola lettura: doppio clic su un metodo per vederne il diagramma di flusso</title>`
         : `<title>${c.abstract ? 'Classe astratta ' : ''}${esc(ModelLib.classTitle(c))}${c.parent ? ' — eredita da ' + esc(c.parent) : ''}${warn ? ' — ⚠ ' + esc(warn) : ''}: doppio clic sul nome per modificarla, clic destro per aggiungere membri</title>`;
       g += `<rect class="ubg" x="${x}" y="${y}" width="${w}" height="${b.h}" rx="6"/>`;
       g += `<path class="uheadbg" d="M${x} ${y + b.head}V${y + 6}Q${x} ${y} ${x + 6} ${y}H${x + w - 6}Q${x + w} ${y} ${x + w} ${y + 6}V${y + b.head}Z"/>`;
       g += `<rect class="uhit head" data-part="head" x="${x}" y="${y}" width="${w}" height="${b.head}"/>`;
-      if (b.main || c.abstract || excParent(c)) g += `<text class="ustereo" x="${x + w / 2}" y="${y + 15}">${b.main ? '«principale»' : c.abstract ? '«abstract»' : `«eredita da ${esc(c.parent)}»`}</text>`;
+      if (b.main || c.abstract || b.exc) g += `<text class="ustereo" x="${x + w / 2}" y="${y + 15}">${b.main ? '«principale»' : c.abstract ? '«abstract»' : '«eccezione»'}</text>`;
       g += `<text class="uname" x="${x + w / 2}" y="${y + b.head - 13}">${esc(ModelLib.classTitle(c))}</text>`;
       if (warn) g += `<g class="uwarn"><circle cx="${x + 15}" cy="${y + b.head / 2}" r="8"/><text x="${x + 15}" y="${y + b.head / 2 + 4}">!</text></g>`;
       // attributi
@@ -184,6 +220,20 @@ const UmlLib = (() => {
       + '<marker id="uml-open" viewBox="0 0 12 12" refX="11" refY="6" markerWidth="11" markerHeight="11" orient="auto-start-reverse" markerUnits="userSpaceOnUse"><path d="M1 1L11 6L1 11" class="mopen"/></marker></defs>'
       + `<g class="umods">${frames.join('')}</g><g class="urels">${lines.join('')}</g><g class="uboxes">${shapes.join('')}</g><g class="ulabels">${labels.join('')}</g></svg>`;
     return { svg, W, H, boxes };
+  }
+  /* eccezione predefinita: messaggio e i due costruttori, in sola lettura */
+  function builtinBox(b) {
+    const { c, x, y, w } = b;
+    let g = `<g class="ubox exc builtin" data-cls="${c.id}"><title>${esc(c.name)} — eccezione predefinita${c.parent ? ', eredita da ' + esc(c.parent) : ''} (${esc(c.doc)}), in sola lettura: trascinala per spostarla</title>`;
+    g += `<rect class="ubg" x="${x}" y="${y}" width="${w}" height="${b.h}" rx="6"/>`;
+    g += `<path class="uheadbg" d="M${x} ${y + b.head}V${y + 6}Q${x} ${y} ${x + 6} ${y}H${x + w - 6}Q${x + w} ${y} ${x + w} ${y + 6}V${y + b.head}Z"/>`;
+    g += `<text class="ustereo" x="${x + w / 2}" y="${y + 15}">«eccezione predefinita»</text><text class="uname" x="${x + w / 2}" y="${y + b.head - 13}">${esc(c.name)}</text>`;
+    let yy = y + b.head;
+    const row = (r, k) => `<g class="urow ro"><text class="umem" x="${x + PADX}" y="${yy + CPAD + k * ROW + ROW / 2 + 4.5}">${esc(r.text)}</text><title>${esc(r.text)} — ${esc(r.tip)}</title></g>`;
+    g += `<path class="usep" d="M${x} ${yy}H${x + w}"/>` + b.attrs.map(row).join('');
+    yy += b.ah;
+    g += `<path class="usep" d="M${x} ${yy}H${x + w}"/>` + b.meths.map(row).join('');
+    return g + '</g>';
   }
   function addBtn(cx, y, what, title) {
     return `<g class="uadd" data-add="${what}" role="button" aria-label="${title}"><title>${title}</title><circle cx="${cx}" cy="${y}" r="8"/><path d="M${cx - 3.5} ${y}H${cx + 3.5}M${cx} ${y - 3.5}V${y + 3.5}"/></g>`;

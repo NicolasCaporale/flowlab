@@ -32,6 +32,8 @@
     fileName: null, ins: [], expanded: new Set(), modCollapsed: new Set(store.get('modCollapsed', [])), varsOpen: new Set(), vfs: new Map(Object.entries(store.get('vfs', {}))),
     // vista Funzioni o Oggetti; nella vista Oggetti il foglio mostra il diagramma delle classi (uml) o un metodo
     view: store.get('view', 'functions') === 'objects' ? 'objects' : 'functions', uml: true, usel: null,
+    // posizioni delle eccezioni predefinite nel diagramma delle classi (solo in memoria, per il programma aperto)
+    excPos: new Map(),
   };
   const SPEEDS = [{ ms: 0, label: 'Istantanea' }, { ms: 40, label: 'Veloce' }, { ms: 280, label: 'Media' }, { ms: 750, label: 'Lenta' }];
   const renderer = new RenderLib.Renderer();
@@ -310,7 +312,7 @@
   function renderChart() {
     const holder = V.chart;
     if (isUml()) {
-      const out = UmlLib.render(st.prog, st.usel, { collapsed: st.modCollapsed });
+      const out = UmlLib.render(st.prog, st.usel, { collapsed: st.modCollapsed, excPos: st.excPos });
       st.ins = []; st.edges = [];
       holder.innerHTML = vsvg(out.svg);
       applyZoom();
@@ -1292,24 +1294,37 @@
     }
     c.name = nu;
   }
-  function classDialog(c, pos) {
+  /* classi ed eccezioni sono due famiglie separate: una classe eredita solo da classi, un'eccezione
+     (Nuova eccezione…, Maiusc+E) solo da eccezioni, predefinite o del programma */
+  /* eccezione predefinita: a che cosa serve e come si eredita */
+  function builtinInfo(name) {
+    const k = M.excClass(name); if (!k) return;
+    infoBox(`${k.name} · eccezione predefinita`, `${k.name}${k.parent ? ` (eredita da ${k.parent})` : ''}: ${k.doc}. Ha l'attributo messaggio, in sola lettura, e due costruttori: ${k.name}() e ${k.name}(messaggio). Per una tua eccezione usa «Nuova eccezione…» e scegli ${k.name} in «Eredita da»; nel suo costruttore puoi richiamare super(messaggio). Le eccezioni predefinite compaiono nel diagramma solo se il programma eredita da loro, e si mettono da sole nel posto migliore.`);
+  }
+  function classDialog(c, pos, asExc, parentName) {
     const isNew = !c;
     if (c && roGuard(c)) return;
-    const nameW = field({ key: 'cname', label: 'Nome della classe', type: 'ident', required: true, placeholder: 'es. Punto', hint: 'Per convenzione inizia con la lettera maiuscola' }, c ? c.name : '');
+    const exc = c ? M.isExcClass(st.prog, c) : !!asExc;
+    const what = exc ? 'eccezione' : 'classe';
+    const nameW = field({ key: 'cname', label: exc ? 'Nome dell\'eccezione' : 'Nome della classe', type: 'ident', required: true, placeholder: exc ? 'es. VotoNonValido' : 'es. Punto', hint: 'Per convenzione inizia con la lettera maiuscola' }, c ? c.name : '');
     const banned = c ? [c, ...descendants(c)] : [];
-    // si può ereditare anche da un'eccezione predefinita: la classe diventa un'eccezione da usare con Throw e Catch
-    const parW = field({ key: 'cpar', label: 'Eredita da (classe madre)', type: 'select', options: [['', '— nessuna —'], ...st.prog.classes.filter((k) => !banned.includes(k) && !(k.tparams || []).length).map((k) => [k.name, k.name]), ...M.EXC_CLASSES.map((k) => [k.name, `${k.name} (eccezione predefinita)`])] }, c ? (c.parent || '') : '');
+    const mine = st.prog.classes.filter((k) => !banned.includes(k) && !(k.tparams || []).length && M.isExcClass(st.prog, k) === exc).map((k) => [k.name, k.name]);
+    const parW = exc
+      ? field({ key: 'cpar', label: 'Eredita da (eccezione madre)', type: 'select', options: [...M.EXC_CLASSES.map((k) => [k.name, `${k.name} (eccezione predefinita)`]), ...mine] }, c ? c.parent : parentName || 'Eccezione')
+      : field({ key: 'cpar', label: 'Eredita da (classe madre)', type: 'select', options: [['', '— nessuna —'], ...mine] }, c ? (c.parent || '') : '');
     const isMainCls = c && c === M.mainClass(st.prog);
-    const absW = isMainCls ? null : field({ key: 'cabs', label: 'Astratta: non si creano oggetti di questa classe, solo delle sue sottoclassi', type: 'check' }, c ? !!c.abstract : false);
-    const body = h('div', { class: 'fields' }, h('p', { class: 'help' }, 'Una classe descrive un tipo di oggetti: i loro attributi (i dati) e i metodi (le operazioni). Con l\'ereditarietà la classe riceve attributi e metodi della classe madre e può ridefinire i metodi.'), nameW, parW, absW);
+    const absW = isMainCls ? null : field({ key: 'cabs', label: `Astratta: non si creano oggetti di questa ${what}, solo delle sue sottoclassi`, type: 'check' }, c ? !!c.abstract : false);
+    const help = exc ? 'Un\'eccezione segnala un errore: si crea e si lancia con Throw (Throw new VotoNonValido("…")) e si cattura con Catch. Eredita da Eccezione, o da un\'eccezione più specifica, e ne riceve l\'attributo messaggio; può avere altri attributi e metodi come una classe.'
+      : 'Una classe descrive un tipo di oggetti: i loro attributi (i dati) e i metodi (le operazioni). Con l\'ereditarietà la classe riceve attributi e metodi della classe madre e può ridefinire i metodi.';
+    const body = h('div', { class: 'fields' }, h('p', { class: 'help' }, help), nameW, parW, absW);
     openModal({
-      title: isNew ? 'Nuova classe' : 'Modifica classe ' + c.name, body, okText: isNew ? 'Crea' : 'Salva',
+      title: isNew ? (exc ? 'Nuova eccezione' : 'Nuova classe') : `Modifica ${what} ${c.name}`, body, okText: isNew ? 'Crea' : 'Salva',
       onOk: () => {
         const e1 = nameW._check(); if (e1) return e1;
         const name = nameW._get().trim();
         if (E.BUILTINS[name.toLowerCase()]) return `${name} è il nome di una funzione integrata`;
         if (st.prog.classes.some((k) => k !== c && k.name.toLowerCase() === name.toLowerCase())) return `Esiste già una classe chiamata ${name}`;
-        if (M.excClass(name)) return `${name} è un'eccezione predefinita: scegli un altro nome (per una tua eccezione, es. VotoNonValido, scegli ${name} in «Eredita da»)`;
+        if (M.excClass(name)) return `${name} è un'eccezione predefinita: scegli un altro nome${exc ? '' : ' (per una tua eccezione usa «Nuova eccezione…» nel menu del diagramma delle classi)'}`;
         const parent = parW._get();
         const abs = !!(absW && absW._get());
         // i Tipi Generici della classe vengono dagli attributi e dai metodi
@@ -1418,12 +1433,16 @@
     const B = (label, fn, cls, key) => h('button', { type: 'button', class: cls || '', onclick: () => { closePop(); fn(); } }, h('span', null, label), key ? h('kbd', null, key) : null);
     let menuBox;
     const modEl = e.target.closest('.umod');
-    if (modEl && !c) {
+    const bi = box && box.classList.contains('builtin') ? box.dataset.cls.slice(4) : null;
+    if (bi) {
+      menuBox = h('div', { class: 'ctxmenu' }, h('div', { class: 'pophead' }, `${bi} · eccezione predefinita`),
+        B(`Nuova eccezione che eredita da ${bi}…`, () => classDialog(null, svgPoint(e), true, bi)), B('Che cos\'è?', () => builtinInfo(bi)));
+    } else if (modEl && !c) {
       const mn = modEl.dataset.module;
       menuBox = h('div', { class: 'ctxmenu' }, h('div', { class: 'pophead' }, 'Modulo ' + mn), B('Aggiorna il modulo', () => updateModule(mn)), h('hr'), B('Rimuovi il modulo', () => removeModule(mn), 'danger'));
     } else if (!c) {
       const pt = svgPoint(e);
-      menuBox = h('div', { class: 'ctxmenu' }, B('Nuova classe…', () => classDialog(null, pt), '', 'N'), B('Importa un modulo…', moduleDialog, '', 'Ctrl+I'));
+      menuBox = h('div', { class: 'ctxmenu' }, B('Nuova classe…', () => classDialog(null, pt), '', 'N'), B('Nuova eccezione…', () => classDialog(null, pt, true), '', 'Maiusc+E'), B('Importa un modulo…', moduleDialog, '', 'Ctrl+I'));
     } else if (c.module) {
       const f = row && row.dataset.kind === 'method' ? st.prog.functions.find((x) => x.id === row.dataset.fid) : null;
       menuBox = h('div', { class: 'ctxmenu' }, h('div', { class: 'pophead' }, `${M.classTitle(c)} · modulo ${c.module.name}`),
@@ -1468,7 +1487,7 @@
   /* selezione nel diagramma delle classi */
   function umlSelectFrom(target) {
     const box = target.closest('.ubox'), row = target.closest('.urow');
-    if (!box) st.usel = null;
+    if (!box || box.classList.contains('builtin')) st.usel = null; // eccezione predefinita: non si seleziona
     else if (row) st.usel = { cls: box.dataset.cls, kind: row.dataset.kind, i: row.dataset.i != null ? +row.dataset.i : undefined, fid: row.dataset.fid };
     else st.usel = { cls: box.dataset.cls, kind: 'class' };
   }
@@ -1527,6 +1546,7 @@
         if (mc) { toggleModule(mc.dataset.module); return; }
         if (e.target.closest('.umod')) return; // riquadro di un modulo: niente nuova classe
         const row = e.target.closest('.urow'), box = e.target.closest('.ubox');
+        if (box && box.classList.contains('builtin')) { builtinInfo(box.dataset.cls.slice(4)); return; }
         if (row && row.dataset.kind === 'method') { openMethod(row.dataset.fid); return; }
         if (isRunning()) { toast('Ferma il programma per modificare il diagramma', 'warn'); return; }
         if (row) { attrDialog(M.classById(st.prog, box.dataset.cls), +row.dataset.i); return; }
@@ -1561,7 +1581,9 @@
         if (e.button !== 0 || isRunning() || e.target.closest('.uadd') || e.target.closest('.umodtog')) return;
         const box = e.target.closest('.ubox'), mod = !box && e.target.closest('.umod');
         let cs;
-        if (box) cs = [M.classById(st.prog, box.dataset.cls)];
+        // eccezione predefinita: si sposta la sua posizione (non è nel file)
+        if (box && box.classList.contains('builtin')) cs = [Object.assign(st.excPos.get(box.dataset.cls.slice(4)) || {}, { builtin: true })];
+        else if (box) cs = [M.classById(st.prog, box.dataset.cls)];
         else if (mod) { const m = M.modulesOf(st.prog).find((x) => x.name === mod.dataset.module); cs = m ? m.classes : []; }
         if (!cs || !cs.length) return;
         udrag = { items: cs.map((c) => ({ c, ox: c.x || 0, oy: c.y || 0 })), mod: mod ? mod.dataset.module : null, x: e.clientX, y: e.clientY, on: false, raf: 0 };
@@ -1585,9 +1607,9 @@
         const dx = (e.clientX - udrag.x) / st.zoom, dy = (e.clientY - udrag.y) / st.zoom;
         if (!udrag.on && Math.hypot(dx, dy) > 4) {
           udrag.on = true;
-          st.undo.push(snapshot()); if (st.undo.length > 150) st.undo.shift(); st.redo = [];
+          if (!udrag.items[0].c.builtin) { st.undo.push(snapshot()); if (st.undo.length > 150) st.undo.shift(); st.redo = []; }
           document.body.classList.add('udragging');
-          st.usel = udrag.mod ? null : { cls: udrag.items[0].c.id, kind: 'class' };
+          st.usel = udrag.mod || udrag.items[0].c.builtin ? null : { cls: udrag.items[0].c.id, kind: 'class' };
         }
         if (udrag.on) {
           // passo di 10 e mai oltre il bordo in alto o a sinistra (le classi di un modulo restano allineate tra loro)
@@ -1618,7 +1640,7 @@
     window.addEventListener('pointerup', (e) => {
       if (udrag) {
         const d = udrag; udrag = null;
-        if (d.on) { cancelAnimationFrame(d.raf); document.body.classList.remove('udragging'); st.dirty = true; suppressClick = true; setTimeout(() => { suppressClick = false; }, 50); render(); }
+        if (d.on) { cancelAnimationFrame(d.raf); document.body.classList.remove('udragging'); if (!d.items[0].c.builtin) st.dirty = true; suppressClick = true; setTimeout(() => { suppressClick = false; }, 50); render(); }
         return;
       }
       if (!drag) return;
@@ -2706,6 +2728,7 @@
     if (isRunning()) stopRun();
     resetViews();
     const before = keepUndo ? snapshot() : null;
+    st.excPos = new Map();
     st.undo = before ? [before] : []; st.redo = []; st.prog = prog; st.fi = 0; st.sel = null; st.fileName = name || null; st.dirty = false; st.sourceUrl = null; st.fileHandle = null;
     run.errId = null; run.mainFrame = null;
     startView();
@@ -3091,13 +3114,13 @@
     confirmBox('Modifiche non salvate', 'Il programma attuale ha modifiche non salvate. Vuoi continuare e perderle?', 'Continua', action);
   }
   function newProgram() {
-    guardDirty(() => { if (isRunning()) stopRun(); resetViews(); st.prog = M.newProgram(); st.fi = 0; st.sel = null; st.uml = isOO(); st.usel = null; st.undo = []; st.redo = []; st.fileName = null; st.dirty = false; run.mainFrame = null; render(); renderVars(); });
+    guardDirty(() => { if (isRunning()) stopRun(); resetViews(); st.excPos = new Map(); st.prog = M.newProgram(); st.fi = 0; st.sel = null; st.uml = isOO(); st.usel = null; st.undo = []; st.redo = []; st.fileName = null; st.dirty = false; run.mainFrame = null; render(); renderVars(); });
   }
   function loadExample(id) {
     const ex = Examples.get(id); if (!ex) return;
     guardDirty(() => {
       if (isRunning()) stopRun();
-      resetViews();
+      resetViews(); st.excPos = new Map();
       st.prog = ex.make(); st.fi = 0; st.sel = null; st.usel = null; st.undo = []; st.redo = []; st.fileName = null; st.dirty = false; run.mainFrame = null; run.errId = null;
       startView();
       conClear(); render(); renderVars(); setTimeout(fitIfLarge, 0);
@@ -3213,7 +3236,7 @@
     }
     try {
       if (oo) {
-        const u = UmlLib.render(prog, null);
+        const u = UmlLib.render(prog, null, { excPos: st.excPos });
         await placeDiagram('uml', 'Diagramma delle classi', exportSvg(svgFromString(u.svg), css), u.W, u.H);
       }
       const all = new Set();
@@ -3284,6 +3307,7 @@
     for (const c of ['term', 'decl', 'assign', 'in', 'out', 'cond', 'loop', 'call', 'comment', 'brk', 'file', 'inc', 'exc']) css += `.c-${c}>path,.c-${c}>rect{fill:${v('--f-' + c)};stroke:${v('--s-' + c)}}`;
     css += `.flow.exc{stroke:${v('--s-exc')};stroke-dasharray:5 4}`;
     // diagramma delle classi
+    css += `.exc .ubg{stroke:${v('--s-exc')}}.exc .uheadbg{fill:${v('--f-exc')}}.exc .usep{stroke:${v('--s-exc')}}.builtin .ubg{stroke-dasharray:6 3}.builtin .uheadbg{fill-opacity:.55}`;
     css += `.ubg{fill:${v('--paper')};stroke:${v('--s-call')};stroke-width:1.6}.uheadbg{fill:${v('--f-call')}}.main .uheadbg{fill:${v('--f-term')}}.main .ubg{stroke:${v('--s-term')}}.usep{stroke:${v('--s-call')};stroke-width:1.2}.uname{font:700 14px "Atkinson Hyperlegible",sans-serif;text-anchor:middle}.ustereo{font:italic 11.5px "Atkinson Hyperlegible",sans-serif;fill:${v('--muted')};text-anchor:middle}.umem{font:400 12.5px "JetBrains Mono",monospace;text-anchor:start}.urel{fill:none;stroke:${v('--flow')};stroke-width:1.6}.minh{fill:${v('--paper')};stroke:${v('--flow')};stroke-width:1.6}.mopen{fill:none;stroke:${v('--flow')};stroke-width:1.6}.ulab{font:600 11.5px "JetBrains Mono",monospace;fill:${v('--muted')};text-anchor:start}`;
     return css;
   }
@@ -3429,7 +3453,7 @@
       ['T  ·  Maiusc+T', 'Try (con Catch e Finally), Throw'],
     ]],
     ['Funzioni, metodi e classi', [
-      ['N', 'Nuova funzione o nuovo metodo (nel diagramma delle classi: nuova classe)'], ['F2', 'Modifica la funzione o il metodo (nel diagramma delle classi: l\'elemento selezionato)'],
+      ['N', 'Nuova funzione o nuovo metodo (nel diagramma delle classi: nuova classe)'], ['Maiusc+E', 'Nel diagramma delle classi: nuova eccezione'], ['F2', 'Modifica la funzione o il metodo (nel diagramma delle classi: l\'elemento selezionato)'],
       ['Maiusc+Canc', 'Elimina la funzione o il metodo'], ['Pag↑  Pag↓', 'Diagramma precedente, successivo'], ['U', 'Diagramma delle classi'],
       ['A  M  C', 'Diagramma delle classi: nuovo attributo, metodo, costruttore della classe selezionata'],
       ['Invio  ·  Canc', 'Diagramma delle classi: apri o modifica, elimina l\'elemento selezionato'],
@@ -3518,6 +3542,7 @@
       if (shift && (e.key === 'Delete' || e.key === 'Backspace') && !isUml()) return go(() => $('#funcDel').click());
       const lab = keyLabel(e);
       if (lab === 'N') return go(() => $('#funcAdd').click());
+      if (lab === 'Maiusc+E' && isUml()) return go(() => { if (isRunning()) toast('Ferma il programma per modificare il diagramma', 'warn'); else classDialog(null, null, true); });
       if (lab === 'U' && isOO() && !isUml()) return go(showUml);
       if (lab === 'Maiusc+K' && !isUml()) return go(toggleCompact);
       if (isUml()) {

@@ -67,10 +67,49 @@ ok('non gestita: ' + await out(), /Eccezione non gestita: ConversioneNonValida �
 await load('test/out/excoo.fprg');
 await page.evaluate(() => FlowLab.showUml()); await wait(150);
 const box = await page.locator('.ubox:has(.uname:text-is("SaldoInsufficiente"))').textContent();
-ok('UML: ' + box.match(/«[^»]+»/)?.[0], /«eredita da Eccezione»/.test(box));
+ok('UML: ' + box.match(/«[^»]+»/)?.[0], /«eccezione»/.test(box));
 await page.locator('.ubox:has(.uname:text-is("SaldoInsufficiente")) .uhit.head').dblclick(); await wait(150);
 ok('classe madre: ' + await page.$eval('#f_cpar', (s) => s.value), (await page.$eval('#f_cpar', (s) => s.value)) === 'Eccezione' && (await page.locator('#f_cpar option').allTextContents()).includes('DivisionePerZero (eccezione predefinita)'));
 await page.keyboard.press('Escape'); await wait(80);
+// eccezione predefinita nel diagramma: Eccezione, sopra o accanto a SaldoInsufficiente, con freccia di ereditarietà
+const bi = page.locator('.ubox.builtin');
+ok('riquadro predefinito: ' + (await bi.allTextContents()).join(' / '), (await bi.count()) === 1 && /Eccezione\(messaggio: Stringa\)/.test(await bi.textContent()) && (await page.locator('.ubox.exc:not(.builtin)').count()) === 1);
+const ov = await page.evaluate(() => { const a = document.querySelector('.ubox.builtin .ubg').getBBox(); return [...document.querySelectorAll('.ubox:not(.builtin) .ubg')].map((x) => x.getBBox()).some((b) => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height); });
+ok('la predefinita non copre altre classi', !ov);
+await bi.locator('.uheadbg').dblclick(); await wait(150);
+ok('doppio clic: ' + await page.locator('.modal h2').textContent(), /Eccezione · eccezione predefinita/.test(await page.locator('.modal h2').textContent()));
+await page.keyboard.press('Escape'); await wait(80);
+await bi.locator('.uheadbg').click({ button: 'right' }); await wait(120);
+ok('menu: ' + (await page.locator('.ctxmenu button').allTextContents()).join(' · '), (await page.locator('.ctxmenu button:has-text("Nuova eccezione che eredita da Eccezione…")').count()) === 1);
+await page.keyboard.press('Escape'); await wait(80);
+// la posizione si calcola la prima volta; spostando la sottoclasse resta ferma
+const bpos = () => page.evaluate(() => { const r = document.querySelector('.ubox.builtin .ubg').getBBox(); return [Math.round(r.x), Math.round(r.y)]; });
+const p0 = await bpos();
+await page.evaluate(() => { const c = FlowLab.state.prog.classes.find((k) => k.name === 'SaldoInsufficiente'); c.x = 600; c.y = 400; FlowLab.render(); }); await wait(150);
+ok(`sottoclasse spostata: predefinita ferma ${p0} → ${await bpos()}`, (await bpos()).join() === p0.join());
+// si sposta trascinandola, senza modificare il programma
+const hb = await bi.locator('.uheadbg').boundingBox();
+await page.mouse.move(hb.x + 30, hb.y + 10); await page.mouse.down(); await page.mouse.move(hb.x + 130, hb.y + 90, { steps: 6 }); await page.mouse.up(); await wait(150);
+const p1 = await bpos();
+ok(`trascinata: ${p0} → ${p1}, programma non modificato`, Math.abs(p1[0] - p0[0] - 100) <= 10 && Math.abs(p1[1] - p0[1] - 80) <= 10 && !(await page.evaluate(() => FlowLab.state.dirty)));
+// riaprendo il programma la posizione si ricalcola
+await page.evaluate(() => { FlowLab.loadText(FlowLab.serialize(), 'p.fprg'); FlowLab.showUml(); }); await wait(200);
+ok('riaperto: posizione ricalcolata ' + await bpos(), (await bpos()).join() !== p1.join());
+// nuova classe: niente eccezioni tra le classi madri
+await page.locator('#chart svg').click({ button: 'right', position: { x: 4, y: 4 } }); await wait(120);
+ok('menu: ' + (await page.locator('.ctxmenu button').allTextContents()).join(' · '), (await page.locator('.ctxmenu button:has-text("Nuova eccezione…")').count()) === 1);
+await page.click('.ctxmenu button:has-text("Nuova classe…")'); await wait(150);
+const cOpts = await page.locator('#f_cpar option').allTextContents();
+ok('Nuova classe, madri possibili: ' + cOpts.join(', '), !cOpts.some((o) => /Eccezione|DivisionePerZero|SaldoInsufficiente/.test(o)) && cOpts.includes('Conto'));
+await page.keyboard.press('Escape'); await wait(80);
+// Maiusc+E: nuova eccezione, solo eccezioni tra le madri
+await page.keyboard.press('Shift+E'); await wait(150);
+const eOpts = await page.locator('#f_cpar option').allTextContents();
+ok(`${await page.locator('.modal h2').textContent()}: madre ${await page.$eval('#f_cpar', (x) => x.value)}, possibili ${eOpts.join(', ')}`, (await page.locator('.modal h2').textContent()) === 'Nuova eccezione' && (await page.$eval('#f_cpar', (x) => x.value)) === 'Eccezione' && eOpts.includes('SaldoInsufficiente') && !eOpts.includes('Conto') && !eOpts.some((o) => /nessuna/.test(o)));
+await page.fill('#f_cname', 'ImportoNonValido'); await page.locator('#f_cpar').selectOption('SaldoInsufficiente');
+await page.click('.modal footer .btn.primary'); await wait(150);
+ok('eccezione creata: ' + await page.evaluate(() => { const c = FlowLab.state.prog.classes.find((k) => k.name === 'ImportoNonValido'); return c && c.parent; }), (await page.evaluate(() => { const c = FlowLab.state.prog.classes.find((k) => k.name === 'ImportoNonValido'); return c && c.parent; })) === 'SaldoInsufficiente');
+await page.keyboard.press('Control+z'); await wait(150);
 await page.evaluate(() => FlowLab.showFunc(0)); await wait(150);
 await page.click('#runBtn'); await wait(600);
 ok('esecuzione: ' + await out(), (await out()).includes('saldo insufficiente: mancano 430 (prelievo troppo grande) | saldo: 70 | generica: importo negativo'));

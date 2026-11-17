@@ -618,6 +618,15 @@ table.ref tr.kgroup td { font-weight: 700; color: var(--muted); padding-top: 12p
 .uml .ubox.mod .ubg { stroke: var(--s-inc); }
 .uml .ubox.mod .uheadbg { fill: var(--f-inc); }
 .uml .ubox.mod .usep { stroke: var(--s-inc); }
+/* eccezioni: colori dei blocchi Try/Throw; quelle predefinite tratteggiate e in sola lettura */
+.uml .ubox.exc .ubg { stroke: var(--s-exc); }
+.uml .ubox.exc .uheadbg { fill: var(--f-exc); }
+.uml .ubox.exc .usep { stroke: var(--s-exc); }
+.uml .ubox.builtin .ubg { stroke-dasharray: 6 3; }
+.uml .ubox.builtin .uheadbg { fill-opacity: 0.55; }
+.uml .ubox.builtin .umem { fill: var(--muted); }
+.uml .ubox.exc.warn .ubg { stroke: var(--err); }
+.uml .ubox.exc.sel .ubg { stroke: var(--sel); }
 body.readonly .chart .ins { display: none; }
 body.readonly #crumbWhere { color: var(--s-inc); }
 .modlib { display: flex; flex-direction: column; gap: 4px; }
