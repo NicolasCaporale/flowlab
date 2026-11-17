@@ -27,13 +27,40 @@ const KINDS = {
   close:      { fields: { mode: 'read' } },
   read:       { fields: { variable: '' } },
   write:      { fields: { expression: '' } },
+  // eccezioni: Try con il corpo, uno o più Catch (catches: [{ id, type, variable, body }]) e Finally facoltativo
+  try:        { fields: { hasFinally: false }, blocks: ['body', 'finally'], catches: true },
+  throw:      { fields: { expression: '' } },
 };
+const makeCatch = (props) => Object.assign({ id: newId(), type: 'Eccezione', variable: 'e', body: [] }, props || {});
+
+/* Eccezioni predefinite: si usano come classi (anche nella vista Funzioni) e si possono estendere.
+   Gli errori dell'interprete diventano eccezioni di questi tipi. */
+const EXCEPTIONS = [
+  ['Eccezione', '', 'qualsiasi eccezione'],
+  ['DivisionePerZero', 'Eccezione', 'divisione o mod per zero'],
+  ['IndiceNonValido', 'Eccezione', 'indice fuori dall\'array'],
+  ['ConversioneNonValida', 'Eccezione', 'testo che non è un numero (ToInteger, ToReal)'],
+  ['OggettoNullo', 'Eccezione', 'uso di un oggetto che vale null'],
+  ['ErroreFile', 'Eccezione', 'errore nei file'],
+];
+const EXC_CLASSES = EXCEPTIONS.map(([name, parent, doc]) => ({
+  id: 'exc:' + name, name, parent, doc, abstract: false, tparams: [], module: null, builtin: true, x: 0, y: 0,
+  attributes: [{ name: 'messaggio', type: 'String', array: false, size: '', visibility: 'public', static: false, init: '', readonly: true }],
+}));
+const excClass = (name) => EXC_CLASSES.find((c) => c.name.toLowerCase() === String(name || '').toLowerCase()) || null;
+/* blocchi figli di un blocco (per il Try: corpo, rami Catch, Finally) */
+function childArrays(s) {
+  const out = (KINDS[s.kind].blocks || []).map((b) => s[b]);
+  if (s.kind === 'try') out.splice(1, 0, ...(s.catches || []).map((c) => c.body));
+  return out;
+}
 
 function makeStmt(kind, props) {
   const def = KINDS[kind];
   const s = { id: newId(), kind };
   for (const [k, v] of Object.entries(def.fields)) s[k] = v;
   for (const b of def.blocks || []) s[b] = [];
+  if (def.catches) s.catches = [makeCatch()];
   if (props) Object.assign(s, props);
   return s;
 }
@@ -89,10 +116,13 @@ function makeAttribute(props) {
 const hasClasses = (prog) => Array.isArray(prog.classes) && prog.classes.length > 0;
 function classById(prog, id) { return hasClasses(prog) ? prog.classes.find((c) => c.id === id) || null : null; }
 function classByName(prog, name) {
-  if (!hasClasses(prog) || !name) return null;
+  if (!name) return null;
   const l = String(name).toLowerCase();
-  return prog.classes.find((c) => c.name.toLowerCase() === l) || null;
+  // le eccezioni predefinite sono classi sempre disponibili
+  return (hasClasses(prog) && prog.classes.find((c) => c.name.toLowerCase() === l)) || excClass(l);
 }
+/* la classe (o il nome) è un'eccezione? */
+const isExcClass = (prog, c) => { const k = typeof c === 'string' ? classByName(prog, c) : c; return !!k && chainOf(prog, k).some((x) => x.builtin && x.name === 'Eccezione'); };
 const classOf = (prog, f) => classById(prog, f.cls);
 const mainClass = (prog) => classOf(prog, prog.functions[0]);
 const membersOf = (prog, c) => prog.functions.filter((f) => f.cls === c.id);
@@ -156,7 +186,8 @@ function cloneStmt(s, keepIds) {
 }
 function reId(s) {
   s.id = newId();
-  for (const b of KINDS[s.kind].blocks || []) s[b].forEach(reId);
+  if (s.catches) s.catches.forEach((c) => { c.id = newId(); });
+  for (const arr of childArrays(s)) arr.forEach(reId);
 }
 
 /* Visita ricorsiva di tutti i blocchi */
@@ -164,7 +195,7 @@ function walk(stmts, fn, parent) {
   for (let i = 0; i < stmts.length; i++) {
     const s = stmts[i];
     fn(s, stmts, i, parent);
-    for (const b of KINDS[s.kind].blocks || []) walk(s[b], fn, s);
+    for (const arr of childArrays(s)) walk(arr, fn, s);
   }
 }
 function findStmt(prog, id) {
@@ -209,7 +240,8 @@ function parseFprg(text) {
         static: boolAttr(a.getAttribute('static'), false), init: a.getAttribute('init') || '',
       }));
       delete cl._attrEls;
-      const par = _classNames.get(cl.parent.toLowerCase()); cl.parent = par && par.toLowerCase() !== cl.name.toLowerCase() ? par : '';
+      // la classe madre può essere anche un'eccezione predefinita
+      const par = _classNames.get(cl.parent.toLowerCase()) || (excClass(cl.parent) || {}).name; cl.parent = par && par.toLowerCase() !== cl.name.toLowerCase() ? par : '';
     }
     if (!prog.classes.length) delete prog.classes;
   }
@@ -363,6 +395,19 @@ function parseStmt(el) {
     case 'close': return makeStmt('close', { mode: (A('mode') || 'read').toLowerCase() === 'write' ? 'write' : 'read' });
     case 'read': return makeStmt('read', { variable: S('variable') });
     case 'write': return makeStmt('write', { expression: S('expression') });
+    // estensione FlowLab: eccezioni
+    case 'throw': return makeStmt('throw', { expression: S('expression') });
+    case 'try': {
+      const s = makeStmt('try', { catches: [] });
+      for (const c of el.children) {
+        const t = c.nodeName.toLowerCase();
+        if (t === 'body') s.body = parseBlock(c);
+        else if (t === 'catch') s.catches.push(makeCatch({ type: (c.getAttribute('type') || 'Eccezione').trim(), variable: (c.getAttribute('variable') || 'e').trim(), body: parseBlock(c) }));
+        else if (t === 'finally') { s.hasFinally = true; s.finally = parseBlock(c); }
+      }
+      if (!s.catches.length && !s.hasFinally) s.catches.push(makeCatch());
+      return s;
+    }
   }
   return null; // elemento sconosciuto: ignorato
 }
@@ -492,6 +537,20 @@ function writeBlock(stmts, L, depth) {
       case 'close': open('close', [['mode', s.mode]]); break;
       case 'read': open('read', [['variable', s.variable]]); break;
       case 'write': open('write', [['expression', s.expression]]); break;
+      case 'throw': open('throw', [['expression', s.expression]]); break;
+      case 'try': {
+        const tag = (t, arr, attrs) => {
+          const a = (attrs || []).map(([k, v]) => ` ${k}="${xmlEsc(v)}"`).join('');
+          if (!arr.length) { L.push(`${ind}    <${t}${a}/>`); return; }
+          L.push(`${ind}    <${t}${a}>`); writeBlock(arr, L, depth + 2); L.push(`${ind}    </${t}>`);
+        };
+        L.push(`${ind}<try>`);
+        tag('body', s.body);
+        for (const c of s.catches || []) tag('catch', c.body, [['type', c.type], ['variable', c.variable]]);
+        if (s.hasFinally) tag('finally', s.finally);
+        L.push(`${ind}</try>`);
+        break;
+      }
     }
   }
 }
@@ -506,6 +565,7 @@ function extendedFeatures(prog) {
   for (const f of prog.functions) {
     if (rets(f).length > 1) out.add('funzioni con più valori restituiti');
     if (rets(f).some((r) => r.array)) out.add('funzioni che restituiscono array');
+    walk(f.body, (s) => { if (s.kind === 'try' || s.kind === 'throw') out.add('eccezioni (Try, Catch, Finally, Throw)'); });
     if (f.params.some((p) => p.array && (p.dims || 1) > 1)) out.add('array a più dimensioni');
     walk(f.body, (s) => {
       if (s.kind === 'const') out.add('costanti');
@@ -527,7 +587,7 @@ function isIncomplete(s) {
     case 'const': return !s.name.trim() || !String(s.expression).trim();
     case 'assign': return !s.variable.trim() || !s.expression.trim();
     case 'input': case 'read': return !s.variable.trim();
-    case 'output': case 'if': case 'while': case 'do': case 'call': case 'open': case 'write':
+    case 'output': case 'if': case 'while': case 'do': case 'call': case 'open': case 'write': case 'throw':
       return !String(s.expression).trim();
     case 'for': return !s.variable.trim() || !s.start.trim() || !s.end.trim();
     case 'breakpoint': return !s.always && !s.expression.trim();
@@ -535,5 +595,5 @@ function isIncomplete(s) {
   }
 }
 
-const ModelLib = { FPRG_ROOT, KINDS, VISIBILITY, VIS_IT, makeClass, isTypeParam, classTitle, modulesOf, isModuleFunc, moduleOfFunc, makeAttribute, hasClasses, classById, classByName, classOf, mainClass, membersOf, chainOf, isSubclass, defaultClassName, wrapInClass, isTrivialOO, isPlainOO, missingAbstract, unwrapClasses, typeList, extendedFeatures, rets, setRets, fgExpr, newId, makeStmt, makeFunction, newProgram, cloneStmt, reId, walk, findStmt, parseFprg, serializeFprg, isIncomplete, normType };
+const ModelLib = { FPRG_ROOT, KINDS, EXCEPTIONS, EXC_CLASSES, excClass, isExcClass, childArrays, makeCatch, VISIBILITY, VIS_IT, makeClass, isTypeParam, classTitle, modulesOf, isModuleFunc, moduleOfFunc, makeAttribute, hasClasses, classById, classByName, classOf, mainClass, membersOf, chainOf, isSubclass, defaultClassName, wrapInClass, isTrivialOO, isPlainOO, missingAbstract, unwrapClasses, typeList, extendedFeatures, rets, setRets, fgExpr, newId, makeStmt, makeFunction, newProgram, cloneStmt, reId, walk, findStmt, parseFprg, serializeFprg, isIncomplete, normType };
 if (typeof module !== 'undefined') module.exports = ModelLib;

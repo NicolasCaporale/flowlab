@@ -1,0 +1,96 @@
+<?xml version="1.0"?>
+<flowgorithm fileversion="4.2">
+    <attributes>
+        <attribute name="name" value="Prelievi dal conto"/>
+        <attribute name="authors" value="Esempi FlowLab"/>
+        <attribute name="about" value="SaldoInsufficiente eredita da Eccezione e ha un attributo suo (quanto manca). Il metodo preleva lancia le eccezioni; il Main le cattura per tipo: prima quella più specifica, poi Eccezione, che cattura anche le sottoclassi."/>
+        <attribute name="saved" value="2026-10-29 08:00:00 PM"/>
+        <attribute name="created" value="Zmxvd2xhYjtlc2VtcGk7MjAyNi0xMC0yOSAwODowMDowMCBQTTsx"/>
+        <attribute name="edited" value="Zmxvd2xhYjtlc2VtcGk7MjAyNi0xMC0yOSAwODowMDowMCBQTTsx"/>
+    </attributes>
+    <flowlab-classes>
+        <class name="PrelieviDalConto" parent="" x="40" y="60"/>
+        <class name="Conto" parent="" x="360" y="40">
+            <attribute name="saldo" type="Integer" array="False" size="" visibility="public" static="False" init=""/>
+        </class>
+        <class name="SaldoInsufficiente" parent="Eccezione" x="360" y="260">
+            <attribute name="mancano" type="Integer" array="False" size="" visibility="public" static="False" init=""/>
+        </class>
+    </flowlab-classes>
+    <function name="Main" type="None" variable="" flowlab-class="PrelieviDalConto" flowlab-visibility="public" flowlab-static="True">
+        <parameters/>
+        <body>
+            <declare name="c" type="Conto" array="False" size=""/>
+            <assign variable="c" expression="new Conto(100)"/>
+            <try>
+                <body>
+                    <call expression="c.preleva(30)"/>
+                    <call expression="c.preleva(500)"/>
+                    <output expression="&quot;no&quot;" newline="True"/>
+                </body>
+                <catch type="SaldoInsufficiente" variable="e">
+                    <output expression="&quot;saldo insufficiente: mancano &quot; &amp; e.mancano &amp; &quot; (&quot; &amp; e.messaggio &amp; &quot;)&quot;" newline="True"/>
+                </catch>
+                <finally>
+                    <output expression="&quot;saldo: &quot; &amp; c.saldo" newline="True"/>
+                </finally>
+            </try>
+            <try>
+                <body>
+                    <call expression="c.preleva(-1)"/>
+                </body>
+                <catch type="SaldoInsufficiente" variable="e">
+                    <output expression="&quot;no&quot;" newline="True"/>
+                </catch>
+                <catch type="Eccezione" variable="e">
+                    <output expression="&quot;generica: &quot; &amp; e.messaggio" newline="True"/>
+                </catch>
+            </try>
+            <try>
+                <body>
+                    <call expression="c.preleva(1000)"/>
+                </body>
+                <catch type="Eccezione" variable="e">
+                    <output expression="&quot;anche come Eccezione: &quot; &amp; e.messaggio" newline="True"/>
+                </catch>
+            </try>
+        </body>
+    </function>
+    <function name="Conto" type="None" variable="" flowlab-class="Conto" flowlab-visibility="public" flowlab-static="False" flowlab-ctor="True">
+        <parameters>
+            <parameter name="s" type="Integer" array="False"/>
+        </parameters>
+        <body>
+            <assign variable="saldo" expression="s"/>
+        </body>
+    </function>
+    <function name="preleva" type="None" variable="" flowlab-class="Conto" flowlab-visibility="public" flowlab-static="False">
+        <parameters>
+            <parameter name="x" type="Integer" array="False"/>
+        </parameters>
+        <body>
+            <if expression="x &lt; 0">
+                <then>
+                    <throw expression="new Eccezione(&quot;importo negativo&quot;)"/>
+                </then>
+                <else/>
+            </if>
+            <if expression="x &gt; saldo">
+                <then>
+                    <throw expression="new SaldoInsufficiente(x - saldo)"/>
+                </then>
+                <else/>
+            </if>
+            <assign variable="saldo" expression="saldo - x"/>
+        </body>
+    </function>
+    <function name="SaldoInsufficiente" type="None" variable="" flowlab-class="SaldoInsufficiente" flowlab-visibility="public" flowlab-static="False" flowlab-ctor="True">
+        <parameters>
+            <parameter name="m" type="Integer" array="False"/>
+        </parameters>
+        <body>
+            <call expression="super(&quot;prelievo troppo grande&quot;)"/>
+            <assign variable="mancano" expression="m"/>
+        </body>
+    </function>
+</flowgorithm>

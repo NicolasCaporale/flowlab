@@ -21,6 +21,9 @@ const Examples = (() => {
     close: (mode) => S('close', { mode }),
     read: (variable) => S('read', { variable }),
     write: (expression) => S('write', { expression }),
+    // eccezioni: catches = [[tipo, variabile, corpo]]
+    try: (body, catches, fin) => S('try', { body, catches: catches.map(([type, variable, b]) => ModelLib.makeCatch({ type, variable, body: b })), hasFinally: !!fin, finally: fin || [] }),
+    throw: (expression) => S('throw', { expression }),
   };
   const prog = (name, about, mainBody, funcs = []) => {
     const p = ModelLib.newProgram();
@@ -292,6 +295,47 @@ const Examples = (() => {
         X.close('read'),
         X.out('"Somma = " & somma'),
       ]),
+    },
+    {
+      id: 'eccezioni', title: 'Eccezioni (Try, Catch, Finally, Throw)', tags: 'Eccezioni · funzioni',
+      make: () => prog('Eccezioni', 'Gli errori durante l\'esecuzione (indice fuori dall\'array, conversione non valida) diventano eccezioni che un Try può catturare; Throw lancia un\'eccezione, che risale dalle funzioni fino al Catch che la gestisce. Il Finally si esegue sempre. Provalo passo passo: la freccia rossa mostra dove salta l\'esecuzione.', [
+        X.decl('v', 'Integer', 3), X.decl('i, x', 'Integer'), X.decl('r', 'Real'),
+        X.com('Un indice fuori dall\'array: il blocco successivo non si esegue'),
+        X.try([X.set('i', '5'), X.set('v[i]', '1'), X.out('"non arriva qui"')], [['IndiceNonValido', 'e', [X.out('"indice non valido"')]]]),
+        X.com('"12a" non è un numero: si esegue il Catch giusto, poi il Finally'),
+        X.try([X.set('x', 'ToInteger("12a")')], [['DivisionePerZero', 'e', [X.out('"no"')]], ['ConversioneNonValida', 'e', [X.out('"conversione non valida"')]]], [X.out('"finally 1"')]),
+        X.com('L\'eccezione lanciata dentro media risale fino a qui: r non cambia'),
+        X.set('r', '1.5'),
+        X.try([X.set('r', 'media(0)')], [['Eccezione', 'e', [X.out('"catturata: " & e.messaggio')]]]),
+        X.out('"r resta " & r'),
+        X.try([X.set('x', 'controlla(-3)'), X.out('"no"')], [['Eccezione', 'err', [X.out('"controlla: " & err.messaggio')]]], [X.out('"finally 2"')]),
+        X.com('Il Try interno non cattura DivisionePerZero: esegue il suo Finally e l\'eccezione prosegue fino al Try esterno'),
+        X.try([X.try([X.throw('new DivisionePerZero("interna")')], [['IndiceNonValido', 'e', [X.out('"no"')]]], [X.out('"finally interno"')])], [['DivisionePerZero', 'e', [X.out('"esterno: " & e.messaggio')]]]),
+        X.set('x', 'controlla(7)'), X.out('"ok " & x'),
+      ], [
+        fn('media', 'Real', 'm', [['n', 'Integer']], [X.decl('m', 'Real'), X.if('n = 0', [X.throw('new Eccezione("nessun voto")')]), X.set('m', '10 / n')]),
+        fn('controlla', 'Integer', 'k', [['n', 'Integer']], [X.decl('k', 'Integer'), X.if('n < 0', [X.throw('new Eccezione("negativo: " & n)')]), X.set('k', 'n * 2')]),
+      ]),
+    },
+    {
+      id: 'saldo', title: 'Prelievi dal conto (eccezioni dell\'utente)', tags: 'Oggetti · eccezioni · ereditarietà',
+      make: () => ooProg('Prelievi dal conto', 'SaldoInsufficiente eredita da Eccezione e ha un attributo suo (quanto manca). Il metodo preleva lancia le eccezioni; il Main le cattura per tipo: prima quella più specifica, poi Eccezione, che cattura anche le sottoclassi.', [
+        X.decl('c', 'Conto'),
+        X.set('c', 'new Conto(100)'),
+        X.try([X.call('c.preleva(30)'), X.call('c.preleva(500)'), X.out('"no"')], [['SaldoInsufficiente', 'e', [X.out('"saldo insufficiente: mancano " & e.mancano & " (" & e.messaggio & ")"')]]], [X.out('"saldo: " & c.saldo')]),
+        X.try([X.call('c.preleva(-1)')], [['SaldoInsufficiente', 'e', [X.out('"no"')]], ['Eccezione', 'e', [X.out('"generica: " & e.messaggio')]]]),
+        X.try([X.call('c.preleva(1000)')], [['Eccezione', 'e', [X.out('"anche come Eccezione: " & e.messaggio')]]]),
+      ], {
+        Conto: { x: 360, y: 40, attrs: [['saldo', 'Integer', 'public']] },
+        SaldoInsufficiente: { parent: 'Eccezione', x: 360, y: 260, attrs: [['mancano', 'Integer', 'public']] },
+      }, [
+        { cls: 'Conto', ctor: true, params: [['s', 'Integer']], body: [X.set('saldo', 's')] },
+        { cls: 'Conto', name: 'preleva', params: [['x', 'Integer']], body: [
+          X.if('x < 0', [X.throw('new Eccezione("importo negativo")')]),
+          X.if('x > saldo', [X.throw('new SaldoInsufficiente(x - saldo)')]),
+          X.set('saldo', 'saldo - x')] },
+        { cls: 'SaldoInsufficiente', ctor: true, params: [['m', 'Integer']], body: [X.call('super("prelievo troppo grande")'), X.set('mancano', 'm')] },
+      ], { x: 40, y: 60 }),
     },
   ];
   return { list, get: (id) => list.find((e) => e.id === id) };

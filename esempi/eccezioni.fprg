@@ -1,0 +1,119 @@
+<?xml version="1.0"?>
+<flowgorithm fileversion="4.2">
+    <attributes>
+        <attribute name="name" value="Eccezioni"/>
+        <attribute name="authors" value="Esempi FlowLab"/>
+        <attribute name="about" value="Gli errori durante l'esecuzione (indice fuori dall'array, conversione non valida) diventano eccezioni che un Try può catturare; Throw lancia un'eccezione, che risale dalle funzioni fino al Catch che la gestisce. Il Finally si esegue sempre. Provalo passo passo: la freccia rossa mostra dove salta l'esecuzione."/>
+        <attribute name="saved" value="2026-10-29 08:00:00 PM"/>
+        <attribute name="created" value="Zmxvd2xhYjtlc2VtcGk7MjAyNi0xMC0yOSAwODowMDowMCBQTTsx"/>
+        <attribute name="edited" value="Zmxvd2xhYjtlc2VtcGk7MjAyNi0xMC0yOSAwODowMDowMCBQTTsx"/>
+    </attributes>
+    <function name="Main" type="None" variable="">
+        <parameters/>
+        <body>
+            <declare name="v" type="Integer" array="True" size="3"/>
+            <declare name="i, x" type="Integer" array="False" size=""/>
+            <declare name="r" type="Real" array="False" size=""/>
+            <comment text="Un indice fuori dall'array: il blocco successivo non si esegue"/>
+            <try>
+                <body>
+                    <assign variable="i" expression="5"/>
+                    <assign variable="v[i]" expression="1"/>
+                    <output expression="&quot;non arriva qui&quot;" newline="True"/>
+                </body>
+                <catch type="IndiceNonValido" variable="e">
+                    <output expression="&quot;indice non valido&quot;" newline="True"/>
+                </catch>
+            </try>
+            <comment text="&quot;12a&quot; non è un numero: si esegue il Catch giusto, poi il Finally"/>
+            <try>
+                <body>
+                    <assign variable="x" expression="ToInteger(&quot;12a&quot;)"/>
+                </body>
+                <catch type="DivisionePerZero" variable="e">
+                    <output expression="&quot;no&quot;" newline="True"/>
+                </catch>
+                <catch type="ConversioneNonValida" variable="e">
+                    <output expression="&quot;conversione non valida&quot;" newline="True"/>
+                </catch>
+                <finally>
+                    <output expression="&quot;finally 1&quot;" newline="True"/>
+                </finally>
+            </try>
+            <comment text="L'eccezione lanciata dentro media risale fino a qui: r non cambia"/>
+            <assign variable="r" expression="1.5"/>
+            <try>
+                <body>
+                    <assign variable="r" expression="media(0)"/>
+                </body>
+                <catch type="Eccezione" variable="e">
+                    <output expression="&quot;catturata: &quot; &amp; e.messaggio" newline="True"/>
+                </catch>
+            </try>
+            <output expression="&quot;r resta &quot; &amp; r" newline="True"/>
+            <try>
+                <body>
+                    <assign variable="x" expression="controlla(-3)"/>
+                    <output expression="&quot;no&quot;" newline="True"/>
+                </body>
+                <catch type="Eccezione" variable="err">
+                    <output expression="&quot;controlla: &quot; &amp; err.messaggio" newline="True"/>
+                </catch>
+                <finally>
+                    <output expression="&quot;finally 2&quot;" newline="True"/>
+                </finally>
+            </try>
+            <comment text="Il Try interno non cattura DivisionePerZero: esegue il suo Finally e l'eccezione prosegue fino al Try esterno"/>
+            <try>
+                <body>
+                    <try>
+                        <body>
+                            <throw expression="new DivisionePerZero(&quot;interna&quot;)"/>
+                        </body>
+                        <catch type="IndiceNonValido" variable="e">
+                            <output expression="&quot;no&quot;" newline="True"/>
+                        </catch>
+                        <finally>
+                            <output expression="&quot;finally interno&quot;" newline="True"/>
+                        </finally>
+                    </try>
+                </body>
+                <catch type="DivisionePerZero" variable="e">
+                    <output expression="&quot;esterno: &quot; &amp; e.messaggio" newline="True"/>
+                </catch>
+            </try>
+            <assign variable="x" expression="controlla(7)"/>
+            <output expression="&quot;ok &quot; &amp; x" newline="True"/>
+        </body>
+    </function>
+    <function name="media" type="Real" variable="m">
+        <parameters>
+            <parameter name="n" type="Integer" array="False"/>
+        </parameters>
+        <body>
+            <declare name="m" type="Real" array="False" size=""/>
+            <if expression="n = 0">
+                <then>
+                    <throw expression="new Eccezione(&quot;nessun voto&quot;)"/>
+                </then>
+                <else/>
+            </if>
+            <assign variable="m" expression="10 / n"/>
+        </body>
+    </function>
+    <function name="controlla" type="Integer" variable="k">
+        <parameters>
+            <parameter name="n" type="Integer" array="False"/>
+        </parameters>
+        <body>
+            <declare name="k" type="Integer" array="False" size=""/>
+            <if expression="n &lt; 0">
+                <then>
+                    <throw expression="new Eccezione(&quot;negativo: &quot; &amp; n)"/>
+                </then>
+                <else/>
+            </if>
+            <assign variable="k" expression="n * 2"/>
+        </body>
+    </function>
+</flowgorithm>

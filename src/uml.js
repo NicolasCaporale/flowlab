@@ -20,6 +20,8 @@ const UmlLib = (() => {
   function attrText(a) {
     return `${V(a.visibility)} ${a.name}: ${T(a.type)}${a.array ? `[${a.size}]` : ''}${!a.array && String(a.init || '').trim() ? ' = ' + a.init : ''}`;
   }
+  /* la classe eredita direttamente da un'eccezione predefinita? */
+  const excParent = (c) => !!c.parent && !!ModelLib.excClass(c.parent);
   function methodText(prog, f) {
     const ps = f.params.map((p) => `${p.name}: ${T(p.type)}${p.array ? `[${','.repeat((p.dims || 1) - 1)}]` : ''}`).join(', ');
     const rl = ModelLib.rets(f);
@@ -39,7 +41,8 @@ const UmlLib = (() => {
       const missing = c.abstract ? [] : ModelLib.missingAbstract(prog, c);
       let w = Math.max(MINW, tw(ModelLib.classTitle(c), FN) + PADX * 2 + 24, ...attrs.map((r) => tw(r.text, FM) + PADX * 2), ...meths.map((r) => tw(r.text, FM) + PADX * 2));
       w = Math.ceil(Math.min(MAXW, w));
-      const head = HEAD + (c === main || c.abstract ? STEREO : 0);
+      // eccezione del programma: sopra il nome si legge da quale eccezione predefinita deriva
+      const head = HEAD + (c === main || c.abstract || excParent(c) ? STEREO : 0);
       const ah = Math.max(1, attrs.length) * ROW + CPAD * 2 - (attrs.length ? 0 : ROW - 10);
       const mh = Math.max(1, meths.length) * ROW + CPAD * 2 - (meths.length ? 0 : ROW - 10);
       boxes.set(c.id, { c, x: c.x || 0, y: c.y || 0, w, h: head + ah + mh, head, ah, mh, attrs, meths, main: c === main, missing });
@@ -89,10 +92,10 @@ const UmlLib = (() => {
     const rels = [];
     for (const c of prog.classes) {
       const par = ModelLib.classByName(prog, c.parent);
-      if (par && par !== c) rels.push({ kind: 'inh', from: c, to: par });
+      if (par && par !== c && !par.builtin) rels.push({ kind: 'inh', from: c, to: par });
       for (const a of c.attributes) {
         const t = ModelLib.classByName(prog, ExprLib.splitType(a.type).base);
-        if (t) rels.push({ kind: 'assoc', from: c, to: t, name: a.name, mult: a.array ? '*' : '0..1', st: a.static });
+        if (t && !t.builtin) rels.push({ kind: 'assoc', from: c, to: t, name: a.name, mult: a.array ? '*' : '0..1', st: a.static });
       }
     }
     const pairCount = new Map();
@@ -151,7 +154,7 @@ const UmlLib = (() => {
       g += `<rect class="ubg" x="${x}" y="${y}" width="${w}" height="${b.h}" rx="6"/>`;
       g += `<path class="uheadbg" d="M${x} ${y + b.head}V${y + 6}Q${x} ${y} ${x + 6} ${y}H${x + w - 6}Q${x + w} ${y} ${x + w} ${y + 6}V${y + b.head}Z"/>`;
       g += `<rect class="uhit head" data-part="head" x="${x}" y="${y}" width="${w}" height="${b.head}"/>`;
-      if (b.main || c.abstract) g += `<text class="ustereo" x="${x + w / 2}" y="${y + 15}">${b.main ? '«principale»' : '«abstract»'}</text>`;
+      if (b.main || c.abstract || excParent(c)) g += `<text class="ustereo" x="${x + w / 2}" y="${y + 15}">${b.main ? '«principale»' : c.abstract ? '«abstract»' : `«eredita da ${esc(c.parent)}»`}</text>`;
       g += `<text class="uname" x="${x + w / 2}" y="${y + b.head - 13}">${esc(ModelLib.classTitle(c))}</text>`;
       if (warn) g += `<g class="uwarn"><circle cx="${x + 15}" cy="${y + b.head / 2}" r="8"/><text x="${x + 15}" y="${y + b.head / 2 + 4}">!</text></g>`;
       // attributi

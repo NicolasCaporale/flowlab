@@ -80,7 +80,10 @@
   function declaredNames(f) {
     const out = [];
     for (const p of f.params) out.push(p.name);
-    M.walk(f.body, (s) => { if (s.kind === 'declare' || s.kind === 'const') s.name.split(',').map((x) => x.trim()).filter(Boolean).forEach((n) => out.push(n)); });
+    M.walk(f.body, (s) => {
+      if (s.kind === 'declare' || s.kind === 'const') s.name.split(',').map((x) => x.trim()).filter(Boolean).forEach((n) => out.push(n));
+      if (s.kind === 'try') for (const c of s.catches || []) if (c.variable && !out.includes(c.variable)) out.push(c.variable); // variabili dei Catch
+    });
     // nella vista Oggetti anche gli attributi della classe (e di quelle madri, se non privati)
     const c = isOO() && M.classOf(st.prog, f);
     if (c) {
@@ -418,8 +421,10 @@
     close: '<path d="M3 4H29V19C22 16 14 26 3 19Z"/>',
     read: '<path d="M3 4H29V19C22 16 14 26 3 19Z"/>',
     write: '<path d="M3 4H29V19C22 16 14 26 3 19Z"/>',
+    try: '<rect x="3" y="4" width="26" height="18" rx="3"/><path class="inner" d="M3 9H29M20 13L16 17H20L16 21"/>',
+    throw: '<path d="M3 5H22L29 13L22 21H3Z"/><path class="inner" d="M15 8L11 13H15L11 18"/>',
   };
-  const CAT = { declare: 'decl', const: 'decl', assign: 'assign', input: 'in', output: 'out', if: 'cond', while: 'loop', for: 'loop', do: 'loop', call: 'call', comment: 'comment', breakpoint: 'brk', open: 'file', close: 'file', read: 'file', write: 'file' };
+  const CAT = { declare: 'decl', const: 'decl', assign: 'assign', input: 'in', output: 'out', if: 'cond', while: 'loop', for: 'loop', do: 'loop', call: 'call', comment: 'comment', breakpoint: 'brk', open: 'file', close: 'file', read: 'file', write: 'file', try: 'exc', throw: 'exc' };
   const icon = (k) => `<svg class="mini c-${CAT[k]}" viewBox="0 0 32 26" aria-hidden="true">${ICON[k]}</svg>`;
 
   const GROUPS = [
@@ -427,6 +432,7 @@
     ['Controllo', ['if', 'while', 'for', 'do']],
     ['Altro', ['comment', 'breakpoint']],
     ['File', ['open', 'read', 'write', 'close']],
+    ['Eccezioni', ['try', 'throw']],
   ];
 
   /* tasti per aggiungere i blocchi: dopo il blocco selezionato, o in fondo al diagramma */
@@ -434,6 +440,7 @@
     declare: 'D', const: 'K', assign: 'A', input: 'I', output: 'O', call: 'C',
     if: 'S', while: 'M', for: 'P', do: 'F', comment: '/', breakpoint: 'B',
     open: 'Maiusc+A', read: 'Maiusc+L', write: 'Maiusc+S', close: 'Maiusc+C',
+    try: 'T', throw: 'Maiusc+T',
   };
   const KEY_KIND = Object.fromEntries(Object.entries(KIND_KEY).map(([k, v]) => [v, k]));
   /* il tasto premuto scritto come in KIND_KEY (lettera, con Maiusc+ davanti) */
@@ -547,9 +554,11 @@
     const c = M.cloneStmt(f.stmt);
     mutate(() => { f.arr.splice(f.index + 1, 0, c); st.sel = c.id; });
   }
+  /* intestazioni dei rami Catch e Finally: appartengono al blocco Try */
+  const ownerOf = (id) => (/:(catch:|finally$)/.test(id) ? id.split(':')[0] : id);
   function containsArr(stmt, arr) {
     let found = false;
-    const visit = (s) => { for (const b of M.KINDS[s.kind].blocks || []) { if (s[b] === arr) found = true; s[b].forEach(visit); } };
+    const visit = (s) => { for (const a of M.childArrays(s)) { if (a === arr) found = true; a.forEach(visit); } };
     visit(stmt);
     return found;
   }
@@ -844,10 +853,58 @@
       { key: 'variable', label: 'Variabile', type: 'lvalue', required: true }] },
     write: { title: 'Scrivi su file', help: 'Aggiunge una riga al file aperto in scrittura.', fields: [
       { key: 'expression', label: 'Espressione', type: 'expr', required: true }] },
+    throw: { title: 'Throw (lancia un\'eccezione)', help: 'Interrompe il programma con un\'eccezione: la cattura il primo Try che ha un Catch del suo tipo, anche in una funzione che ha chiamato questa; se nessuno la cattura il programma si ferma.', fields: [
+      { key: 'expression', label: 'Eccezione', type: 'expr', required: true, placeholder: 'new Eccezione("messaggio")', hint: 'Si crea con new e il messaggio, es. new Eccezione("voto non valido"). In un Catch, Throw e rilancia l\'eccezione catturata.' }] },
   };
+  /* tipi di eccezione: i predefiniti e (vista Oggetti) le classi che ereditano da Eccezione */
+  const excTypes = () => [...M.EXC_CLASSES.map((c) => c.name), ...(M.hasClasses(st.prog) ? st.prog.classes.filter((c) => M.isExcClass(st.prog, c)).map((c) => c.name) : [])];
+  const excDoc = (n) => { const b = M.excClass(n); return b ? b.doc : 'classe del programma'; };
+  /* Try: rami Catch (tipo e variabile), Finally facoltativo */
+  function tryDialog(s, isNew, done) {
+    const cats = (s.catches || []).map((c) => ({ ...c }));
+    let hasF = !!s.hasFinally;
+    const body = h('div', { class: 'fields' }, h('p', { class: 'help' }, 'I blocchi dentro il Try sono protetti: se uno di loro (o una funzione che chiamano) lancia un\'eccezione, il Try si interrompe e si esegue il primo Catch del tipo giusto. Il Finally si esegue sempre, alla fine.'));
+    const list = h('div', { class: 'params' });
+    const draw = () => {
+      list.innerHTML = '';
+      if (!cats.length) list.append(h('p', { class: 'muted small' }, 'Nessun Catch: l\'eccezione prosegue dopo il Finally.'));
+      cats.forEach((c, i) => {
+        const sel = h('select', { 'aria-label': 'Tipo del Catch ' + (i + 1), onchange: (e) => { c.type = e.target.value; } }, excTypes().map((t) => h('option', { value: t, selected: t.toLowerCase() === String(c.type).toLowerCase(), title: excDoc(t) }, t)));
+        const nm = h('input', { type: 'text', class: 'mono', value: c.variable, 'aria-label': 'Variabile del Catch ' + (i + 1), placeholder: 'e', oninput: (e) => { c.variable = e.target.value.trim(); } });
+        list.append(h('div', { class: 'prow catchrow' }, h('span', { class: 'ckw' }, 'Catch'), sel, nm,
+          h('button', { class: 'iconbtn', type: 'button', title: 'Sposta su: i Catch si controllano in ordine', 'aria-label': 'Sposta su', disabled: i === 0, onclick: () => { cats.splice(i - 1, 0, cats.splice(i, 1)[0]); draw(); } }, '↑'),
+          h('button', { class: 'iconbtn', type: 'button', title: 'Rimuovi (con i suoi blocchi)', 'aria-label': 'Rimuovi il Catch', onclick: () => { cats.splice(i, 1); draw(); } }, '✕')));
+      });
+    };
+    draw();
+    const finW = field({ key: 'fin', label: 'Finally: blocchi eseguiti sempre, alla fine del Try', type: 'check' }, hasF);
+    body.append(h('div', { class: 'flabel' }, 'Catch (si controllano in ordine: prima i tipi più specifici)'), list,
+      h('button', { class: 'btn small', type: 'button', onclick: () => { const used = cats.map((c) => c.type); cats.push(M.makeCatch({ type: excTypes().find((t) => !used.includes(t)) || 'Eccezione' })); draw(); } }, '+ Aggiungi Catch'),
+      finW, h('p', { class: 'muted small', style: 'margin:0' }, 'Nel Catch e.messaggio è il messaggio dell\'eccezione. Errori come la divisione per zero o un indice fuori dall\'array diventano eccezioni dei tipi predefiniti.'));
+    openModal({
+      title: (isNew ? 'Nuovo blocco: ' : '') + 'Try', body, okText: isNew ? 'Aggiungi' : 'Salva', wide: true,
+      onOk: () => {
+        hasF = finW._get();
+        if (!cats.length && !hasF) return 'Un Try ha almeno un Catch oppure il Finally';
+        const own = declaredNames(func());
+        const catchVars = new Set(); M.walk(func().body, (x) => { if (x.kind === 'try') (x.catches || []).forEach((c) => catchVars.add(c.variable.toLowerCase())); });
+        for (const [i, c] of cats.entries()) {
+          if (!E.validIdent(c.variable)) return `Catch ${i + 1}: "${c.variable || '(vuoto)'}" non è un nome di variabile valido`;
+          if (own.some((n) => n.toLowerCase() === c.variable.toLowerCase()) && !catchVars.has(c.variable.toLowerCase())) return `Catch ${i + 1}: "${c.variable}" è già una variabile della funzione, scegli un altro nome (di solito e)`;
+          // un Catch dopo uno di un tipo più generale non si raggiungerebbe mai (in Java è un errore)
+          const prev = cats.slice(0, i).find((p) => M.isSubclass(st.prog, M.classByName(st.prog, c.type), M.classByName(st.prog, p.type)));
+          if (prev) return `Il Catch ${c.type} non verrebbe mai eseguito: viene dopo il Catch ${prev.type}, che cattura anche ${c.type}. Spostalo più in alto`;
+        }
+        done({ catches: cats, hasFinally: hasF, finally: hasF ? (s.finally || []) : [] });
+        return true;
+      },
+    });
+  }
 
   function stmtDialog(s, isNew, done) {
+    if (s.kind === 'try') { tryDialog(s, isNew, done); return; }
     let form = STMT_FORMS[s.kind];
+    if (s.kind === 'throw' && isNew && !s.expression) s = { ...s, expression: 'new Eccezione("")' };
     // nella vista Oggetti si possono dichiarare variabili di tipo classe
     if (s.kind === 'declare' && (M.hasClasses(st.prog) || (func().tparams || []).length)) form = { ...form, fields: form.fields.map((f) => (f.key === 'type' ? { ...f, type: 'typepick', ctx: typeCtx(func()) } : f)) };
     const vars = declaredNames(func());
@@ -867,6 +924,17 @@
       }
     };
     body.addEventListener('change', sync); sync();
+    // Throw: scelta rapida del tipo di eccezione (cambia la parte new Tipo(...) dell'espressione)
+    if (s.kind === 'throw') {
+      const inp = ws.expression._input;
+      const cur = (/^\s*new\s+([\p{L}_][\p{L}\p{N}_]*)/u.exec(s.expression || '') || [])[1] || '';
+      const sel = h('select', { id: 'f_exctype', 'aria-label': 'Tipo di eccezione', onchange: (e) => {
+        const t = e.target.value, v = inp.value;
+        inp.value = /^\s*new\s+[\p{L}_][\p{L}\p{N}_]*/u.test(v) ? v.replace(/^\s*new\s+[\p{L}_][\p{L}\p{N}_]*/u, 'new ' + t) : `new ${t}("")`;
+        inp.dispatchEvent(new Event('input')); inp.focus();
+      } }, excTypes().map((t) => h('option', { value: t, selected: t.toLowerCase() === cur.toLowerCase(), title: excDoc(t) }, `${t} — ${excDoc(t)}`)));
+      body.insertBefore(h('div', { class: 'field' }, h('label', { class: 'flabel', for: 'f_exctype' }, 'Tipo di eccezione'), sel), ws.expression);
+    }
     openModal({
       title: (isNew ? 'Nuovo blocco: ' : '') + form.title, body, okText: isNew ? 'Aggiungi' : 'Salva',
       onOk: () => {
@@ -1139,6 +1207,7 @@
       M.setRets(f, M.rets(f).map((r) => ({ name: r.name, type: T(r.type) })));
       M.walk(f.body, (x) => {
         if (x.kind === 'declare' || x.kind === 'const') x.type = T(x.type);
+        if (x.kind === 'try') for (const c of x.catches || []) c.type = T(c.type); // Catch di un'eccezione del programma
         for (const k of ['expression', 'variable', 'start', 'end', 'step', 'size']) if (typeof x[k] === 'string') x[k] = renameInExpr(x[k], old, nu);
       });
     }
@@ -1149,7 +1218,8 @@
     if (c && roGuard(c)) return;
     const nameW = field({ key: 'cname', label: 'Nome della classe', type: 'ident', required: true, placeholder: 'es. Punto', hint: 'Per convenzione inizia con la lettera maiuscola' }, c ? c.name : '');
     const banned = c ? [c, ...descendants(c)] : [];
-    const parW = field({ key: 'cpar', label: 'Eredita da (classe madre)', type: 'select', options: [['', '— nessuna —'], ...st.prog.classes.filter((k) => !banned.includes(k) && !(k.tparams || []).length).map((k) => [k.name, k.name])] }, c ? (c.parent || '') : '');
+    // si può ereditare anche da un'eccezione predefinita: la classe diventa un'eccezione da usare con Throw e Catch
+    const parW = field({ key: 'cpar', label: 'Eredita da (classe madre)', type: 'select', options: [['', '— nessuna —'], ...st.prog.classes.filter((k) => !banned.includes(k) && !(k.tparams || []).length).map((k) => [k.name, k.name]), ...M.EXC_CLASSES.map((k) => [k.name, `${k.name} (eccezione predefinita)`])] }, c ? (c.parent || '') : '');
     const isMainCls = c && c === M.mainClass(st.prog);
     const absW = isMainCls ? null : field({ key: 'cabs', label: 'Astratta: non si creano oggetti di questa classe, solo delle sue sottoclassi', type: 'check' }, c ? !!c.abstract : false);
     const body = h('div', { class: 'fields' }, h('p', { class: 'help' }, 'Una classe descrive un tipo di oggetti: i loro attributi (i dati) e i metodi (le operazioni). Con l\'ereditarietà la classe riceve attributi e metodi della classe madre e può ridefinire i metodi.'), nameW, parW, absW);
@@ -1160,6 +1230,7 @@
         const name = nameW._get().trim();
         if (E.BUILTINS[name.toLowerCase()]) return `${name} è il nome di una funzione integrata`;
         if (st.prog.classes.some((k) => k !== c && k.name.toLowerCase() === name.toLowerCase())) return `Esiste già una classe chiamata ${name}`;
+        if (M.excClass(name)) return `${name} è un'eccezione predefinita: scegli un altro nome (per una tua eccezione, es. VotoNonValido, scegli ${name} in «Eredita da»)`;
         const parent = parW._get();
         const abs = !!(absW && absW._get());
         // i Tipi Generici della classe vengono dagli attributi e dai metodi
@@ -1363,7 +1434,8 @@
       const ins = e.target.closest('.ins');
       if (ins) { if (isRunning()) { toast('Ferma il programma per modificare il diagramma', 'warn'); return; } insertMenu(+ins.dataset.ins, e.clientX + 6, e.clientY + 6); return; }
       const g = e.target.closest('.shape');
-      st.sel = g && !g.dataset.id.includes(':') ? g.dataset.id : null;
+      const gid = g ? ownerOf(g.dataset.id) : null;
+      st.sel = gid && !gid.includes(':') ? gid : null;
       decorate();
     });
     chart.addEventListener('dblclick', (e) => {
@@ -1384,7 +1456,7 @@
       const g = e.target.closest('.shape'); if (!g) return;
       const id = g.dataset.id;
       if (id.startsWith('start:') || id.startsWith('end:')) { if (isRunning()) return; st.fi === 0 ? editProgram() : editFunction(st.fi); return; }
-      editStmt(id);
+      editStmt(ownerOf(id));
     });
     chart.addEventListener('contextmenu', (e) => {
       if (isUml()) {
@@ -1395,8 +1467,9 @@
       }
       const g = e.target.closest('.shape'); if (!g) return;
       e.preventDefault();
-      if (!g.dataset.id.includes(':')) { st.sel = g.dataset.id; decorate(); }
-      shapeMenu(g.dataset.id, e.clientX, e.clientY);
+      const gid = ownerOf(g.dataset.id);
+      if (!gid.includes(':')) { st.sel = gid; decorate(); }
+      shapeMenu(gid, e.clientX, e.clientY);
     });
     chart.addEventListener('pointerdown', (e) => {
       if (isUml()) {
@@ -1509,7 +1582,7 @@
     if (!name.trim()) throw new E.FlowError('Il nome del file è vuoto');
     if (streams[mode]) throw new E.FlowError(`C'è già un file aperto in ${mode === 'read' ? 'lettura' : 'scrittura'}: chiudilo prima di aprirne un altro`);
     if (mode === 'read') {
-      if (!st.vfs.has(name)) throw new E.FlowError(`File "${name}" non trovato: caricalo nella scheda File`);
+      if (!st.vfs.has(name)) throw new E.FlowError(`File "${name}" non trovato: caricalo nella scheda File`, { exc: 'ErroreFile' });
       const lines = st.vfs.get(name).split(/\r?\n/);
       if (lines.length && lines[lines.length - 1] === '') lines.pop();
       streams.read = { name, lines, pos: 0 };
@@ -1529,7 +1602,7 @@
     fileRead: () => {
       const r = streams.read;
       if (!r) throw new E.FlowError('Nessun file aperto in lettura');
-      if (r.pos >= r.lines.length) throw new E.FlowError(`Lettura oltre la fine del file "${r.name}" (controlla con EOF())`);
+      if (r.pos >= r.lines.length) throw new E.FlowError(`Lettura oltre la fine del file "${r.name}" (controlla con EOF())`, { exc: 'ErroreFile' });
       return r.lines[r.pos++];
     },
     fileWrite: (s) => { if (!streams.write) throw new E.FlowError('Nessun file aperto in scrittura'); streams.write.lines.push(s); },
@@ -1578,7 +1651,7 @@
     if (ev.type === 'stmt') {
       run.steps++; run.curId = ev.stmt.id; run.curFrame = ev.frame;
       // percorso per il cursore: dall'ultimo blocco eseguito in questa stessa chiamata
-      run.trail = { from: ev.frame._last || null, to: ev.stmt.id, frame: ev.frame, branch: ev.frame._branch || null, step: run.steps };
+      run.trail = { from: ev.frame._last || null, to: ev.stmt.id, frame: ev.frame, branch: ev.frame._branch || null, step: run.steps, exc: ev.exc || null };
       ev.frame._last = ev.stmt.id;
       if (!run.mainFrame) run.mainFrame = ev.frame;
       return ev;
@@ -1678,6 +1751,7 @@
     cancelAnimationFrame(trailRaf);
     run.hold = null;
     const g = $('#chart svg .trail'); if (g) g.innerHTML = '';
+    const ov = $('#chart svg .exc-over'); if (ov) ov.innerHTML = '';
     run.trailShown = null;
   }
   function findPath(from, to, branch) {
@@ -1706,20 +1780,24 @@
     if (run.hold) { run.hold = null; decorate(); }
     const g = $('#chart svg .trail'); if (!g) return;
     g.innerHTML = '';
+    const ov = $('#chart svg .exc-over'); if (ov) ov.innerHTML = '';
     if (!t.from || func().id !== t.frame.func.id) return;
-    const path = findPath(t.from, t.to, t.branch);
-    if (!path) return;
-    const pts = [];
-    for (const e of path) for (const p of e.pts) { const q = pts[pts.length - 1]; if (!q || q[0] !== p[0] || q[1] !== p[1]) pts.push(p); }
+    let pts = [];
+    if (t.exc) pts = excPath(t, g); // eccezione: freccia rossa tratteggiata dal blocco da cui arriva al Catch (o al Finally)
+    else {
+      const path = findPath(t.from, t.to, t.branch);
+      if (!path) return;
+      for (const e of path) for (const p of e.pts) { const q = pts[pts.length - 1]; if (!q || q[0] !== p[0] || q[1] !== p[1]) pts.push(p); }
+    }
     if (pts.length < 2) return;
     const seg = []; let total = 0;
     for (let i = 1; i < pts.length; i++) { const l = Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); seg.push(l); total += l; }
     const NS = 'http://www.w3.org/2000/svg';
     const line = document.createElementNS(NS, 'path');
-    line.setAttribute('class', 'trail-path');
+    line.setAttribute('class', 'trail-path' + (t.exc ? ' exc' : ''));
     line.setAttribute('d', pts.map((p, i) => (i ? 'L' : 'M') + p[0] + ' ' + p[1]).join(''));
     const dot = document.createElementNS(NS, 'circle');
-    dot.setAttribute('class', 'trail-cursor'); dot.setAttribute('r', '6');
+    dot.setAttribute('class', 'trail-cursor' + (t.exc ? ' exc' : '')); dot.setAttribute('r', '6');
     g.append(line, dot);
     const at = (d) => {
       let i = 0;
@@ -1746,6 +1824,36 @@
     };
     place(0);
     trailRaf = requestAnimationFrame(tick);
+  }
+  /* percorso dell'eccezione: dal blocco da cui arriva (quello che l'ha lanciata, oppure la chiamata
+     della funzione da cui risale) all'intestazione del Catch che la cattura o del Finally; il blocco di
+     partenza si cerchia di rosso e un'etichetta dice di che eccezione si tratta */
+  function excPath(t, g) {
+    const box = (id) => { const el = $(`#chart .shape[data-id="${CSS.escape(id)}"]`); return el ? el.getBBox() : null; };
+    const a = box(t.from), b = box(t.to);
+    if (!a || !b) return [];
+    const NS = 'http://www.w3.org/2000/svg';
+    const ring = document.createElementNS(NS, 'rect');
+    ring.setAttribute('class', 'exc-src');
+    for (const [k, v] of [['x', a.x - 5], ['y', a.y - 5], ['width', a.width + 10], ['height', a.height + 10], ['rx', 8]]) ring.setAttribute(k, v);
+    const lab = document.createElementNS(NS, 'text');
+    lab.setAttribute('class', 'exc-lab');
+    lab.setAttribute('x', a.x - 4); lab.setAttribute('y', a.y - 9);
+    lab.textContent = `⚡ ${t.exc.type}${t.exc.lost && t.exc.lost.length ? ` da ${t.exc.lost[0]}()` : ''}${t.exc.pending ? ' → Finally, poi prosegue' : ''}`;
+    // sopra i blocchi, così l'etichetta si legge sempre
+    const svg = g.ownerSVGElement;
+    const over = svg.querySelector('.exc-over') || svg.appendChild(document.createElementNS(NS, 'g'));
+    over.setAttribute('class', 'exc-over'); over.innerHTML = '';
+    over.append(ring, lab);
+    const sy = a.y + a.height / 2, hy = b.y + b.height / 2;
+    if (b.x > a.x + a.width) {
+      // Catch a destra: corsia appena a sinistra della sua colonna
+      const lane = b.x - 14;
+      return [[a.x + a.width, sy], [lane, sy], [lane, hy], [b.x, hy]];
+    }
+    // Finally (sotto, al centro): corsia a sinistra
+    const lane = Math.min(a.x, b.x) - 18;
+    return [[a.x, sy], [lane, sy], [lane, hy], [b.x, hy]];
   }
   function scrollIntoViewIfNeeded(el) {
     const wrap = $('#canvasWrap');
@@ -2815,7 +2923,8 @@
     const cs = getComputedStyle(document.documentElement);
     const v = (n) => cs.getPropertyValue(n).trim();
     let css = `text{font:${RenderLib.R_.font};fill:${v('--sh-text')};text-anchor:middle}.cline-t{text-anchor:start}.comment text{font-weight:400;font-style:italic}.badge{font-size:10px}.c-in .badge{fill:${v('--s-in')}}.c-out .badge{fill:${v('--s-out')}}.c-decl .badge{fill:${v('--s-decl')}}.blabel{font-size:11px;font-weight:600;fill:${v('--muted')}}.flow{fill:none;stroke:${v('--flow')};stroke-width:1.6}.ahead{fill:${v('--flow')}}.joint{fill:${v('--flow')}}.shape>path,.shape>rect{stroke-width:1.6}.inner{fill:none!important}.note{stroke-dasharray:4 3}svg{background:${v('--paper')}}`;
-    for (const c of ['term', 'decl', 'assign', 'in', 'out', 'cond', 'loop', 'call', 'comment', 'brk', 'file', 'inc']) css += `.c-${c}>path,.c-${c}>rect{fill:${v('--f-' + c)};stroke:${v('--s-' + c)}}`;
+    for (const c of ['term', 'decl', 'assign', 'in', 'out', 'cond', 'loop', 'call', 'comment', 'brk', 'file', 'inc', 'exc']) css += `.c-${c}>path,.c-${c}>rect{fill:${v('--f-' + c)};stroke:${v('--s-' + c)}}`;
+    css += `.flow.exc{stroke:${v('--s-exc')};stroke-dasharray:5 4}`;
     // diagramma delle classi
     css += `.ubg{fill:${v('--paper')};stroke:${v('--s-call')};stroke-width:1.6}.uheadbg{fill:${v('--f-call')}}.main .uheadbg{fill:${v('--f-term')}}.main .ubg{stroke:${v('--s-term')}}.usep{stroke:${v('--s-call')};stroke-width:1.2}.uname{font:700 14px "Atkinson Hyperlegible",sans-serif;text-anchor:middle}.ustereo{font:italic 11.5px "Atkinson Hyperlegible",sans-serif;fill:${v('--muted')};text-anchor:middle}.umem{font:400 12.5px "JetBrains Mono",monospace;text-anchor:start}.urel{fill:none;stroke:${v('--flow')};stroke-width:1.6}.minh{fill:${v('--paper')};stroke:${v('--flow')};stroke-width:1.6}.mopen{fill:none;stroke:${v('--flow')};stroke-width:1.6}.ulab{font:600 11.5px "JetBrains Mono",monospace;fill:${v('--muted')};text-anchor:start}`;
     return css;
@@ -2915,6 +3024,9 @@
       ['&', 'Unisce testi e numeri: "Totale: " & t'], ['=  ==   !=  <>', 'Uguale, diverso'], ['<  <=  >  >=', 'Confronti'],
       ['and  &&   or  ||   not  !', 'Operatori logici'], ['true  false  Pi', 'Costanti'], ['v[i]', 'Elemento i di un array (da 0)'],
       ['v ← quadrati(10)', 'Funzione che restituisce un array: v diventa l\'array restituito (forma «array» nel valore restituito)'],
+      ['Try  Catch  Finally', 'Eccezioni: se un blocco del Try (o una funzione che chiama) lancia un\'eccezione, si esegue il primo Catch del tipo giusto; il Finally si esegue sempre'],
+      ['Throw new Eccezione("…")', 'Lancia un\'eccezione. Tipi predefiniti: Eccezione, DivisionePerZero, IndiceNonValido, ConversioneNonValida, OggettoNullo, ErroreFile; nella vista Oggetti anche le classi che ereditano da Eccezione'],
+      ['e.messaggio', 'Nel Catch: il messaggio dell\'eccezione catturata e'],
       ['massimo<T>(v: T[], n)', 'Tipo Generico T: un tipo qualsiasi, ricavato dagli argomenti della chiamata. Si sceglie «Nuovo Tipo Generico» nel menu del tipo di un parametro'],
     ].map(([a, b]) => h('tr', null, h('td', { class: 'mono' }, a), h('td', null, b)));
     const oo = [
@@ -2956,6 +3068,7 @@
     ['Aggiungi un blocco (dopo quello selezionato o in fondo; anche nel menu «Aggiungi un blocco»)', [
       ['D  K  A', 'Dichiara, Costante, Assegna'], ['I  O  C', 'Input, Output, Chiama'], ['S  M  P  F', 'Se, Mentre, Per, Fai-mentre'], ['/  B', 'Commento, Interruzione'],
       ['Maiusc+A  L  S  C', 'Apri file, Leggi da file, Scrivi su file, Chiudi file'],
+      ['T  ·  Maiusc+T', 'Try (con Catch e Finally), Throw'],
     ]],
     ['Funzioni, metodi e classi', [
       ['N', 'Nuova funzione o nuovo metodo (nel diagramma delle classi: nuova classe)'], ['F2', 'Modifica la funzione o il metodo (nel diagramma delle classi: l\'elemento selezionato)'],

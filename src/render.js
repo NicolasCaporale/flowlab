@@ -74,14 +74,14 @@ function dedupe(pts) {
 }
 const cat2 = (a, b) => a.concat(b);
 /* vista compatta: questi blocchi, se sono uno dopo l'altro, si toccano (freccia di lunghezza 0) */
-const COMPACT_KINDS = new Set(['declare', 'const', 'assign', 'input', 'output', 'call', 'comment', 'breakpoint']);
-const COMPOUND_KINDS = new Set(['if', 'while', 'for', 'do']);
+const COMPACT_KINDS = new Set(['declare', 'const', 'assign', 'input', 'output', 'call', 'comment', 'breakpoint', 'throw']);
+const COMPOUND_KINDS = new Set(['if', 'while', 'for', 'do', 'try']);
 const TAIL_C = 14; // ultima freccia di un ramo o del corpo di un ciclo: corta, quanto basta per il +
 const TOG = 24, LINE_H = 17;
 
 const KIND_IT = {
   declare: 'Dichiara', const: 'Costante', assign: 'Assegna', input: 'Input', output: 'Output', if: 'Se', while: 'Mentre', for: 'Per', do: 'Fai-mentre',
-  call: 'Chiama', comment: 'Commento', breakpoint: 'Interruzione',
+  call: 'Chiama', comment: 'Commento', breakpoint: 'Interruzione', try: 'Try', throw: 'Throw',
   open: 'Apri file', close: 'Chiudi file', read: 'Leggi da file', write: 'Scrivi su file',
 };
 
@@ -109,6 +109,8 @@ function caption(s) {
     case 'close': return { text: `Chiudi file (${s.mode === 'read' ? 'lettura' : 'scrittura'})` };
     case 'read': return { text: `Leggi ${s.variable} dal file` };
     case 'write': return { text: `Scrivi ${s.expression} nel file` };
+    case 'try': return { text: 'Try' };
+    case 'throw': return { text: `Throw ${s.expression}` };
   }
   return { text: s.kind };
 }
@@ -127,18 +129,21 @@ function shapePath(shape, cx, y, w, h) {
     case 'note': { const k = 9; return `<path class="note" d="M${l} ${y}H${r - k}L${r} ${y + k}V${b}H${l}Z"/><path class="inner" d="M${r - k} ${y}V${y + k}H${r}"/>`; }
     case 'oct': { const k = 9; return `<path d="M${l + k} ${y}H${r - k}L${r} ${y + k}V${b - k}L${r - k} ${b}H${l + k}L${l} ${b - k}V${y + k}Z"/>`; }
     case 'doc': { const q = 5; return `<path d="M${l} ${y}H${r}V${b - q}C${r - w * 0.25} ${b - q * 3} ${cx} ${b + q} ${l} ${b - q}Z"/>`; }
+    // eccezioni: Try, Catch e Finally hanno un'intestazione con la barra in alto; Throw è una freccia che esce
+    case 'exchead': return `<rect x="${l}" y="${y}" width="${w}" height="${h}" rx="6"/><path class="inner" d="M${l} ${y + 7}H${r}"/>`;
+    case 'throw': { const k = 14; return `<path d="M${l} ${y}H${r - k}L${r} ${m}L${r - k} ${b}H${l}Z"/>`; }
   }
   return '';
 }
 const SHAPE_OF = {
   declare: 'decl', const: 'decl', assign: 'rect', input: 'para', output: 'para', if: 'diamond', while: 'diamond', do: 'diamond', for: 'hex',
   call: 'call', comment: 'note', breakpoint: 'oct',
-  open: 'doc', close: 'doc', read: 'doc', write: 'doc',
+  open: 'doc', close: 'doc', read: 'doc', write: 'doc', try: 'exchead', throw: 'throw',
 };
 const CAT_OF = {
   declare: 'decl', const: 'decl', assign: 'assign', input: 'in', output: 'out', if: 'cond', while: 'loop', do: 'loop', for: 'loop', call: 'call',
   comment: 'comment', breakpoint: 'brk',
-  open: 'file', close: 'file', read: 'file', write: 'file',
+  open: 'file', close: 'file', read: 'file', write: 'file', try: 'exc', throw: 'exc',
 };
 
 class Renderer {
@@ -357,6 +362,7 @@ class Renderer {
         },
       };
     }
+    if (s.kind === 'try') return this.tryBlock(s, cat, title);
     if (s.kind === 'comment' && !cap.incomplete) return this.comment(s, title);
     const mb = this.measure(s, cap, shp, H);
     const w0 = mb.w, h = mb.h;
@@ -367,6 +373,56 @@ class Renderer {
         this.edge(head.node, s.id, head.pts, head.tag);
         this.shape(s.id, s.kind, cat, shp, cx, y, w, h, cap.text, title, s.kind === 'comment' ? ' comment' : '', cap.incomplete ? null : cap.badge, mb);
         return { node: s.id, pts: [[cx, y + h]] };
+      },
+    };
+  }
+
+  /* Try: intestazione, corpo al centro; a destra la linea tratteggiata dell'eccezione porta ai rami Catch,
+     che si riuniscono sotto il corpo; poi, se c'è, il Finally */
+  tryBlock(s, cat, title) {
+    const TH = R_.H, GX = 30, DROP = 16;
+    const tw = this.boxW('Try', 'rect');
+    const B = this.seq(s.body, false);
+    const cats = (s.catches || []).map((c) => { const t = `Catch ${c.type} ${c.variable}`; return { c, t, w: this.boxW(t, 'rect'), S: this.seq(c.body, false) }; });
+    const F = s.hasFinally ? this.seq(s.finally || [], false) : null, fw = this.boxW('Finally', 'rect');
+    let x = Math.max(tw / 2, B.R) + GX;
+    for (const k of cats) { k.dx = x + Math.max(k.w / 2, k.S.L); x = k.dx + Math.max(k.w / 2, k.S.R) + GX; }
+    const ctop = TH + DROP; // intestazioni dei Catch
+    const jrel = TH + Math.max(B.h, ...cats.map((k) => DROP + TH + k.S.h)) + 10;
+    const h = jrel + (F ? 14 + TH + F.h : 0);
+    const L = Math.max(tw / 2, B.L, F ? Math.max(fw / 2, F.L) : 0) + 4;
+    const R = Math.max(cats.length ? x - GX : Math.max(tw / 2, B.R), F ? Math.max(fw / 2, F.R) : 0) + 4;
+    return {
+      L, R, h,
+      draw: (cx, y, head) => {
+        const m = y + TH / 2, j = y + jrel, J = s.id + ':join';
+        this.edge(head.node, s.id, head.pts, head.tag);
+        this.shape(s.id, 'try', cat, 'exchead', cx, y, tw, TH, 'Try', title);
+        const tB = B.draw(cx, y + TH, { node: s.id, pts: [[cx, y + TH]] });
+        this.line([[cx, y + TH + B.h], [cx, j]]);
+        this.edge(tB.node, J, cat2(tB.pts, [[cx, j]]), tB.tag);
+        if (cats.length) {
+          const last = cats[cats.length - 1];
+          this.line([[cx + tw / 2, m], [cx + last.dx, m]], false, 'exc');
+          this.label(cx + tw / 2 + 6, m - 6, 'eccezione', 'start');
+          for (const k of cats) {
+            const kx = cx + k.dx, KID = s.id + ':catch:' + k.c.id;
+            this.line([[kx, m], [kx, y + ctop]], true, 'exc');
+            this.shape(KID, 'catch', cat, 'exchead', kx, y + ctop, k.w, TH, k.t, `Catch: se nel Try si verifica un'eccezione ${k.c.type} (o di una sua sottoclasse) si esegue questo ramo; ${k.c.variable} è l'eccezione, ${k.c.variable}.messaggio il suo messaggio. Doppio clic per modificare il Try`);
+            this.edge(s.id, KID, [[cx + tw / 2, m], [kx, m], [kx, y + ctop]], 'X');
+            const tC = k.S.draw(kx, y + ctop + TH, { node: KID, pts: [[kx, y + ctop + TH]] });
+            this.line([[kx, y + ctop + TH + k.S.h], [kx, j], [cx, j]]);
+            this.edge(tC.node, J, cat2(tC.pts, [[kx, j], [cx, j]]), tC.tag);
+          }
+          this.ln.push(`<circle class="joint" cx="${cx}" cy="${j}" r="3.5"/>`);
+        }
+        if (!F) return { node: J, pts: [[cx, j]] };
+        const fy = j + 14, FID = s.id + ':finally';
+        this.line([[cx, j], [cx, fy]], true);
+        this.edge(J, FID, [[cx, j], [cx, fy]]);
+        this.shape(FID, 'finally', cat, 'exchead', cx, fy, fw, TH, 'Finally', 'Finally: si esegue sempre, che ci sia stata un\'eccezione o no. Doppio clic per modificare il Try');
+        const tF = F.draw(cx, fy + TH, { node: FID, pts: [[cx, fy + TH]] });
+        return { node: tF.node, pts: tF.pts, tag: tF.tag };
       },
     };
   }

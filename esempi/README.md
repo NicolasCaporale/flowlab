@@ -1,6 +1,6 @@
 # Esempi
 
-I programmi di esempio di FlowLab in formato `.fprg`. Il link nella prima colonna apre l'esempio direttamente in FlowLab. 
+I programmi di esempio di FlowLab in formato `.fprg`. Il link nella prima colonna apre l'esempio direttamente in FlowLab.
 
 | Esempio | Argomenti | File | Formato |
 |---|---|---|---|
@@ -18,6 +18,8 @@ I programmi di esempio di FlowLab in formato `.fprg`. Il link nella prima colonn
 | [Animali (classi e metodi astratti)](https://nicvac.github.io/flowlab/dist/FlowLab.html?url=../esempi/animali.fprg) | Oggetti · astratta · override | [animali.fprg](animali.fprg) | esteso (classi e oggetti) |
 | [Lista collegata (oggetti che puntano ad altri oggetti)](https://nicvac.github.io/flowlab/dist/FlowLab.html?url=../esempi/lista.fprg) | Oggetti · null · associazione | [lista.fprg](lista.fprg) | esteso (classi e oggetti) |
 | [Scrivere e leggere un file](https://nicvac.github.io/flowlab/dist/FlowLab.html?url=../esempi/file.fprg) | File | [file.fprg](file.fprg) | standard |
+| [Eccezioni (Try, Catch, Finally, Throw)](https://nicvac.github.io/flowlab/dist/FlowLab.html?url=../esempi/eccezioni.fprg) | Eccezioni · funzioni | [eccezioni.fprg](eccezioni.fprg) | esteso (eccezioni (Try, Catch, Finally, Throw)) |
+| [Prelievi dal conto (eccezioni dell'utente)](https://nicvac.github.io/flowlab/dist/FlowLab.html?url=../esempi/saldo.fprg) | Oggetti · eccezioni · ereditarietà | [saldo.fprg](saldo.fprg) | esteso (classi e oggetti, eccezioni (Try, Catch, Finally, Throw)) |
 
 Per aprire in FlowLab un qualsiasi file `.fprg` pubblicato online si aggiunge `?url=` all'indirizzo di FlowLab, per esempio:
 

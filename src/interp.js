@@ -34,6 +34,8 @@ class Interpreter {
         (f.ctor ? this.ctors : this.methods).get(f.cls).push(f);
       }
     }
+    // eccezioni predefinite: classi disponibili anche nella vista Funzioni
+    for (const c of _M.EXC_CLASSES) if (!this.byName.has(c.name.toLowerCase())) { this.byName.set(c.name.toLowerCase(), c); this.methods.set(c.id, []); this.ctors.set(c.id, []); }
     // parametri di tipo delle classi e delle funzioni generiche
     this.tparamNames = new Set([...(prog.classes || []).flatMap((c) => c.tparams || []), ...prog.functions.flatMap((f) => f.tparams || [])].map((t) => t.toLowerCase()));
     const self = this;
@@ -42,7 +44,7 @@ class Interpreter {
       hasUser: (name) => self.hasUser(name),
       callUser: (name, args, node) => self.callUser(name, args, node, false),
       cellOf: (node) => self.cellOf(node),
-      oo: this.oo ? (node) => self.ooEval(node) : null,
+      oo: (node) => self.ooEval(node),
       env: {
         eof: (node) => env.eof(node),
       },
@@ -168,6 +170,7 @@ class Interpreter {
         cell.dims = dims; cell.items = new Array(n).fill(this.defaultOf(dt));
       } else {
         cell.value = this.defaultOf(dt);
+        if (a.readonly) cell.readonly = true; // messaggio delle eccezioni: si imposta solo creandole
         if (String(a.init || '').trim()) cell.value = this.coerceTo(yield* _E.evalE(this.parse(a.init, 'e'), this.ctx), a.type, `il valore iniziale di ${owner.name}.${a.name}`);
       }
     } catch (e) {
@@ -217,7 +220,7 @@ class Interpreter {
     if (o.k === 'var' && !o.indices && !this.isVarName(o.name) && this.byName.has(o.name.toLowerCase())) return { cls: this.byName.get(o.name.toLowerCase()) };
     const v = yield* _E.evalE(objNode, this.ctx);
     if (v.t !== 'Object') throw new _E.FlowError(`"${this.label(objNode)}" non è un oggetto (è ${_E.typeName(v.t)}): il punto si usa con gli oggetti`, { node: objNode });
-    if (v.v === null) throw new _E.FlowError(`"${this.label(objNode)}" vale null: non indica nessun oggetto (crealo con new)`, { node: objNode });
+    if (v.v === null) throw new _E.FlowError(`"${this.label(objNode)}" vale null: non indica nessun oggetto (crealo con new)`, { node: objNode, exc: 'OggettoNullo' });
     return { obj: v.v };
   }
   fieldCell(tg, name, node) {
@@ -257,7 +260,15 @@ class Interpreter {
     if (cell.value === undefined) throw new _E.FlowError(`"${nm}" non ha ancora un valore`, { node });
     return cell.value;
   }
+  /* la classe è un'eccezione (Eccezione o una sua sottoclasse)? */
+  isExc(c) { return !!c && this.isA(c, this.byName.get('eccezione')); }
   *ooEval(node) {
+    if (!this.oo) {
+      // vista Funzioni: degli oggetti si usano solo le eccezioni, new Eccezione("…") ed e.messaggio
+      if (node.k === 'new' && this.isExc(this.byName.get(node.cls.toLowerCase()))) return yield* this.construct(node);
+      if (node.k === 'member') { const tg = yield* this.target(node.obj); if (tg.obj && this.isExc(tg.obj.cls)) return yield* this.readCell(this.fieldCell(tg, node.name, node), node); }
+      throw new _E.FlowError('Oggetti, new e this si usano nella vista Oggetti (nella vista Funzioni solo le eccezioni: new Eccezione("…") ed e.messaggio)', { node });
+    }
     switch (node.k) {
       case 'this':
         if (!this.frame.self) throw new _E.FlowError('this si usa solo nei metodi non statici e nei costruttori', { node });
@@ -482,6 +493,13 @@ class Interpreter {
     return _E.V.obj(obj);
   }
   *runCtor(cls, argNodes, obj, node) {
+    // eccezione predefinita: new Eccezione() oppure new Eccezione("messaggio"), anche come super("messaggio")
+    if (cls.builtin) {
+      if (argNodes.length > 1) throw new _E.FlowError(`${cls.name} si crea con il messaggio: new ${cls.name}("testo")`, { node });
+      const v = argNodes.length ? yield* _E.evalE(argNodes[0], this.ctx) : _E.V.str('');
+      obj.fields.get('messaggio').value = this.coerceTo(v, 'String', `il messaggio di ${cls.name}`, null);
+      return;
+    }
     const ctors = this.ctors.get(cls.id) || [];
     if (!ctors.length) {
       if (argNodes.length) throw new _E.FlowError(`${cls.name} non ha costruttori con parametri: si crea con new ${cls.name}() senza argomenti`, { node });
@@ -877,9 +895,72 @@ class Interpreter {
         env.fileWrite(_E.fmtValue(v));
         return;
       }
+      case 'throw': {
+        yield { type: 'stmt', stmt: s, frame };
+        const v = yield* ev(s.expression);
+        if (v.t !== 'Object' || !v.v) throw new _E.FlowError(v.t === 'Object' ? 'Throw: l\'eccezione vale null' : `Throw vuole un'eccezione, es. new Eccezione("messaggio"), non ${_E.TYPE_IT[v.t] || v.t}`);
+        if (!this.isExc(v.v.cls)) throw new _E.FlowError(`Throw: ${v.v.cls.name} non è un'eccezione (una classe di eccezioni eredita da Eccezione)`);
+        throw this.excError(v.v);
+      }
+      case 'try': {
+        yield { type: 'stmt', stmt: s, frame };
+        const depth = this.stack.length;
+        let pending = null, pendInfo = null;
+        // eccezione arrivata qui: si esce dalle funzioni chiamate dentro il Try (lost: i loro nomi, per il cursore)
+        const unwind = (e, obj) => { const lost = this.stack.slice(depth).filter((f) => !f.init).map((f) => f.func.name); this.stack.length = depth; return { type: obj.cls.name, lost }; };
+        try {
+          yield* this.block(s.body);
+        } catch (e) {
+          const obj = this.excOf(e);
+          if (!obj) throw e; // errore del programma, non un'eccezione: si ferma tutto
+          const info = unwind(e, obj);
+          const c = (s.catches || []).find((k) => { const t = this.byName.get(String(k.type).toLowerCase()); return t && this.isA(obj.cls, t); });
+          if (!c) { pending = e; pendInfo = info; }
+          else {
+            const key = String(c.variable || 'e').toLowerCase(), old = frame.vars.get(key);
+            if (old && !old.catchVar) throw this.tag(new _E.FlowError(`Catch: la variabile "${c.variable}" è già usata in questa funzione, scegli un altro nome`), s, frame);
+            frame.vars.set(key, { name: c.variable, type: obj.cls.name, array: false, value: _E.V.obj(obj), catchVar: true, ctx: null });
+            yield { type: 'stmt', stmt: { id: s.id + ':catch:' + c.id, kind: 'catch' }, frame, exc: info };
+            try { yield* this.block(c.body); } catch (e2) {
+              const o2 = this.excOf(e2);
+              if (!o2) throw e2;
+              pending = e2; pendInfo = unwind(e2, o2);
+            }
+          }
+        }
+        if (s.hasFinally) {
+          // con un'eccezione in sospeso il cursore ci arriva con la freccia rossa; dopo il Finally l'eccezione prosegue
+          yield { type: 'stmt', stmt: { id: s.id + ':finally', kind: 'finally' }, frame, exc: pendInfo ? { ...pendInfo, pending: true } : undefined };
+          yield* this.block(s.finally || []);
+        }
+        if (pending) throw pending;
+        return;
+      }
     }
   }
 
+  /* ---- eccezioni ---- */
+  /* errore che porta un'eccezione lanciata con Throw: se nessuno la cattura, il programma si ferma con questo messaggio */
+  excError(obj) {
+    const msg = obj.fields.get('messaggio').value.v;
+    const where = this.stack.filter((f) => !f.init).map((f, i) => (i === 0 ? 'Inizio' : f.func.name)).reverse();
+    const e = new _E.FlowError(`Eccezione non gestita: ${obj.cls.name}${msg ? ' — ' + msg : ''}${where.length > 1 ? ` (lanciata in ${where[0]}, chiamata da ${where.slice(1).join(' ← ')})` : ''}`);
+    e.thrown = obj;
+    return e;
+  }
+  /* l'eccezione portata da un errore: lanciata con Throw, oppure un errore di esecuzione (divisione per zero…).
+     null per gli errori del programma, che non si possono catturare */
+  excOf(e) {
+    if (!(e instanceof _E.FlowError)) return null;
+    if (e.thrown) return e.thrown;
+    if (!e.exc) return null;
+    const cls = this.byName.get(e.exc.toLowerCase());
+    const n = (this.classCount.get(cls.id) || 0) + 1;
+    this.classCount.set(cls.id, n);
+    const obj = { id: n, uid: ++this.objCount, cls, fields: new Map([['messaggio', { name: 'messaggio', type: 'String', array: false, value: _E.V.str(e.message), field: true, owner: cls, visibility: 'public', readonly: true, ctx: null }]]), targs: null };
+    e.thrown = obj;
+    return obj;
+  }
   *storeArray(tcell, lv, rx) {
     const nm = lv.k === 'var' ? lv.name : this.label(lv);
     const src = yield* this.cellOf(rx);
@@ -900,6 +981,7 @@ class Interpreter {
   *store(lv, val) {
     const cell = yield* this.cellOf(lv);
     const nm = lv.k === 'var' ? lv.name : this.label(lv).replace(/\[…\]$/, '');
+    if (cell.readonly) throw new _E.FlowError(`"${cell.name}" di un'eccezione si può solo leggere: il messaggio si indica creandola, es. new Eccezione("testo")`);
     if (cell.constant) throw new _E.FlowError(`"${cell.name}" è una costante: il suo valore non si può modificare`);
     // array restituito da una funzione
     if (val && val.t === 'ArrRef') {

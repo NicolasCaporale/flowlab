@@ -26,7 +26,7 @@
   --f-loop: #fde6c9; --s-loop: #b57d32;
   --f-call: #ebe4f6; --s-call: #8167b0;
   --f-comment: #ffffff; --s-comment: #9aa6b2;
-  --f-brk: #f6d8d8; --s-brk: #ad4545;
+  --f-brk: #f6d8d8; --s-brk: #ad4545; --f-exc: #f8dcea; --s-exc: #a8457a;
   --f-file: #e6e9ef; --s-file: #687384;
   --f-inc: #eceff2; --s-inc: #8f9aa6;
   --con-bg: #10161c; --con-ink: #dbe6ee; --con-echo: #7fd1e3; --con-sys: #7f8d99; --con-err: #ff8f8f;
@@ -46,7 +46,7 @@
     --f-term: #352d48; --s-term: #a996d6; --f-decl: #37352a; --s-decl: #c9bb78; --f-assign: #3c3622; --s-assign: #d6bd5c;
     --f-in: #1f3249; --s-in: #7eabdb; --f-out: #1f3a29; --s-out: #74c08a; --f-cond: #462826; --s-cond: #e08b81;
     --f-loop: #43331d; --s-loop: #e0a85a; --f-call: #332a45; --s-call: #ae95dc; --f-comment: #1b232b; --s-comment: #6d7b88;
-    --f-brk: #452424; --s-brk: #e07a7a; --f-file: #262d36; --s-file: #9aa5b3;
+    --f-brk: #452424; --s-brk: #e07a7a; --f-exc: #43233a; --s-exc: #e58ab9; --f-file: #262d36; --s-file: #9aa5b3;
     --f-inc: #232a31; --s-inc: #6d7883;
     --con-bg: #0a0e11; --shadow: 0 12px 34px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.4);
     color-scheme: dark;
@@ -61,7 +61,7 @@
   --f-term: #352d48; --s-term: #a996d6; --f-decl: #37352a; --s-decl: #c9bb78; --f-assign: #3c3622; --s-assign: #d6bd5c;
   --f-in: #1f3249; --s-in: #7eabdb; --f-out: #1f3a29; --s-out: #74c08a; --f-cond: #462826; --s-cond: #e08b81;
   --f-loop: #43331d; --s-loop: #e0a85a; --f-call: #332a45; --s-call: #ae95dc; --f-comment: #1b232b; --s-comment: #6d7b88;
-  --f-brk: #452424; --s-brk: #e07a7a; --f-file: #262d36; --s-file: #9aa5b3;
+  --f-brk: #452424; --s-brk: #e07a7a; --f-exc: #43233a; --s-exc: #e58ab9; --f-file: #262d36; --s-file: #9aa5b3;
   --f-inc: #232a31; --s-inc: #6d7883;
   --con-bg: #0a0e11; --shadow: 0 12px 34px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.4);
   color-scheme: dark;
@@ -180,6 +180,9 @@ body.side-hidden #sideToggle { left: auto; right: 3px; transform: translateY(-50
 .c-call > path, .c-call > rect { fill: var(--f-call); stroke: var(--s-call); }
 .c-comment > path, .c-comment > rect { fill: var(--f-comment); stroke: var(--s-comment); }
 .c-brk > path, .c-brk > rect { fill: var(--f-brk); stroke: var(--s-brk); }
+.c-exc > path, .c-exc > rect { fill: var(--f-exc); stroke: var(--s-exc); }
+.c-exc > path.inner { fill: none; }
+.chart path.flow.exc { stroke: var(--s-exc); stroke-dasharray: 5 4; }
 .c-file > path, .c-file > rect { fill: var(--f-file); stroke: var(--s-file); }
 .c-inc > path, .c-inc > rect { fill: var(--f-inc); stroke: var(--s-inc); }
 .chart .shape:hover > path, .chart .shape:hover > rect { stroke-width: 2.4; }
@@ -191,6 +194,12 @@ body.side-hidden #sideToggle { left: auto; right: 3px; transform: translateY(-50
 .chart .trail { pointer-events: none; }
 .chart .trail-path { fill: none; stroke: var(--exec); stroke-width: 4.5; stroke-linecap: round; stroke-linejoin: round; opacity: 0.75; }
 .chart .trail-cursor { fill: var(--exec); stroke: var(--paper); stroke-width: 2.5; filter: drop-shadow(0 0 5px var(--exec)); }
+/* eccezione durante l'esecuzione: freccia rossa tratteggiata verso il Catch, blocco di partenza cerchiato */
+.chart .trail-path.exc { stroke: var(--err); stroke-dasharray: 7 6; stroke-width: 3.5; opacity: 0.9; }
+.chart .trail-cursor.exc { fill: var(--err); filter: drop-shadow(0 0 5px var(--err)); }
+.chart .exc-src { fill: none; stroke: var(--err); stroke-width: 2.5; stroke-dasharray: 5 4; }
+.chart .exc-lab { font: 700 12px var(--font-ui); fill: var(--err); text-anchor: start; paint-order: stroke; stroke: var(--paper); stroke-width: 4px; pointer-events: none; }
+.chart .exc-over { pointer-events: none; }
 .chart .ins { cursor: copy; }
 .chart .ins rect { fill: transparent; }
 .chart .ins circle { fill: var(--accent); opacity: 0; transition: opacity .12s, transform .12s; }
@@ -1251,12 +1260,12 @@ const BUILTINS = {
   sqrt:     { sig: [N], ret: 'Real', fn: (a, n) => { if (num(a[0]) < 0) throw new FlowError('Sqrt: radice quadrata di un numero negativo', { node: n }); return V.real(Math.sqrt(num(a[0]))); }, doc: 'Sqrt(n) — radice quadrata' },
   random:   { sig: ['Integer'], ret: 'Integer', fn: (a, n) => { if (a[0].v <= 0) throw new FlowError('Random: l\'argomento deve essere maggiore di 0', { node: n }); return V.int(Math.floor(Math.random() * a[0].v)); }, doc: 'Random(n) — intero casuale da 0 a n-1' },
   len:      { sig: ['String'], ret: 'Integer', fn: (a) => V.int([...a[0].v].length), doc: 'Len(s) — lunghezza della stringa' },
-  char:     { sig: ['String', 'Integer'], ret: 'String', fn: (a, n) => { const ch = [...a[0].v]; const i = a[1].v; if (i < 0 || i >= ch.length) throw new FlowError(`Char: indice ${i} fuori dalla stringa (lunghezza ${ch.length})`, { node: n }); return V.str(ch[i]); }, doc: 'Char(s, i) — carattere in posizione i (da 0)' },
+  char:     { sig: ['String', 'Integer'], ret: 'String', fn: (a, n) => { const ch = [...a[0].v]; const i = a[1].v; if (i < 0 || i >= ch.length) throw new FlowError(`Char: indice ${i} fuori dalla stringa (lunghezza ${ch.length})`, { node: n, exc: 'IndiceNonValido' }); return V.str(ch[i]); }, doc: 'Char(s, i) — carattere in posizione i (da 0)' },
   tochar:   { sig: ['Integer'], ret: 'String', fn: (a) => V.str(String.fromCodePoint(a[0].v)), doc: 'ToChar(n) — carattere con codice n' },
   tocode:   { sig: ['String'], ret: 'Integer', fn: (a, n) => { if (!a[0].v.length) throw new FlowError('ToCode: stringa vuota', { node: n }); return V.int(a[0].v.codePointAt(0)); }, doc: 'ToCode(s) — codice del primo carattere' },
   tofixed:  { sig: [N, 'Integer'], ret: 'String', fn: (a) => V.str(Number(num(a[0])).toFixed(Math.max(0, Math.min(20, a[1].v)))), doc: 'ToFixed(r, d) — numero come testo con d decimali' },
-  tointeger:{ sig: ['String'], ret: 'Integer', fn: (a, n) => { try { return parseInputText(a[0].v, 'Integer'); } catch (e) { throw new FlowError(`ToInteger: ${e.message}`, { node: n }); } }, doc: 'ToInteger(s) — converte testo in intero' },
-  toreal:   { sig: ['String'], ret: 'Real', fn: (a, n) => { try { return parseInputText(a[0].v, 'Real'); } catch (e) { throw new FlowError(`ToReal: ${e.message}`, { node: n }); } }, doc: 'ToReal(s) — converte testo in reale' },
+  tointeger:{ sig: ['String'], ret: 'Integer', fn: (a, n) => { try { return parseInputText(a[0].v, 'Integer'); } catch (e) { throw new FlowError(`ToInteger: ${e.message}`, { node: n, exc: 'ConversioneNonValida' }); } }, doc: 'ToInteger(s) — converte testo in intero' },
+  toreal:   { sig: ['String'], ret: 'Real', fn: (a, n) => { try { return parseInputText(a[0].v, 'Real'); } catch (e) { throw new FlowError(`ToReal: ${e.message}`, { node: n, exc: 'ConversioneNonValida' }); } }, doc: 'ToReal(s) — converte testo in reale' },
   tostring: { sig: ['Any'], ret: 'String', fn: (a) => V.str(fmtValue(a[0])), doc: 'ToString(x) — converte in testo' },
   size:     { sig: ['Array'], ret: 'Integer', fn: null, doc: 'Size(a) — numero di elementi dell\'array; Size(m, d) — elementi della dimensione d (da 0)' },
   eof:      { sig: [], ret: 'Boolean', fn: null, doc: 'EOF() — vero se il file in lettura è finito' },
@@ -1320,7 +1329,7 @@ function arrOffset(ivs, cell, node) {
     const iv = ivs[k];
     if (iv.t !== 'Integer') throw new FlowError(`Gli indici di "${node.name}" devono essere interi, non ${TYPE_IT[iv.t]}`, { node });
     if (iv.v < 0 || iv.v >= dims[k]) {
-      throw new FlowError(dims.length === 1 ? `Indice ${iv.v} fuori dai limiti: "${node.name}" ha ${dims[0]} elementi (indici da 0 a ${dims[0] - 1})` : `Indice ${iv.v} fuori dai limiti nella dimensione ${k + 1} di "${node.name}" (indici da 0 a ${dims[k] - 1})`, { node });
+      throw new FlowError(dims.length === 1 ? `Indice ${iv.v} fuori dai limiti: "${node.name}" ha ${dims[0]} elementi (indici da 0 a ${dims[0] - 1})` : `Indice ${iv.v} fuori dai limiti nella dimensione ${k + 1} di "${node.name}" (indici da 0 a ${dims[k] - 1})`, { node, exc: 'IndiceNonValido' });
     }
     off = off * dims[k] + iv.v;
   }
@@ -1328,7 +1337,7 @@ function arrOffset(ivs, cell, node) {
 }
 function arrIndex(iv, cell, node) {
   if (iv.t !== 'Integer') throw new FlowError(`L'indice di "${node.name}" deve essere intero, non ${TYPE_IT[iv.t]}`, { node });
-  if (iv.v < 0 || iv.v >= cell.items.length) throw new FlowError(`Indice ${iv.v} fuori dai limiti: "${node.name}" ha ${cell.items.length} elementi (indici da 0 a ${cell.items.length - 1})`, { node });
+  if (iv.v < 0 || iv.v >= cell.items.length) throw new FlowError(`Indice ${iv.v} fuori dai limiti: "${node.name}" ha ${cell.items.length} elementi (indici da 0 a ${cell.items.length - 1})`, { node, exc: 'IndiceNonValido' });
   return iv.v;
 }
 
@@ -1365,10 +1374,10 @@ function* evalBin(node, ctx) {
         case '-': return bothInt ? checkInt(l.v - r.v, node) : V.real(l.v - r.v);
         case '*': return bothInt ? checkInt(l.v * r.v, node) : V.real(l.v * r.v);
         case '/':
-          if (r.v === 0) throw new FlowError('Divisione per zero', { node });
+          if (r.v === 0) throw new FlowError('Divisione per zero', { node, exc: 'DivisionePerZero' });
           return V.real(l.v / r.v);
         case '%':
-          if (r.v === 0) throw new FlowError('Modulo per zero', { node });
+          if (r.v === 0) throw new FlowError('Modulo per zero', { node, exc: 'DivisionePerZero' });
           return bothInt ? V.int(l.v % r.v) : V.real(l.v % r.v);
         case '^': {
           const v = Math.pow(l.v, r.v);
@@ -1517,13 +1526,40 @@ const KINDS = {
   close:      { fields: { mode: 'read' } },
   read:       { fields: { variable: '' } },
   write:      { fields: { expression: '' } },
+  // eccezioni: Try con il corpo, uno o più Catch (catches: [{ id, type, variable, body }]) e Finally facoltativo
+  try:        { fields: { hasFinally: false }, blocks: ['body', 'finally'], catches: true },
+  throw:      { fields: { expression: '' } },
 };
+const makeCatch = (props) => Object.assign({ id: newId(), type: 'Eccezione', variable: 'e', body: [] }, props || {});
+
+/* Eccezioni predefinite: si usano come classi (anche nella vista Funzioni) e si possono estendere.
+   Gli errori dell'interprete diventano eccezioni di questi tipi. */
+const EXCEPTIONS = [
+  ['Eccezione', '', 'qualsiasi eccezione'],
+  ['DivisionePerZero', 'Eccezione', 'divisione o mod per zero'],
+  ['IndiceNonValido', 'Eccezione', 'indice fuori dall\'array'],
+  ['ConversioneNonValida', 'Eccezione', 'testo che non è un numero (ToInteger, ToReal)'],
+  ['OggettoNullo', 'Eccezione', 'uso di un oggetto che vale null'],
+  ['ErroreFile', 'Eccezione', 'errore nei file'],
+];
+const EXC_CLASSES = EXCEPTIONS.map(([name, parent, doc]) => ({
+  id: 'exc:' + name, name, parent, doc, abstract: false, tparams: [], module: null, builtin: true, x: 0, y: 0,
+  attributes: [{ name: 'messaggio', type: 'String', array: false, size: '', visibility: 'public', static: false, init: '', readonly: true }],
+}));
+const excClass = (name) => EXC_CLASSES.find((c) => c.name.toLowerCase() === String(name || '').toLowerCase()) || null;
+/* blocchi figli di un blocco (per il Try: corpo, rami Catch, Finally) */
+function childArrays(s) {
+  const out = (KINDS[s.kind].blocks || []).map((b) => s[b]);
+  if (s.kind === 'try') out.splice(1, 0, ...(s.catches || []).map((c) => c.body));
+  return out;
+}
 
 function makeStmt(kind, props) {
   const def = KINDS[kind];
   const s = { id: newId(), kind };
   for (const [k, v] of Object.entries(def.fields)) s[k] = v;
   for (const b of def.blocks || []) s[b] = [];
+  if (def.catches) s.catches = [makeCatch()];
   if (props) Object.assign(s, props);
   return s;
 }
@@ -1579,10 +1615,13 @@ function makeAttribute(props) {
 const hasClasses = (prog) => Array.isArray(prog.classes) && prog.classes.length > 0;
 function classById(prog, id) { return hasClasses(prog) ? prog.classes.find((c) => c.id === id) || null : null; }
 function classByName(prog, name) {
-  if (!hasClasses(prog) || !name) return null;
+  if (!name) return null;
   const l = String(name).toLowerCase();
-  return prog.classes.find((c) => c.name.toLowerCase() === l) || null;
+  // le eccezioni predefinite sono classi sempre disponibili
+  return (hasClasses(prog) && prog.classes.find((c) => c.name.toLowerCase() === l)) || excClass(l);
 }
+/* la classe (o il nome) è un'eccezione? */
+const isExcClass = (prog, c) => { const k = typeof c === 'string' ? classByName(prog, c) : c; return !!k && chainOf(prog, k).some((x) => x.builtin && x.name === 'Eccezione'); };
 const classOf = (prog, f) => classById(prog, f.cls);
 const mainClass = (prog) => classOf(prog, prog.functions[0]);
 const membersOf = (prog, c) => prog.functions.filter((f) => f.cls === c.id);
@@ -1646,7 +1685,8 @@ function cloneStmt(s, keepIds) {
 }
 function reId(s) {
   s.id = newId();
-  for (const b of KINDS[s.kind].blocks || []) s[b].forEach(reId);
+  if (s.catches) s.catches.forEach((c) => { c.id = newId(); });
+  for (const arr of childArrays(s)) arr.forEach(reId);
 }
 
 /* Visita ricorsiva di tutti i blocchi */
@@ -1654,7 +1694,7 @@ function walk(stmts, fn, parent) {
   for (let i = 0; i < stmts.length; i++) {
     const s = stmts[i];
     fn(s, stmts, i, parent);
-    for (const b of KINDS[s.kind].blocks || []) walk(s[b], fn, s);
+    for (const arr of childArrays(s)) walk(arr, fn, s);
   }
 }
 function findStmt(prog, id) {
@@ -1699,7 +1739,8 @@ function parseFprg(text) {
         static: boolAttr(a.getAttribute('static'), false), init: a.getAttribute('init') || '',
       }));
       delete cl._attrEls;
-      const par = _classNames.get(cl.parent.toLowerCase()); cl.parent = par && par.toLowerCase() !== cl.name.toLowerCase() ? par : '';
+      // la classe madre può essere anche un'eccezione predefinita
+      const par = _classNames.get(cl.parent.toLowerCase()) || (excClass(cl.parent) || {}).name; cl.parent = par && par.toLowerCase() !== cl.name.toLowerCase() ? par : '';
     }
     if (!prog.classes.length) delete prog.classes;
   }
@@ -1853,6 +1894,19 @@ function parseStmt(el) {
     case 'close': return makeStmt('close', { mode: (A('mode') || 'read').toLowerCase() === 'write' ? 'write' : 'read' });
     case 'read': return makeStmt('read', { variable: S('variable') });
     case 'write': return makeStmt('write', { expression: S('expression') });
+    // estensione FlowLab: eccezioni
+    case 'throw': return makeStmt('throw', { expression: S('expression') });
+    case 'try': {
+      const s = makeStmt('try', { catches: [] });
+      for (const c of el.children) {
+        const t = c.nodeName.toLowerCase();
+        if (t === 'body') s.body = parseBlock(c);
+        else if (t === 'catch') s.catches.push(makeCatch({ type: (c.getAttribute('type') || 'Eccezione').trim(), variable: (c.getAttribute('variable') || 'e').trim(), body: parseBlock(c) }));
+        else if (t === 'finally') { s.hasFinally = true; s.finally = parseBlock(c); }
+      }
+      if (!s.catches.length && !s.hasFinally) s.catches.push(makeCatch());
+      return s;
+    }
   }
   return null; // elemento sconosciuto: ignorato
 }
@@ -1982,6 +2036,20 @@ function writeBlock(stmts, L, depth) {
       case 'close': open('close', [['mode', s.mode]]); break;
       case 'read': open('read', [['variable', s.variable]]); break;
       case 'write': open('write', [['expression', s.expression]]); break;
+      case 'throw': open('throw', [['expression', s.expression]]); break;
+      case 'try': {
+        const tag = (t, arr, attrs) => {
+          const a = (attrs || []).map(([k, v]) => ` ${k}="${xmlEsc(v)}"`).join('');
+          if (!arr.length) { L.push(`${ind}    <${t}${a}/>`); return; }
+          L.push(`${ind}    <${t}${a}>`); writeBlock(arr, L, depth + 2); L.push(`${ind}    </${t}>`);
+        };
+        L.push(`${ind}<try>`);
+        tag('body', s.body);
+        for (const c of s.catches || []) tag('catch', c.body, [['type', c.type], ['variable', c.variable]]);
+        if (s.hasFinally) tag('finally', s.finally);
+        L.push(`${ind}</try>`);
+        break;
+      }
     }
   }
 }
@@ -1996,6 +2064,7 @@ function extendedFeatures(prog) {
   for (const f of prog.functions) {
     if (rets(f).length > 1) out.add('funzioni con più valori restituiti');
     if (rets(f).some((r) => r.array)) out.add('funzioni che restituiscono array');
+    walk(f.body, (s) => { if (s.kind === 'try' || s.kind === 'throw') out.add('eccezioni (Try, Catch, Finally, Throw)'); });
     if (f.params.some((p) => p.array && (p.dims || 1) > 1)) out.add('array a più dimensioni');
     walk(f.body, (s) => {
       if (s.kind === 'const') out.add('costanti');
@@ -2017,7 +2086,7 @@ function isIncomplete(s) {
     case 'const': return !s.name.trim() || !String(s.expression).trim();
     case 'assign': return !s.variable.trim() || !s.expression.trim();
     case 'input': case 'read': return !s.variable.trim();
-    case 'output': case 'if': case 'while': case 'do': case 'call': case 'open': case 'write':
+    case 'output': case 'if': case 'while': case 'do': case 'call': case 'open': case 'write': case 'throw':
       return !String(s.expression).trim();
     case 'for': return !s.variable.trim() || !s.start.trim() || !s.end.trim();
     case 'breakpoint': return !s.always && !s.expression.trim();
@@ -2025,7 +2094,7 @@ function isIncomplete(s) {
   }
 }
 
-const ModelLib = { FPRG_ROOT, KINDS, VISIBILITY, VIS_IT, makeClass, isTypeParam, classTitle, modulesOf, isModuleFunc, moduleOfFunc, makeAttribute, hasClasses, classById, classByName, classOf, mainClass, membersOf, chainOf, isSubclass, defaultClassName, wrapInClass, isTrivialOO, isPlainOO, missingAbstract, unwrapClasses, typeList, extendedFeatures, rets, setRets, fgExpr, newId, makeStmt, makeFunction, newProgram, cloneStmt, reId, walk, findStmt, parseFprg, serializeFprg, isIncomplete, normType };
+const ModelLib = { FPRG_ROOT, KINDS, EXCEPTIONS, EXC_CLASSES, excClass, isExcClass, childArrays, makeCatch, VISIBILITY, VIS_IT, makeClass, isTypeParam, classTitle, modulesOf, isModuleFunc, moduleOfFunc, makeAttribute, hasClasses, classById, classByName, classOf, mainClass, membersOf, chainOf, isSubclass, defaultClassName, wrapInClass, isTrivialOO, isPlainOO, missingAbstract, unwrapClasses, typeList, extendedFeatures, rets, setRets, fgExpr, newId, makeStmt, makeFunction, newProgram, cloneStmt, reId, walk, findStmt, parseFprg, serializeFprg, isIncomplete, normType };
 if (typeof module !== 'undefined') module.exports = ModelLib;
 
 /* ==========================================================================
@@ -2064,6 +2133,8 @@ class Interpreter {
         (f.ctor ? this.ctors : this.methods).get(f.cls).push(f);
       }
     }
+    // eccezioni predefinite: classi disponibili anche nella vista Funzioni
+    for (const c of _M.EXC_CLASSES) if (!this.byName.has(c.name.toLowerCase())) { this.byName.set(c.name.toLowerCase(), c); this.methods.set(c.id, []); this.ctors.set(c.id, []); }
     // parametri di tipo delle classi e delle funzioni generiche
     this.tparamNames = new Set([...(prog.classes || []).flatMap((c) => c.tparams || []), ...prog.functions.flatMap((f) => f.tparams || [])].map((t) => t.toLowerCase()));
     const self = this;
@@ -2072,7 +2143,7 @@ class Interpreter {
       hasUser: (name) => self.hasUser(name),
       callUser: (name, args, node) => self.callUser(name, args, node, false),
       cellOf: (node) => self.cellOf(node),
-      oo: this.oo ? (node) => self.ooEval(node) : null,
+      oo: (node) => self.ooEval(node),
       env: {
         eof: (node) => env.eof(node),
       },
@@ -2198,6 +2269,7 @@ class Interpreter {
         cell.dims = dims; cell.items = new Array(n).fill(this.defaultOf(dt));
       } else {
         cell.value = this.defaultOf(dt);
+        if (a.readonly) cell.readonly = true; // messaggio delle eccezioni: si imposta solo creandole
         if (String(a.init || '').trim()) cell.value = this.coerceTo(yield* _E.evalE(this.parse(a.init, 'e'), this.ctx), a.type, `il valore iniziale di ${owner.name}.${a.name}`);
       }
     } catch (e) {
@@ -2247,7 +2319,7 @@ class Interpreter {
     if (o.k === 'var' && !o.indices && !this.isVarName(o.name) && this.byName.has(o.name.toLowerCase())) return { cls: this.byName.get(o.name.toLowerCase()) };
     const v = yield* _E.evalE(objNode, this.ctx);
     if (v.t !== 'Object') throw new _E.FlowError(`"${this.label(objNode)}" non è un oggetto (è ${_E.typeName(v.t)}): il punto si usa con gli oggetti`, { node: objNode });
-    if (v.v === null) throw new _E.FlowError(`"${this.label(objNode)}" vale null: non indica nessun oggetto (crealo con new)`, { node: objNode });
+    if (v.v === null) throw new _E.FlowError(`"${this.label(objNode)}" vale null: non indica nessun oggetto (crealo con new)`, { node: objNode, exc: 'OggettoNullo' });
     return { obj: v.v };
   }
   fieldCell(tg, name, node) {
@@ -2287,7 +2359,15 @@ class Interpreter {
     if (cell.value === undefined) throw new _E.FlowError(`"${nm}" non ha ancora un valore`, { node });
     return cell.value;
   }
+  /* la classe è un'eccezione (Eccezione o una sua sottoclasse)? */
+  isExc(c) { return !!c && this.isA(c, this.byName.get('eccezione')); }
   *ooEval(node) {
+    if (!this.oo) {
+      // vista Funzioni: degli oggetti si usano solo le eccezioni, new Eccezione("…") ed e.messaggio
+      if (node.k === 'new' && this.isExc(this.byName.get(node.cls.toLowerCase()))) return yield* this.construct(node);
+      if (node.k === 'member') { const tg = yield* this.target(node.obj); if (tg.obj && this.isExc(tg.obj.cls)) return yield* this.readCell(this.fieldCell(tg, node.name, node), node); }
+      throw new _E.FlowError('Oggetti, new e this si usano nella vista Oggetti (nella vista Funzioni solo le eccezioni: new Eccezione("…") ed e.messaggio)', { node });
+    }
     switch (node.k) {
       case 'this':
         if (!this.frame.self) throw new _E.FlowError('this si usa solo nei metodi non statici e nei costruttori', { node });
@@ -2512,6 +2592,13 @@ class Interpreter {
     return _E.V.obj(obj);
   }
   *runCtor(cls, argNodes, obj, node) {
+    // eccezione predefinita: new Eccezione() oppure new Eccezione("messaggio"), anche come super("messaggio")
+    if (cls.builtin) {
+      if (argNodes.length > 1) throw new _E.FlowError(`${cls.name} si crea con il messaggio: new ${cls.name}("testo")`, { node });
+      const v = argNodes.length ? yield* _E.evalE(argNodes[0], this.ctx) : _E.V.str('');
+      obj.fields.get('messaggio').value = this.coerceTo(v, 'String', `il messaggio di ${cls.name}`, null);
+      return;
+    }
     const ctors = this.ctors.get(cls.id) || [];
     if (!ctors.length) {
       if (argNodes.length) throw new _E.FlowError(`${cls.name} non ha costruttori con parametri: si crea con new ${cls.name}() senza argomenti`, { node });
@@ -2907,9 +2994,72 @@ class Interpreter {
         env.fileWrite(_E.fmtValue(v));
         return;
       }
+      case 'throw': {
+        yield { type: 'stmt', stmt: s, frame };
+        const v = yield* ev(s.expression);
+        if (v.t !== 'Object' || !v.v) throw new _E.FlowError(v.t === 'Object' ? 'Throw: l\'eccezione vale null' : `Throw vuole un'eccezione, es. new Eccezione("messaggio"), non ${_E.TYPE_IT[v.t] || v.t}`);
+        if (!this.isExc(v.v.cls)) throw new _E.FlowError(`Throw: ${v.v.cls.name} non è un'eccezione (una classe di eccezioni eredita da Eccezione)`);
+        throw this.excError(v.v);
+      }
+      case 'try': {
+        yield { type: 'stmt', stmt: s, frame };
+        const depth = this.stack.length;
+        let pending = null, pendInfo = null;
+        // eccezione arrivata qui: si esce dalle funzioni chiamate dentro il Try (lost: i loro nomi, per il cursore)
+        const unwind = (e, obj) => { const lost = this.stack.slice(depth).filter((f) => !f.init).map((f) => f.func.name); this.stack.length = depth; return { type: obj.cls.name, lost }; };
+        try {
+          yield* this.block(s.body);
+        } catch (e) {
+          const obj = this.excOf(e);
+          if (!obj) throw e; // errore del programma, non un'eccezione: si ferma tutto
+          const info = unwind(e, obj);
+          const c = (s.catches || []).find((k) => { const t = this.byName.get(String(k.type).toLowerCase()); return t && this.isA(obj.cls, t); });
+          if (!c) { pending = e; pendInfo = info; }
+          else {
+            const key = String(c.variable || 'e').toLowerCase(), old = frame.vars.get(key);
+            if (old && !old.catchVar) throw this.tag(new _E.FlowError(`Catch: la variabile "${c.variable}" è già usata in questa funzione, scegli un altro nome`), s, frame);
+            frame.vars.set(key, { name: c.variable, type: obj.cls.name, array: false, value: _E.V.obj(obj), catchVar: true, ctx: null });
+            yield { type: 'stmt', stmt: { id: s.id + ':catch:' + c.id, kind: 'catch' }, frame, exc: info };
+            try { yield* this.block(c.body); } catch (e2) {
+              const o2 = this.excOf(e2);
+              if (!o2) throw e2;
+              pending = e2; pendInfo = unwind(e2, o2);
+            }
+          }
+        }
+        if (s.hasFinally) {
+          // con un'eccezione in sospeso il cursore ci arriva con la freccia rossa; dopo il Finally l'eccezione prosegue
+          yield { type: 'stmt', stmt: { id: s.id + ':finally', kind: 'finally' }, frame, exc: pendInfo ? { ...pendInfo, pending: true } : undefined };
+          yield* this.block(s.finally || []);
+        }
+        if (pending) throw pending;
+        return;
+      }
     }
   }
 
+  /* ---- eccezioni ---- */
+  /* errore che porta un'eccezione lanciata con Throw: se nessuno la cattura, il programma si ferma con questo messaggio */
+  excError(obj) {
+    const msg = obj.fields.get('messaggio').value.v;
+    const where = this.stack.filter((f) => !f.init).map((f, i) => (i === 0 ? 'Inizio' : f.func.name)).reverse();
+    const e = new _E.FlowError(`Eccezione non gestita: ${obj.cls.name}${msg ? ' — ' + msg : ''}${where.length > 1 ? ` (lanciata in ${where[0]}, chiamata da ${where.slice(1).join(' ← ')})` : ''}`);
+    e.thrown = obj;
+    return e;
+  }
+  /* l'eccezione portata da un errore: lanciata con Throw, oppure un errore di esecuzione (divisione per zero…).
+     null per gli errori del programma, che non si possono catturare */
+  excOf(e) {
+    if (!(e instanceof _E.FlowError)) return null;
+    if (e.thrown) return e.thrown;
+    if (!e.exc) return null;
+    const cls = this.byName.get(e.exc.toLowerCase());
+    const n = (this.classCount.get(cls.id) || 0) + 1;
+    this.classCount.set(cls.id, n);
+    const obj = { id: n, uid: ++this.objCount, cls, fields: new Map([['messaggio', { name: 'messaggio', type: 'String', array: false, value: _E.V.str(e.message), field: true, owner: cls, visibility: 'public', readonly: true, ctx: null }]]), targs: null };
+    e.thrown = obj;
+    return obj;
+  }
   *storeArray(tcell, lv, rx) {
     const nm = lv.k === 'var' ? lv.name : this.label(lv);
     const src = yield* this.cellOf(rx);
@@ -2930,6 +3080,7 @@ class Interpreter {
   *store(lv, val) {
     const cell = yield* this.cellOf(lv);
     const nm = lv.k === 'var' ? lv.name : this.label(lv).replace(/\[…\]$/, '');
+    if (cell.readonly) throw new _E.FlowError(`"${cell.name}" di un'eccezione si può solo leggere: il messaggio si indica creandola, es. new Eccezione("testo")`);
     if (cell.constant) throw new _E.FlowError(`"${cell.name}" è una costante: il suo valore non si può modificare`);
     // array restituito da una funzione
     if (val && val.t === 'ArrRef') {
@@ -3043,9 +3194,101 @@ function setupGen(prog, lang) {
     if (c.name === spec.cls) native.set(c.name.toLowerCase(), spec);
   }
   const tps = [...cs.flatMap((c) => c.tparams || []), ...prog.functions.flatMap((f) => f.tparams || [])].map((t) => t.toLowerCase());
-  GEN = { native, skip, tparams: new Set(tps), helpers: new Set(), bound: new Set(), boxed: new Set(), cur: null };
+  GEN = { native, skip, tparams: new Set(tps), helpers: new Set(), bound: new Set(), boxed: new Set(), cur: null, exc: excInfo(prog), jthrows: new Map() };
   if (tps.length) analyzeGenerics(prog, lang);
+  if (lang === 'java' && GEN.exc.used) analyzeThrows(prog);
 }
+/* ------------------------------ Eccezioni ----------------------------------
+   Le eccezioni predefinite di FlowLab corrispondono a quelle dei linguaggi; dove il linguaggio
+   non lancia nulla (divisione tra reali per zero, indice fuori dall'array in JavaScript…) il codice
+   usa piccole funzioni di controllo, solo se il programma cattura quel tipo di eccezione. */
+const EXC_LANG = {
+  java: { Eccezione: 'Exception', DivisionePerZero: 'ArithmeticException', IndiceNonValido: 'IndexOutOfBoundsException', ConversioneNonValida: 'NumberFormatException', OggettoNullo: 'NullPointerException', ErroreFile: 'java.io.IOException' },
+  csharp: { Eccezione: 'Exception', DivisionePerZero: 'DivideByZeroException', IndiceNonValido: 'IndexOutOfRangeException', ConversioneNonValida: 'FormatException', OggettoNullo: 'NullReferenceException', ErroreFile: 'System.IO.IOException' },
+  python: { Eccezione: 'Exception', DivisionePerZero: 'ZeroDivisionError', IndiceNonValido: 'IndexError', ConversioneNonValida: 'ValueError', OggettoNullo: 'AttributeError', ErroreFile: 'OSError' },
+  cpp: { Eccezione: 'runtime_error', DivisionePerZero: 'DivisionePerZero', IndiceNonValido: 'out_of_range', ConversioneNonValida: 'invalid_argument', OggettoNullo: 'OggettoNullo', ErroreFile: 'ErroreFile' },
+  javascript: { Eccezione: 'Error', DivisionePerZero: 'DivisionePerZero', IndiceNonValido: 'IndiceNonValido', ConversioneNonValida: 'ConversioneNonValida', OggettoNullo: 'OggettoNullo', ErroreFile: 'ErroreFile' },
+};
+/* nome dell'eccezione nel linguaggio (le classi del programma restano come sono) */
+const excL = (lang, name) => { const b = _CM.excClass(name); if (!b) return name; if ((lang === 'cpp' || lang === 'javascript') && EXC_LANG[lang][b.name] === b.name) need('exc:' + b.name); return EXC_LANG[lang][b.name]; };
+/* classe madre nel linguaggio (una classe del programma può ereditare da un'eccezione predefinita) */
+const parentL = (lang, c) => (c.parent && _CM.excClass(c.parent) ? excL(lang, c.parent) : c.parent);
+/* che cosa usa il programma: Try/Throw, e quali errori di esecuzione vengono catturati */
+function excInfo(prog) {
+  const caught = new Set(); let used = false;
+  for (const f of prog.functions) _CM.walk(f.body, (st) => {
+    if (st.kind === 'throw') used = true;
+    if (st.kind !== 'try') return;
+    used = true;
+    for (const c of st.catches || []) { const k = _CM.classByName(prog, c.type); for (const b of _CM.EXC_CLASSES) if (k && _CM.isSubclass(prog, b, k)) caught.add(b.name); }
+  });
+  return { used, div: caught.has('DivisionePerZero'), idx: caught.has('IndiceNonValido'), conv: caught.has('ConversioneNonValida') };
+}
+/* tipo dell'eccezione lanciata: new X(...) oppure il tipo della variabile */
+function thrownType(node, sc) { const n = strip(node); if (!n) return null; if (n.k === 'new') return n.cls; const t = _CE.inferType(n, sc); return t && t !== 'Unknown' ? _CE.splitType(t).base : null; }
+/* Java: eccezioni controllate (vanno dichiarate con throws): Eccezione, ErroreFile e le classi del programma che ne derivano */
+function jChecked(prog, name) {
+  const k = _CM.classByName(prog, name); if (!k) return false;
+  const b = _CM.chainOf(prog, k).find((x) => x.builtin);
+  return !!b && (b.name === 'Eccezione' || b.name === 'ErroreFile');
+}
+/* Java: per ogni funzione, le eccezioni controllate che possono uscire (non catturate da un Try) */
+function analyzeThrows(prog) {
+  const oo = _CM.hasClasses(prog);
+  const fl = prog.functions.filter((f) => !(oo && GEN.skip.has(f.cls)));
+  const out = new Map(fl.map((f) => [f, new Set()])), scopes = new Map(fl.map((f) => [f, buildScope(prog, f)]));
+  const caughtBy = (t, catches) => catches.some((ct) => _CM.isSubclass(prog, _CM.classByName(prog, t), _CM.classByName(prog, ct)));
+  for (let changed = true, guard = 0; changed && guard < 30; guard++) {
+    changed = false;
+    for (const f of fl) {
+      const sc = scopes.get(f), set = out.get(f);
+      const add = (t, catches) => { if (!t || !jChecked(prog, t) || caughtBy(t, catches)) return; const k = _CM.classByName(prog, t).name; if (!set.has(k)) { set.add(k); changed = true; } };
+      const visitExpr = (src, catches) => { const t = String(src || '').trim() && tryParse(src); if (t) walkNodes(t, (n) => { const g = calleeNode(n, sc, prog); if (g && out.has(g)) for (const x of out.get(g)) add(x, catches); }); };
+      const visit = (stmts, catches) => {
+        for (const st of stmts) {
+          if (st.kind === 'try') {
+            visit(st.body, [...catches, ...(st.catches || []).map((c) => c.type)]);
+            for (const c of st.catches || []) visit(c.body, catches);
+            if (st.hasFinally) visit(st.finally || [], catches);
+            continue;
+          }
+          if (st.kind === 'throw') { const t = tryParse(st.expression); add(t && thrownType(t, sc), catches); }
+          for (const src of exprSources(st)) visitExpr(src, catches);
+          for (const arr of _CM.childArrays(st)) visit(arr, catches);
+        }
+      };
+      visit(f.body, []);
+      // un costruttore senza super(...) chiama quello della classe madre
+    }
+    // un metodo ridefinito dichiara le stesse eccezioni in tutta la gerarchia (in Java la ridefinizione non può aggiungerne)
+    if (oo) {
+      const groups = new Map();
+      for (const f of fl) {
+        if (f.ctor || f.static) continue;
+        const c = _CM.classOf(prog, f); if (!c) continue;
+        const root = _CM.chainOf(prog, c).filter((k) => !k.builtin).pop();
+        const key = root.id + ':' + f.name.toLowerCase() + '(' + OO.sig(f) + ')';
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(f);
+      }
+      for (const g of groups.values()) {
+        if (g.length < 2) continue;
+        const all = new Set(g.flatMap((f) => [...out.get(f)]));
+        for (const f of g) for (const x of all) if (!out.get(f).has(x)) { out.get(f).add(x); changed = true; }
+      }
+    }
+  }
+  GEN.jthrows = out;
+}
+/* Java: " throws …" della funzione (con i file c'è già throws Exception) */
+const jThrows = (f, files) => {
+  if (files) return ' throws Exception';
+  const set = GEN.jthrows.get(f);
+  if (!set || !set.size) return '';
+  if (set.has('Eccezione')) return ' throws Exception';
+  return ' throws ' + [...set].map((n) => excL('java', n)).join(', ');
+};
+
 /* ---- generici: chi possiede un parametro di tipo (la funzione o la classe) ---- */
 const FKEY = (f, t) => 'f:' + f.id + ':' + String(t).toLowerCase();
 const CKEY = (c, t) => 'c:' + c.id + ':' + String(t).toLowerCase();
@@ -3063,7 +3306,7 @@ const boundHere = (t) => !!GEN.cur && isBound(t, GEN.cur.f, GEN.cur.c);
 function exprSources(s) {
   switch (s.kind) {
     case 'declare': return [..._CE.splitTop(s.array ? s.size || '' : ''), s.init || ''];
-    case 'const': case 'output': case 'write': case 'if': case 'while': case 'do': case 'call': case 'open': return [s.expression];
+    case 'const': case 'output': case 'write': case 'if': case 'while': case 'do': case 'call': case 'open': case 'throw': return [s.expression];
     case 'breakpoint': return s.always ? [] : [s.expression];
     case 'assign': return [..._CE.splitTop(s.variable), s.expression];
     case 'input': case 'read': return [s.variable];
@@ -3176,6 +3419,8 @@ function buildScope(prog, func) {
   _CM.walk(func.body, (s) => {
     if (s.kind === 'const' && s.name.trim() && !vars.has(s.name.trim().toLowerCase())) vars.set(s.name.trim().toLowerCase(), { type: s.type, array: false, name: s.name.trim(), constant: true });
     if (s.kind === 'declare') for (const n of s.name.split(',').map((x) => x.trim()).filter(Boolean)) if (!vars.has(n.toLowerCase())) vars.set(n.toLowerCase(), { type: s.type, array: s.array, dims: s.array ? _CE.splitTop(s.size).length : 0, name: n });
+    // variabile di un Catch: l'eccezione catturata
+    if (s.kind === 'try') for (const c of s.catches || []) if (c.variable && !vars.has(c.variable.toLowerCase())) vars.set(c.variable.toLowerCase(), { type: (_CM.classByName(prog, c.type) || { name: c.type }).name, array: false, dims: 0, name: c.variable, catchVar: true });
   });
   const funcs = new Map();
   const ooMode = _CM.hasClasses(prog);
@@ -3185,6 +3430,8 @@ function buildScope(prog, func) {
   else for (const k of _CM.chainOf(prog, cls)) for (const f of _CM.membersOf(prog, k)) if (!f.ctor && !funcs.has(f.name.toLowerCase()) && !_CE.BUILTINS[f.name.toLowerCase()]) funcs.set(f.name.toLowerCase(), { type: f.type, rets: _CM.rets(f), f, name: f.name, owner: k });
   const sc = { vars, funcs, func, prog, cls, ooMode };
   if (ooMode) ooScope(prog, sc);
+  // vista Funzioni: degli oggetti ci sono solo le eccezioni (new Eccezione("…"), e.messaggio)
+  else sc.oo = (node) => (node.k === 'new' ? node.cls : node.k === 'member' && node.name.toLowerCase() === 'messaggio' ? 'String' : undefined);
   return sc;
 }
 
@@ -3247,7 +3494,7 @@ const OO = {
   ordered(prog, mainFirst) {
     const main = _CM.mainClass(prog);
     const out = [], done = new Set();
-    const visit = (c) => { if (!c || done.has(c)) return; done.add(c); visit(_CM.classByName(prog, c.parent)); out.push(c); };
+    const visit = (c) => { if (!c || c.builtin || done.has(c)) return; done.add(c); visit(_CM.classByName(prog, c.parent)); out.push(c); };
     const rest = prog.classes.filter((c) => c !== main && !GEN.skip.has(c.id));
     if (mainFirst) { visit(main); rest.forEach(visit); } else { rest.forEach(visit); visit(main); }
     return out;
@@ -3331,6 +3578,8 @@ function exprPrinter(L) {
       case 'new': {
         const c = sc.classNamed ? sc.classNamed(n.cls) : null; const nm = c ? c.name : n.cls;
         const a = n.args.map((x) => pr(x, sc).s).join(', ');
+        // eccezione predefinita: la classe del linguaggio
+        if (_CM.excClass(n.cls) && EXC_LANG[L.lang]) { const t = excL(L.lang, n.cls); return { s: L.newObj ? L.newObj(t, a) : `new ${t}(${a})`, p: P.atom }; }
         // argomenti di tipo: quelli scritti, altrimenti quelli della variabile a cui si assegna
         let targs = n.targs && n.targs.length ? n.targs : null;
         const gen = c && (c.tparams || []).length;
@@ -3342,6 +3591,11 @@ function exprPrinter(L) {
       }
       case 'supercall': { const a = n.args.map((x) => pr(x, sc).s).join(', '); return { s: L.superCtor ? L.superCtor(a, sc) : `super(${a})`, p: P.atom }; }
       case 'member': {
+        // messaggio di un'eccezione: getMessage(), Message, str(e), what()…
+        if (n.name.toLowerCase() === 'messaggio' && L.excMsg && !n.indices) {
+          const t = _CE.inferType(n.obj, sc);
+          if (t && _CM.isExcClass(sc.prog, _CE.splitType(t).base)) { const o = pr(n.obj, sc); return { s: L.excMsg(o.p < P.atom ? `(${o.s})` : o.s), p: P.atom }; }
+        }
         const ref = objRef(n.obj, sc);
         const c = ref.cls || (sc.objClass && sc.objClass(n.obj));
         const h = c && sc.fieldHit(c, n.name.toLowerCase());
@@ -3508,6 +3762,12 @@ LANGS.pseudo = {
           case 'close': o.line(`CHIUDI FILE IN ${s.mode === 'read' ? 'LETTURA' : 'SCRITTURA'}`); break;
           case 'read': o.line(`LEGGI ${E(s.variable, sc)} DAL FILE`); break;
           case 'write': o.line(`SCRIVI ${E(s.expression, sc)} NEL FILE`); break;
+          case 'throw': o.line(`THROW ${E(s.expression, sc)}`); break;
+          case 'try':
+            o.line('TRY'); o.in(); block(s.body, sc); o.out();
+            for (const c of s.catches || []) { o.line(`CATCH ${c.type} ${c.variable}`); o.in(); block(c.body, sc); o.out(); }
+            if (s.hasFinally) { o.line('FINALLY'); o.in(); block(s.finally || [], sc); o.out(); }
+            o.line('FINE TRY'); break;
         }
       }
     };
@@ -3573,6 +3833,9 @@ LANGS.python = {
       str: (s) => escStr(s, '"'), T: 'True', F: 'False', pi: 'math.pi', use: (x) => used.add(x === 'pi' ? 'math' : x), not: 'not ', notPrec: P.notLow, or: 'or', and: 'and', pow: '**',
       rel: { '==': '==', '!=': '!=', '<': '<', '<=': '<=', '>': '>', '>=': '>=' },
       lang: 'python', nul: 'None', self: 'self', newObj: (c, a) => `${c}(${a})`, superCtor: (a) => `super().__init__(${a})`, superMethod: (m, a) => `super().${m}(${a})`,
+      excMsg: (o) => `str(${o})`,
+      // indici controllati (Python accetterebbe gli indici negativi): solo se il programma cattura IndiceNonValido
+      idx: GEN.exc.idx ? (nm, ix) => { used.add('indice'); return ix.reduce((c, i) => `${c}[indice(${c}, ${i})]`, nm); } : undefined,
       field: (h, sc) => (h.attr.static ? `${h.owner.name}.${h.attr.name}` : `self.${h.attr.name}`),
       bin(n, sc, pr, generic) {
         // confronto con None: is / is not
@@ -3692,6 +3955,12 @@ LANGS.python = {
             break;
           }
           case 'write': used.add('files'); o.line(`file_scrittura.write(str(${E(s.expression, sc)}) + "\\n")`); break;
+          case 'throw': o.line(`raise ${E(s.expression, sc)}`); break;
+          case 'try':
+            o.line('try:'); o.in(); block(s.body, sc, o); o.out();
+            for (const c of s.catches || []) { o.line(`except ${excL('python', c.type)} as ${c.variable}:`); o.in(); block(c.body, sc, o); o.out(); }
+            if (s.hasFinally) { o.line('finally:'); o.in(); block(s.finally || [], sc, o); o.out(); }
+            break;
         }
       }
       if (o.lines.length === start) o.line('pass');
@@ -3705,6 +3974,7 @@ LANGS.python = {
       if (used.has('abc')) hd.push('from abc import ABC, abstractmethod');
       if (GEN.helpers.has('deque')) hd.push('from collections import deque');
       if (hd.length) hd.push('');
+      if (used.has('indice')) hd.push('def indice(v, i):', '    # come in FlowLab: un indice negativo o troppo grande è un errore', '    if i < 0 or i >= len(v):', '        raise IndexError("Indice " + str(i) + " fuori dai limiti")', '    return i', '', '');
       if (used.has('eof')) hd.push('def fine_file():', '    pos = file_lettura.tell()', '    riga = file_lettura.readline()', '    file_lettura.seek(pos)', '    return riga == ""', '', '');
       return hd.join('\n') + (hd.length ? '\n' : '');
     };
@@ -3718,7 +3988,7 @@ LANGS.python = {
       for (const c of OO.ordered(prog, false)) {
         // classe astratta: deriva da ABC (se la madre non lo è già)
         const par = _CM.classByName(prog, c.parent);
-        const bases = [...(c.parent ? [c.parent] : []), ...(c.abstract && !(par && _CM.chainOf(prog, par).some((k) => k.abstract)) ? ['ABC'] : [])];
+        const bases = [...(c.parent ? [parentL('python', c)] : []), ...(c.abstract && !(par && _CM.chainOf(prog, par).some((k) => k.abstract)) ? ['ABC'] : [])];
         if (c.abstract) used.add('abc');
         o.line(`class ${c.name}${bases.length ? `(${bases.join(', ')})` : ''}:`); o.in();
         const start = o.lines.length;
@@ -3814,10 +4084,11 @@ function cFamily(cfg) {
     generate(prog) {
       const used = new Set();
       const L = {
-        idx: cfg.idx, str: (s) => cfg.strLit(s), T: 'true', F: 'false', pi: cfg.pi, use: () => used.add('pi'),
+        // indici controllati solo se il programma cattura IndiceNonValido (C++ .at(), JavaScript indice())
+        idx: GEN.exc.idx && cfg.idxChk ? (nm, ix) => cfg.idxChk(nm, ix, used) : cfg.idx, str: (s) => cfg.strLit(s), T: 'true', F: 'false', pi: cfg.pi, use: () => used.add('pi'),
         not: '!', notPrec: P.un, or: '||', and: '&&', pow: '**',
         rel: { '==': cfg.eq || '==', '!=': cfg.neq || '!=', '<': '<', '<=': '<=', '>': '>', '>=': '>=' },
-        lang: cfg.lang, targ: cfg.targ, diamond: cfg.diamond, garg: cfg.garg,
+        lang: cfg.lang, targ: cfg.targ, diamond: cfg.diamond, garg: cfg.garg, excMsg: cfg.excMsg,
         nul: cfg.nul, self: cfg.self, arrow: cfg.arrow, staticSep: cfg.staticSep, newObj: cfg.newObj, superCtor: cfg.superCtor, superMethod: cfg.superMethod, field: cfg.field,
         bin(n, sc, pr) {
           const lt = _CE.inferType(n.l, sc), rt = _CE.inferType(n.r, sc);
@@ -3826,6 +4097,9 @@ function cFamily(cfg) {
             if (cfg.concatPrefix && _CE.inferType(concatParts(n)[0], sc) !== 'String') parts.unshift(cfg.concatPrefix);
             return { s: parts.join(' + '), p: P.add };
           }
+          // divisione e resto per zero: dove il linguaggio non lancia un'eccezione, una funzione di controllo
+          if (GEN.exc.div && n.op === '/' && cfg.divFn) return { s: cfg.divFn(pr(n.l, sc).s, pr(n.r, sc).s, used), p: P.atom };
+          if (GEN.exc.div && n.op === '%' && cfg.modFn && lt !== 'Real' && rt !== 'Real') return { s: cfg.modFn(pr(n.l, sc).s, pr(n.r, sc).s, used), p: P.atom };
           if (n.op === '/' && cfg.intDiv && lt !== 'Real' && rt !== 'Real') {
             const l = pr(n.l, sc), r = pr(n.r, sc);
             return { s: `(double) ${l.p < P.atom ? '(' + l.s + ')' : l.s} / ${r.p <= P.mul ? '(' + r.s + ')' : r.s}`, p: P.mul };
@@ -3910,6 +4184,15 @@ function cFamily(cfg) {
             case 'open': case 'close': case 'read': case 'write':
               if (cfg.files) cfg.files(o, s, E, sc, lvInfo, used); else unsupported(o, `file: ${s.kind} ${s.expression || s.variable || s.mode}`);
               break;
+            case 'throw': o.line(cfg.throwStmt ? cfg.throwStmt(s, E, sc, pr) : `throw ${E(s.expression, sc)};`); break;
+            case 'try': {
+              if (cfg.tryStmt) { cfg.tryStmt(o, s, sc, blk, used); break; }
+              o.line('try {'); blk(o, s.body, sc);
+              for (const c of s.catches || []) { o.line(`} catch (${excL(cfg.lang, c.type)} ${c.variable}) {`); blk(o, c.body, sc); }
+              if (s.hasFinally) { o.line('} finally {'); blk(o, s.finally || [], sc); }
+              o.line('}');
+              break;
+            }
           }
         }
       }
@@ -3924,7 +4207,7 @@ const T_CPP = { Integer: 'int', Real: 'double', String: 'string', Boolean: 'bool
 /* gli oggetti in C++ sono puntatori (creati con new); T resta T; ArrayList<int> nativo diventa vector<int>* */
 const tCpp = (t) => {
   const g = _CE.splitType(t);
-  if (!g.args.length) return T_CPP[t] || (isTP(t) ? t : t + '*');
+  if (!g.args.length) return T_CPP[t] || (isTP(t) ? t : (_CM.excClass(t) ? excL('cpp', t) : t) + '*');
   const a = g.args.map(tCpp), n = nativeOf(g.base);
   return n && n.cpp ? n.cpp.type(a) : `${g.base}<${a.join(', ')}>*`;
 };
@@ -3944,6 +4227,34 @@ function cppHeaderExtras(o) {
   if (GEN.helpers.has('stack')) o.line('#include <stack>');
   if (GEN.helpers.has('queue')) o.line('#include <queue>');
 }
+/* eccezioni in C++: include, classi delle eccezioni predefinite che il C++ non ha, funzioni di controllo */
+function cppExcIncludes(o, u) {
+  if (!GEN.exc.used && !u.has('dividi') && !u.has('conv')) return;
+  o.line('#include <stdexcept>');
+  if (u.has('excptr')) o.line('#include <exception>');
+}
+function cppExcHelpers(o, u) {
+  const lines = [];
+  for (const b of _CM.EXC_CLASSES) if (GEN.helpers.has('exc:' + b.name)) lines.push(`class ${b.name} : public runtime_error { public: using runtime_error::runtime_error; };`);
+  if (u.has('dividi')) lines.push('// divisione e resto che lanciano un\'eccezione se il divisore è zero (come in FlowLab)', 'double dividi(double a, double b) { if (b == 0) throw DivisionePerZero("Divisione per zero"); return a / b; }');
+  if (u.has('resto')) lines.push('int resto(int a, int b) { if (b == 0) throw DivisionePerZero("Modulo per zero"); return a % b; }');
+  if (u.has('conv')) lines.push('// conversioni che accettano solo un numero intero (stoi accetterebbe anche "12abc")',
+    'int aIntero(const string& s) { size_t n = 0; int v = stoi(s, &n); if (n != s.size()) throw invalid_argument("\\"" + s + "\\" non è un numero intero valido"); return v; }',
+    'double aReale(const string& s) { size_t n = 0; double v = stod(s, &n); if (n != s.size()) throw invalid_argument("\\"" + s + "\\" non è un numero reale valido"); return v; }');
+  if (lines.length) { o.line(''); lines.forEach((l) => o.line(l)); }
+}
+/* JavaScript: classi delle eccezioni predefinite (tranne Eccezione = Error) e funzioni di controllo */
+function jsExcHelpers(u) {
+  const lines = [];
+  const add = (...l) => { if (lines.length) lines.push(''); lines.push(...l); };
+  for (const b of _CM.EXC_CLASSES) if (GEN.helpers.has('exc:' + b.name)) add(`class ${b.name} extends Error {}`);
+  if (u.has('dividi')) add('// divisione e resto che lanciano un\'eccezione se il divisore è zero (come in FlowLab)', 'function dividi(a, b) { if (b === 0) throw new DivisionePerZero("Divisione per zero"); return a / b; }');
+  if (u.has('resto')) add('function resto(a, b) { if (b === 0) throw new DivisionePerZero("Modulo per zero"); return a % b; }');
+  if (u.has('indice')) add('// indice controllato: fuori dai limiti è un errore (come in FlowLab)', 'function indice(v, i) { if (i < 0 || i >= v.length) throw new IndiceNonValido("Indice " + i + " fuori dai limiti"); return i; }');
+  if (u.has('conv')) add('// conversioni che accettano solo un numero', 'function aIntero(s) { if (!/^\\s*[-+]?\\d+\\s*$/.test(s)) throw new ConversioneNonValida(\'"\' + s + \'" non è un numero intero valido\'); return parseInt(s); }',
+    'function aReale(s) { const v = Number(s); if (String(s).trim() === "" || isNaN(v)) throw new ConversioneNonValida(\'"\' + s + \'" non è un numero reale valido\'); return v; }');
+  return lines;
+}
 function cppHelpers(o) {
   const hs = Object.keys(CPP_HELPERS).filter((k) => GEN.helpers.has(k));
   if (!hs.length) return;
@@ -3962,6 +4273,40 @@ function cppParts(t, arr, D) {
 }
 LANGS.cpp = cFamily({
   lang: 'cpp', targ: (t) => tCpp(t),
+  excMsg: (o) => `string(${o}->what())`,
+  divFn: (a, b, used) => { used.add('dividi'); need('exc:DivisionePerZero'); return `dividi(${a}, ${b})`; },
+  modFn: (a, b, used) => { used.add('resto'); need('exc:DivisionePerZero'); return `resto(${a}, ${b})`; },
+  idxChk: (nm, ix) => ix.reduce((c, i) => `${c}.at(${i})`, nm),
+  // Throw: si lancia l'oggetto (non il puntatore), come si fa in C++
+  throwStmt(s, E, sc, pr) {
+    const n = strip(tryParse(s.expression));
+    if (n && n.k === 'new') { const t = _CM.excClass(n.cls) ? excL('cpp', n.cls) : ((sc.classNamed && sc.classNamed(n.cls)) || { name: n.cls }).name; return `throw ${t}(${n.args.map((a) => pr(a, sc).s).join(', ')});`; }
+    return `throw *${E(s.expression, sc)};`;
+  },
+  // Catch: l'eccezione si cattura per riferimento e si usa tramite un puntatore (come gli altri oggetti);
+  // il Finally non esiste in C++: si cattura tutto, si esegue il Finally e poi l'eccezione prosegue
+  tryStmt(o, s, sc, blk, used) {
+    const cats = s.catches || [];
+    const inner = () => {
+      o.line('try {'); blk(o, s.body, sc);
+      for (const c of cats) {
+        const T = _CM.excClass(c.type) && _CM.excClass(c.type).name === 'Eccezione' ? 'exception' : excL('cpp', c.type);
+        o.line(`} catch (${T}& ecc_) {`);
+        if (new RegExp('\\b' + c.variable + '\\b', 'i').test(JSON.stringify(c.body))) { o.in(); o.line(`${T}* ${c.variable} = &ecc_;`); o.out(); }
+        blk(o, c.body, sc);
+      }
+      o.line('}');
+    };
+    if (!s.hasFinally) { inner(); return; }
+    used.add('excptr');
+    o.line('{'); o.in();
+    o.line('exception_ptr pendente = nullptr; // Finally: si esegue sempre, poi l\'eccezione (se c\'è) prosegue');
+    if (cats.length) { o.line('try {'); o.in(); inner(); o.out(); } else { o.line('try {'); blk(o, s.body, sc); }
+    o.line('} catch (...) {'); o.in(); o.line('pendente = current_exception();'); o.out(); o.line('}');
+    o.line('// Finally'); o.out(); blk(o, s.finally || [], sc); o.in();
+    o.line('if (pendente) rethrow_exception(pendente);');
+    o.out(); o.line('}');
+  },
   // funzioni generiche: "testo" è un const char*, con string("testo") T diventa string
   garg: (node, s) => (strip(node) && strip(node).k === 'str' ? `string(${s})` : s),
   label: 'C++', ext: 'cpp', intDiv: true, fmod: true, powFn: 'pow', intCast: '(int) ', wrapOut: true,
@@ -3989,8 +4334,8 @@ LANGS.cpp = cFamily({
       case 'tochar': return `string(1, (char) ${At(0)})`;
       case 'tocode': return `(int) ${At(0)}[0]`;
       case 'tofixed': used.add('fixed'); return `aDecimali(${A(0)}, ${A(1)})`;
-      case 'tointeger': return `stoi(${A(0)})`;
-      case 'toreal': return `stod(${A(0)})`;
+      case 'tointeger': if (GEN.exc.conv) { used.add('conv'); return `aIntero(${A(0)})`; } return `stoi(${A(0)})`;
+      case 'toreal': if (GEN.exc.conv) { used.add('conv'); return `aReale(${A(0)})`; } return `stod(${A(0)})`;
       case 'tostring': { const t = _CE.inferType(n.args[0], sc); if (t === 'String') return A(0); if (t === 'Real') { used.add('fmt'); return `formatta(${A(0)})`; } if (t === 'Boolean') return `string(${A(0)} ? "true" : "false")`; return `to_string(${A(0)})`; }
       case 'eof': return 'fileLettura.peek() == EOF';
     }
@@ -4032,6 +4377,7 @@ LANGS.cpp = cFamily({
     mainOut.in(); g.block(mainOut, prog.functions[0].body, g.buildScope(prog.functions[0])); mainOut.out();
     const u = g.used;
     o.line('#include <iostream>'); o.line('#include <string>'); o.line('#include <vector>'); o.line('#include <cmath>');
+    cppExcIncludes(o, u);
     if (u.has('rand')) { o.line('#include <cstdlib>'); o.line('#include <ctime>'); }
     if (u.has('fmt') || u.has('fixed')) { o.line('#include <sstream>'); o.line('#include <iomanip>'); }
     if (u.has('fstream')) o.line('#include <fstream>');
@@ -4041,6 +4387,7 @@ LANGS.cpp = cFamily({
     if (u.has('fstream')) { o.line('ifstream fileLettura;'); o.line('ofstream fileScrittura;'); }
     if (u.has('fmt')) { o.line(''); o.line('string formatta(double x) {'); o.line('    ostringstream s;'); o.line('    s << setprecision(15) << x;'); o.line('    return s.str();'); o.line('}'); }
     if (u.has('fixed')) { o.line(''); o.line('string aDecimali(double x, int cifre) {'); o.line('    ostringstream s;'); o.line('    s << fixed << setprecision(cifre) << x;'); o.line('    return s.str();'); o.line('}'); }
+    cppExcHelpers(o, u);
     if (fns.length) { o.line(''); o.line('// Prototipi'); for (const f of fns) o.line(sig(f) + ';'); }
     o.line(''); o.line('int main() {');
     if (u.has('rand')) o.line('    srand(time(0));');
@@ -4075,7 +4422,10 @@ LANGS.cpp = cFamily({
       }
       decls.line('');
       if (tplOf(c)) decls.line(tplOf(c));
-      decls.line(`class ${c.name}${c.parent ? ' : public ' + c.parent : ''} {${c.abstract ? ' // classe astratta' : ''}`);
+      // eccezione del programma senza costruttori: il C++ vuole comunque il messaggio per runtime_error
+      const excRoot = c.parent && _CM.excClass(c.parent);
+      if (excRoot && !OO.ctors(prog, c).length) sec.public.unshift(`${c.name}() : ${parentL('cpp', c)}("") {}`);
+      decls.line(`class ${c.name}${c.parent ? ' : public ' + parentL('cpp', c) : ''} {${c.abstract ? ' // classe astratta' : ''}`);
       for (const v of ['public', 'protected', 'private']) if (sec[v].length) { decls.line(v + ':'); decls.in(); sec[v].forEach((l) => decls.line(l)); decls.out(); }
       decls.line('};');
       // definizioni di costruttori e metodi
@@ -4086,7 +4436,7 @@ LANGS.cpp = cFamily({
         if (tplOf(c)) defs.line(tplOf(c));
         if (f.ctor) {
           const sp = OO.splitSuper(f);
-          defs.line(`${qualOf(c)}::${c.name}(${params(f)})${sp.args ? ` : ${c.parent}(${sp.args.map((x) => g.pr(x, sc).s).join(', ')})` : ''} {`);
+          defs.line(`${qualOf(c)}::${c.name}(${params(f)})${sp.args ? ` : ${parentL('cpp', c)}(${sp.args.map((x) => g.pr(x, sc).s).join(', ')})` : (c.parent && _CM.excClass(c.parent) ? ` : ${parentL('cpp', c)}("")` : '')} {`);
           defs.in(); g.block(defs, sp.rest, sc); defs.out(); defs.line('}');
           continue;
         }
@@ -4099,7 +4449,7 @@ LANGS.cpp = cFamily({
     }
     const o = new g.Out(); const u = g.used;
     o.line('#include <iostream>'); o.line('#include <string>'); o.line('#include <vector>'); o.line('#include <cmath>');
-    cppHeaderExtras(o);
+    cppHeaderExtras(o); cppExcIncludes(o, u);
     if (u.has('rand')) { o.line('#include <cstdlib>'); o.line('#include <ctime>'); }
     if (u.has('fmt') || u.has('fixed')) { o.line('#include <sstream>'); o.line('#include <iomanip>'); }
     if (u.has('fstream')) o.line('#include <fstream>');
@@ -4109,7 +4459,7 @@ LANGS.cpp = cFamily({
     if (u.has('fstream')) { o.line('ifstream fileLettura;'); o.line('ofstream fileScrittura;'); }
     if (u.has('fmt')) { o.line(''); o.line('string formatta(double x) {'); o.line('    ostringstream s;'); o.line('    s << setprecision(15) << x;'); o.line('    return s.str();'); o.line('}'); }
     if (u.has('fixed')) { o.line(''); o.line('string aDecimali(double x, int cifre) {'); o.line('    ostringstream s;'); o.line('    s << fixed << setprecision(cifre) << x;'); o.line('    return s.str();'); o.line('}'); }
-    cppHelpers(o);
+    cppHelpers(o); cppExcHelpers(o, u);
     o.line(''); o.line('// Classi (gli oggetti si creano con new e si usano tramite puntatori)');
     o.line(ordered.map((c) => `${tplOf(c) ? tplOf(c) + ' ' : ''}class ${c.name};`).join(' '));
     o.lines.push(...decls.lines);
@@ -4129,7 +4479,7 @@ const BOX_J = { Integer: 'Integer', Real: 'Double', String: 'String', Boolean: '
 /* tipi Java: ArrayList<Integer> con i tipi base "inscatolati"; i moduli nativi usano le classi di java.util */
 const tJava = (t) => {
   const g = _CE.splitType(t);
-  if (!g.args.length) return T_JAVA[t] || t;
+  if (!g.args.length) return T_JAVA[t] || (_CM.excClass(t) ? excL('java', t) : t);
   const a = g.args.map((x) => BOX_J[x] || tJava(x)), n = nativeOf(g.base);
   return n && n.java ? n.java.type(a) : `${g.base}<${a.join(', ')}>`;
 };
@@ -4162,6 +4512,9 @@ let J_PFX = ''; // dalle altre classi lo Scanner e i file stanno nella classe pr
 const DEF_C = { Integer: '0', Real: '0.0', String: '""', Boolean: 'false' };
 LANGS.java = cFamily({
   lang: 'java', targ: (t) => BOX_J[t] || tJava(t), diamond: '<>',
+  excMsg: (o) => `${o}.getMessage()`,
+  // in Java la divisione tra reali per zero non lancia eccezioni: dividi() la controlla
+  divFn: (a, b, used) => { used.add('dividi'); return `${J_PFX}dividi(${a}, ${b})`; },
   label: 'Java', ext: 'java', intDiv: true, powFn: 'Math.pow', intCast: '(int) ', concatPrefix: '""',
   keywords: ['public', 'static', 'void', 'class', 'int', 'double', 'String', 'boolean', 'return', 'if', 'else', 'while', 'for', 'do', 'true', 'false', 'new', 'import', 'Scanner', 'System', 'Math', 'private', 'protected', 'extends', 'this', 'super', 'null', 'final', 'record', 'throws', 'abstract'],
   pi: 'Math.PI',
@@ -4247,7 +4600,7 @@ LANGS.java = cFamily({
       const rl = _CM.rets(f);
       inner.line('');
       if (jUnchecked(f)) inner.line('@SuppressWarnings("unchecked")');
-      inner.line(`public static ${jFunTP(f)}${rl.length > 1 ? recName(f) : jRetT(f)} ${f.name}(${jParams(f)})${g.used.has('files') ? ' throws Exception' : ''} {`);
+      inner.line(`public static ${jFunTP(f)}${rl.length > 1 ? recName(f) : jRetT(f)} ${f.name}(${jParams(f)})${jThrows(f, g.used.has('files'))} {`);
       inner.in(); g.block(inner, f.body, sc);
       if (rl.length) { inner.line(rl.length > 1 ? `return new ${recName(f)}(${rl.map((r) => r.name).join(', ')});` : `return ${rl[0].name};`); }
       inner.out(); inner.line('}');
@@ -4259,9 +4612,10 @@ LANGS.java = cFamily({
     for (const f of records) o.line(`    record ${recName(f)}(${_CM.rets(f).map((r, i) => `${jRet(f, r, i)} ${r.name}`).join(', ')}) {}`);
     if (g.used.has('files')) { o.line('    private static Scanner fileLettura;'); o.line('    private static java.io.PrintWriter fileScrittura;'); }
     o.line('');
-    o.line(`    public static void main(String[] args)${g.used.has('files') ? ' throws Exception' : ''} {`);
+    o.line(`    public static void main(String[] args)${jThrows(prog.functions[0], g.used.has('files'))} {`);
     o.lines.push(...main.lines);
     o.line('    }');
+    if (g.used.has('dividi')) { o.line(''); o.line('    // divisione che lancia un\'eccezione se il divisore è zero (come in FlowLab)'); o.line('    static double dividi(double a, double b) { if (b == 0) throw new ArithmeticException("Divisione per zero"); return a / b; }'); }
     o.lines.push(...inner.lines);
     o.line('}');
     return o.text();
@@ -4269,7 +4623,7 @@ LANGS.java = cFamily({
   programOO(prog, g) {
     const main = _CM.mainClass(prog);
     const files = usesFiles(prog);
-    const thr = files ? ' throws Exception' : '';
+    const thrOf = (f) => jThrows(f, files);
     const params = jParams;
     const recName = (f) => 'Risultato' + cap(f.name);
     const V = (v) => (v || 'public') + ' ';
@@ -4296,7 +4650,8 @@ LANGS.java = cFamily({
         const sc = g.buildScope(f);
         const rl = _CM.rets(f);
         if (o.lines.length) o.line('');
-        if (f.abstract) { o.line(`${V(f.visibility)}abstract ${jFunTP(f)}${rl.length > 1 ? recName(f) : jRetT(f)} ${f.name}(${params(f)});`); continue; }
+        if (f.abstract) { o.line(`${V(f.visibility)}abstract ${jFunTP(f)}${rl.length > 1 ? recName(f) : jRetT(f)} ${f.name}(${params(f)})${thrOf(f)};`); continue; }
+        const thr = thrOf(f);
         if (jUnchecked(f)) o.line('@SuppressWarnings("unchecked")');
         if (f.ctor) o.line(`${V(f.visibility)}${c.name}(${params(f)})${thr} {`);
         else if (OO.isMain(prog, f)) o.line(`public static void main(String[] args)${thr} {`);
@@ -4314,8 +4669,9 @@ LANGS.java = cFamily({
     for (const { c, lines } of parts) {
       o.line('');
       if ((c.tparams || []).length) o.line('@SuppressWarnings("unchecked")');
-      o.line(`${c === main ? 'public ' : ''}${c.abstract ? 'abstract ' : ''}class ${jClassTitle(c)}${c.parent ? ' extends ' + c.parent : ''} {`);
+      o.line(`${c === main ? 'public ' : ''}${c.abstract ? 'abstract ' : ''}class ${jClassTitle(c)}${c.parent ? ' extends ' + parentL('java', c) : ''} {`);
       o.lines.push(...lines);
+      if (c === main && g.used.has('dividi')) { o.line(''); o.line('    // divisione che lancia un\'eccezione se il divisore è zero (come in FlowLab)'); o.line('    static double dividi(double a, double b) { if (b == 0) throw new ArithmeticException("Divisione per zero"); return a / b; }'); }
       o.line('}');
     }
     return o.text();
@@ -4324,7 +4680,7 @@ LANGS.java = cFamily({
 
 const tCs = (t) => {
   const g = _CE.splitType(t);
-  if (!g.args.length) return T_CPP[t] || t;
+  if (!g.args.length) return T_CPP[t] || (_CM.excClass(t) ? excL('csharp', t) : t);
   const a = g.args.map(tCs), n = nativeOf(g.base);
   return n && n.csharp ? n.csharp.type(a) : `${g.base}<${a.join(', ')}>`;
 };
@@ -4337,6 +4693,8 @@ const csWhereF = (f) => csWhere(f.tparams || [], (t) => FKEY(f, t));
 const csWhereC = (c) => csWhere(c.tparams || [], (t) => CKEY(c, t));
 LANGS.csharp = cFamily({
   lang: 'csharp', targ: (t) => tCs(t),
+  excMsg: (o) => `${o}.Message`,
+  divFn: (a, b, used) => { used.add('dividi'); return `${CS_PFX}Dividi(${a}, ${b})`; },
   label: 'C#', ext: 'cs', intDiv: true, powFn: 'Math.Pow', intCast: '(int) ',
   keywords: ['using', 'class', 'static', 'void', 'int', 'double', 'string', 'bool', 'return', 'if', 'else', 'while', 'for', 'do', 'true', 'false', 'new', 'Console', 'Math', 'System', 'public', 'private', 'protected', 'this', 'base', 'null', 'virtual', 'override', 'const', 'abstract'],
   pi: 'Math.PI',
@@ -4409,6 +4767,7 @@ LANGS.csharp = cFamily({
     }
     o.line('using System;'); o.line('');
     o.line('class Program {');
+    if (g.used.has('dividi')) o.line('    static double Dividi(double a, double b) { if (b == 0) throw new DivideByZeroException("Divisione per zero"); return a / b; }');
     if (g.used.has('rnd')) o.line('    static Random rnd = new Random();');
     if (g.used.has('files')) { o.line('    static System.IO.StreamReader fileLettura;'); o.line('    static System.IO.StreamWriter fileScrittura;'); }
     o.line('    static void Main() {');
@@ -4466,8 +4825,9 @@ LANGS.csharp = cFamily({
     }
     for (const { c, lines } of parts) {
       o.line('');
-      o.line(`${c.abstract ? 'abstract ' : ''}class ${_CM.classTitle(c)}${c.parent ? ' : ' + c.parent : ''}${csWhereC(c)} {`);
+      o.line(`${c.abstract ? 'abstract ' : ''}class ${_CM.classTitle(c)}${c.parent ? ' : ' + parentL('csharp', c) : ''}${csWhereC(c)} {`);
       if (c === main) {
+        if (g.used.has('dividi')) o.line('    public static double Dividi(double a, double b) { if (b == 0) throw new DivideByZeroException("Divisione per zero"); return a / b; }');
         if (g.used.has('rnd')) o.line('    public static Random rnd = new Random();');
         if (g.used.has('files')) { o.line('    public static System.IO.StreamReader fileLettura;'); o.line('    public static System.IO.StreamWriter fileScrittura;'); }
         if ((g.used.has('rnd') || g.used.has('files')) && lines.length) o.line('');
@@ -4481,12 +4841,29 @@ LANGS.csharp = cFamily({
 
 LANGS.javascript = cFamily({
   lang: 'javascript',
+  excMsg: (o) => `${o}.message`,
+  divFn: (a, b, used) => { used.add('dividi'); need('exc:DivisionePerZero'); return `dividi(${a}, ${b})`; },
+  modFn: (a, b, used) => { used.add('resto'); need('exc:DivisionePerZero'); return `resto(${a}, ${b})`; },
+  idxChk: (nm, ix, used) => { used.add('indice'); need('exc:IndiceNonValido'); return ix.reduce((c, i) => `${c}[indice(${c}, ${i})]`, nm); },
+  // un solo catch: si sceglie il ramo con instanceof; se nessuno va bene l'eccezione prosegue
+  tryStmt(o, s, sc, blk) {
+    const cats = s.catches || [];
+    o.line('try {'); blk(o, s.body, sc);
+    if (cats.length) {
+      o.line('} catch (ecc_) {'); o.in();
+      cats.forEach((c, i) => { o.line(`${i ? '} else if' : 'if'} (ecc_ instanceof ${excL('javascript', c.type)}) {`); o.in(); o.line(`const ${c.variable} = ecc_;`); o.out(); blk(o, c.body, sc); });
+      o.line('} else {'); o.in(); o.line('throw ecc_;'); o.out(); o.line('}');
+      o.out();
+    }
+    if (s.hasFinally) { o.line('} finally {'); blk(o, s.finally || [], sc); }
+    o.line('}');
+  },
   label: 'JavaScript', ext: 'js',
   keywords: ['let', 'const', 'function', 'return', 'if', 'else', 'while', 'for', 'do', 'true', 'false', 'new', 'Math', 'console', 'prompt', 'parseInt', 'parseFloat', 'String', 'Array', 'class', 'extends', 'constructor', 'static', 'this', 'super', 'null', 'throw', 'args', 'typeof', 'instanceof'],
   pi: 'Math.PI', eq: '===', neq: '!==', concatPrefix: '""',
   strLit: (s) => escStr(s, '"'),
   toStr: (x, t, e) => (e.p <= P.add ? `(${e.s})` : e.s),
-  builtin(low, a, n, sc) {
+  builtin(low, a, n, sc, used) {
     const A = (i) => (a[i] ? a[i].s : ''); const At = (i) => (a[i] ? (a[i].p < P.atom ? `(${a[i].s})` : a[i].s) : '');
     const map = { abs: 'abs', arccos: 'acos', arcsin: 'asin', arctan: 'atan', cos: 'cos', sin: 'sin', tan: 'tan', cosh: 'cosh', sinh: 'sinh', tanh: 'tanh', arccosh: 'acosh', arcsinh: 'asinh', arctanh: 'atanh', ln: 'log', log: 'log', log10: 'log10', sqrt: 'sqrt', sgn: 'sign', int: 'trunc' };
     if (map[low]) return `Math.${map[low]}(${A(0)})`;
@@ -4498,8 +4875,8 @@ LANGS.javascript = cFamily({
       case 'tochar': return `String.fromCharCode(${A(0)})`;
       case 'tocode': return `${At(0)}.charCodeAt(0)`;
       case 'tofixed': return `${At(0)}.toFixed(${A(1)})`;
-      case 'tointeger': return `parseInt(${A(0)})`;
-      case 'toreal': return `parseFloat(${A(0)})`;
+      case 'tointeger': if (GEN.exc.conv) { used.add('conv'); need('exc:ConversioneNonValida'); return `aIntero(${A(0)})`; } return `parseInt(${A(0)})`;
+      case 'toreal': if (GEN.exc.conv) { used.add('conv'); need('exc:ConversioneNonValida'); return `aReale(${A(0)})`; } return `parseFloat(${A(0)})`;
       case 'tostring': return `String(${A(0)})`;
     }
     return null;
@@ -4520,6 +4897,7 @@ LANGS.javascript = cFamily({
     o.line('    rigaCorrente += String(valore);');
     o.line('    if (aCapo) { console.log(rigaCorrente); rigaCorrente = ""; }');
     o.line('}');
+    const helpAt = o.lines.length;
     for (const f of prog.functions.slice(1)) {
       const sc = g.buildScope(f);
       o.line('');
@@ -4532,6 +4910,7 @@ LANGS.javascript = cFamily({
     o.line(''); o.line('// Main');
     g.block(o, prog.functions[0].body, g.buildScope(prog.functions[0]));
     o.line('if (rigaCorrente) console.log(rigaCorrente);');
+    { const hl = jsExcHelpers(g.used); if (hl.length) o.lines.splice(helpAt, 0, '', ...hl); }
     if (g.used.has('creaArray')) {
       o.line('');
       o.line('// array a più dimensioni: creaArray([3, 4]) crea una matrice 3 × 4');
@@ -4552,6 +4931,7 @@ LANGS.javascript = cFamily({
     o.line('    rigaCorrente += String(valore);');
     o.line('    if (aCapo) { console.log(rigaCorrente); rigaCorrente = ""; }');
     o.line('}');
+    const ooHelpAt = o.lines.length;
     const test = {
       len: (n) => `args.length === ${n}`,
       type: (p, i) => { const a = `args[${i}]`; if (p.array) return `Array.isArray(${a})`; if (isTP(p.type)) return 'true'; return { Integer: `Number.isInteger(${a})`, Real: `typeof ${a} === "number"`, String: `typeof ${a} === "string"`, Boolean: `typeof ${a} === "boolean"` }[p.type] || `${a} instanceof ${_CE.splitType(p.type).base}`; },
@@ -4559,7 +4939,7 @@ LANGS.javascript = cFamily({
     let multiDim = false;
     for (const c of OO.ordered(prog, false)) {
       o.line('');
-      o.line(`class ${c.name}${c.parent ? ' extends ' + c.parent : ''} {${c.abstract ? ' // classe astratta: non si creano oggetti' : ''}`); o.in();
+      o.line(`class ${c.name}${c.parent ? ' extends ' + parentL('javascript', c) : ''} {${c.abstract ? ' // classe astratta: non si creano oggetti' : ''}`); o.in();
       const start = o.lines.length;
       for (const a of c.attributes) {
         const sc = OO.classScope(prog, c, a.static);
@@ -4591,6 +4971,7 @@ LANGS.javascript = cFamily({
       for (const gr of OO.groups(OO.methods(prog, c))) emit(gr, false);
       o.out(); o.line('}');
     }
+    { const hl = jsExcHelpers(g.used); if (hl.length) o.lines.splice(ooHelpAt, 0, '', ...hl); }
     o.line(''); o.line('// Main');
     o.line(`${main.name}.main();`);
     o.line('if (rigaCorrente) console.log(rigaCorrente);');
@@ -4693,14 +5074,14 @@ function dedupe(pts) {
 }
 const cat2 = (a, b) => a.concat(b);
 /* vista compatta: questi blocchi, se sono uno dopo l'altro, si toccano (freccia di lunghezza 0) */
-const COMPACT_KINDS = new Set(['declare', 'const', 'assign', 'input', 'output', 'call', 'comment', 'breakpoint']);
-const COMPOUND_KINDS = new Set(['if', 'while', 'for', 'do']);
+const COMPACT_KINDS = new Set(['declare', 'const', 'assign', 'input', 'output', 'call', 'comment', 'breakpoint', 'throw']);
+const COMPOUND_KINDS = new Set(['if', 'while', 'for', 'do', 'try']);
 const TAIL_C = 14; // ultima freccia di un ramo o del corpo di un ciclo: corta, quanto basta per il +
 const TOG = 24, LINE_H = 17;
 
 const KIND_IT = {
   declare: 'Dichiara', const: 'Costante', assign: 'Assegna', input: 'Input', output: 'Output', if: 'Se', while: 'Mentre', for: 'Per', do: 'Fai-mentre',
-  call: 'Chiama', comment: 'Commento', breakpoint: 'Interruzione',
+  call: 'Chiama', comment: 'Commento', breakpoint: 'Interruzione', try: 'Try', throw: 'Throw',
   open: 'Apri file', close: 'Chiudi file', read: 'Leggi da file', write: 'Scrivi su file',
 };
 
@@ -4728,6 +5109,8 @@ function caption(s) {
     case 'close': return { text: `Chiudi file (${s.mode === 'read' ? 'lettura' : 'scrittura'})` };
     case 'read': return { text: `Leggi ${s.variable} dal file` };
     case 'write': return { text: `Scrivi ${s.expression} nel file` };
+    case 'try': return { text: 'Try' };
+    case 'throw': return { text: `Throw ${s.expression}` };
   }
   return { text: s.kind };
 }
@@ -4746,18 +5129,21 @@ function shapePath(shape, cx, y, w, h) {
     case 'note': { const k = 9; return `<path class="note" d="M${l} ${y}H${r - k}L${r} ${y + k}V${b}H${l}Z"/><path class="inner" d="M${r - k} ${y}V${y + k}H${r}"/>`; }
     case 'oct': { const k = 9; return `<path d="M${l + k} ${y}H${r - k}L${r} ${y + k}V${b - k}L${r - k} ${b}H${l + k}L${l} ${b - k}V${y + k}Z"/>`; }
     case 'doc': { const q = 5; return `<path d="M${l} ${y}H${r}V${b - q}C${r - w * 0.25} ${b - q * 3} ${cx} ${b + q} ${l} ${b - q}Z"/>`; }
+    // eccezioni: Try, Catch e Finally hanno un'intestazione con la barra in alto; Throw è una freccia che esce
+    case 'exchead': return `<rect x="${l}" y="${y}" width="${w}" height="${h}" rx="6"/><path class="inner" d="M${l} ${y + 7}H${r}"/>`;
+    case 'throw': { const k = 14; return `<path d="M${l} ${y}H${r - k}L${r} ${m}L${r - k} ${b}H${l}Z"/>`; }
   }
   return '';
 }
 const SHAPE_OF = {
   declare: 'decl', const: 'decl', assign: 'rect', input: 'para', output: 'para', if: 'diamond', while: 'diamond', do: 'diamond', for: 'hex',
   call: 'call', comment: 'note', breakpoint: 'oct',
-  open: 'doc', close: 'doc', read: 'doc', write: 'doc',
+  open: 'doc', close: 'doc', read: 'doc', write: 'doc', try: 'exchead', throw: 'throw',
 };
 const CAT_OF = {
   declare: 'decl', const: 'decl', assign: 'assign', input: 'in', output: 'out', if: 'cond', while: 'loop', do: 'loop', for: 'loop', call: 'call',
   comment: 'comment', breakpoint: 'brk',
-  open: 'file', close: 'file', read: 'file', write: 'file',
+  open: 'file', close: 'file', read: 'file', write: 'file', try: 'exc', throw: 'exc',
 };
 
 class Renderer {
@@ -4976,6 +5362,7 @@ class Renderer {
         },
       };
     }
+    if (s.kind === 'try') return this.tryBlock(s, cat, title);
     if (s.kind === 'comment' && !cap.incomplete) return this.comment(s, title);
     const mb = this.measure(s, cap, shp, H);
     const w0 = mb.w, h = mb.h;
@@ -4986,6 +5373,56 @@ class Renderer {
         this.edge(head.node, s.id, head.pts, head.tag);
         this.shape(s.id, s.kind, cat, shp, cx, y, w, h, cap.text, title, s.kind === 'comment' ? ' comment' : '', cap.incomplete ? null : cap.badge, mb);
         return { node: s.id, pts: [[cx, y + h]] };
+      },
+    };
+  }
+
+  /* Try: intestazione, corpo al centro; a destra la linea tratteggiata dell'eccezione porta ai rami Catch,
+     che si riuniscono sotto il corpo; poi, se c'è, il Finally */
+  tryBlock(s, cat, title) {
+    const TH = R_.H, GX = 30, DROP = 16;
+    const tw = this.boxW('Try', 'rect');
+    const B = this.seq(s.body, false);
+    const cats = (s.catches || []).map((c) => { const t = `Catch ${c.type} ${c.variable}`; return { c, t, w: this.boxW(t, 'rect'), S: this.seq(c.body, false) }; });
+    const F = s.hasFinally ? this.seq(s.finally || [], false) : null, fw = this.boxW('Finally', 'rect');
+    let x = Math.max(tw / 2, B.R) + GX;
+    for (const k of cats) { k.dx = x + Math.max(k.w / 2, k.S.L); x = k.dx + Math.max(k.w / 2, k.S.R) + GX; }
+    const ctop = TH + DROP; // intestazioni dei Catch
+    const jrel = TH + Math.max(B.h, ...cats.map((k) => DROP + TH + k.S.h)) + 10;
+    const h = jrel + (F ? 14 + TH + F.h : 0);
+    const L = Math.max(tw / 2, B.L, F ? Math.max(fw / 2, F.L) : 0) + 4;
+    const R = Math.max(cats.length ? x - GX : Math.max(tw / 2, B.R), F ? Math.max(fw / 2, F.R) : 0) + 4;
+    return {
+      L, R, h,
+      draw: (cx, y, head) => {
+        const m = y + TH / 2, j = y + jrel, J = s.id + ':join';
+        this.edge(head.node, s.id, head.pts, head.tag);
+        this.shape(s.id, 'try', cat, 'exchead', cx, y, tw, TH, 'Try', title);
+        const tB = B.draw(cx, y + TH, { node: s.id, pts: [[cx, y + TH]] });
+        this.line([[cx, y + TH + B.h], [cx, j]]);
+        this.edge(tB.node, J, cat2(tB.pts, [[cx, j]]), tB.tag);
+        if (cats.length) {
+          const last = cats[cats.length - 1];
+          this.line([[cx + tw / 2, m], [cx + last.dx, m]], false, 'exc');
+          this.label(cx + tw / 2 + 6, m - 6, 'eccezione', 'start');
+          for (const k of cats) {
+            const kx = cx + k.dx, KID = s.id + ':catch:' + k.c.id;
+            this.line([[kx, m], [kx, y + ctop]], true, 'exc');
+            this.shape(KID, 'catch', cat, 'exchead', kx, y + ctop, k.w, TH, k.t, `Catch: se nel Try si verifica un'eccezione ${k.c.type} (o di una sua sottoclasse) si esegue questo ramo; ${k.c.variable} è l'eccezione, ${k.c.variable}.messaggio il suo messaggio. Doppio clic per modificare il Try`);
+            this.edge(s.id, KID, [[cx + tw / 2, m], [kx, m], [kx, y + ctop]], 'X');
+            const tC = k.S.draw(kx, y + ctop + TH, { node: KID, pts: [[kx, y + ctop + TH]] });
+            this.line([[kx, y + ctop + TH + k.S.h], [kx, j], [cx, j]]);
+            this.edge(tC.node, J, cat2(tC.pts, [[kx, j], [cx, j]]), tC.tag);
+          }
+          this.ln.push(`<circle class="joint" cx="${cx}" cy="${j}" r="3.5"/>`);
+        }
+        if (!F) return { node: J, pts: [[cx, j]] };
+        const fy = j + 14, FID = s.id + ':finally';
+        this.line([[cx, j], [cx, fy]], true);
+        this.edge(J, FID, [[cx, j], [cx, fy]]);
+        this.shape(FID, 'finally', cat, 'exchead', cx, fy, fw, TH, 'Finally', 'Finally: si esegue sempre, che ci sia stata un\'eccezione o no. Doppio clic per modificare il Try');
+        const tF = F.draw(cx, fy + TH, { node: FID, pts: [[cx, fy + TH]] });
+        return { node: tF.node, pts: tF.pts, tag: tF.tag };
       },
     };
   }
@@ -5086,6 +5523,8 @@ const UmlLib = (() => {
   function attrText(a) {
     return `${V(a.visibility)} ${a.name}: ${T(a.type)}${a.array ? `[${a.size}]` : ''}${!a.array && String(a.init || '').trim() ? ' = ' + a.init : ''}`;
   }
+  /* la classe eredita direttamente da un'eccezione predefinita? */
+  const excParent = (c) => !!c.parent && !!ModelLib.excClass(c.parent);
   function methodText(prog, f) {
     const ps = f.params.map((p) => `${p.name}: ${T(p.type)}${p.array ? `[${','.repeat((p.dims || 1) - 1)}]` : ''}`).join(', ');
     const rl = ModelLib.rets(f);
@@ -5105,7 +5544,8 @@ const UmlLib = (() => {
       const missing = c.abstract ? [] : ModelLib.missingAbstract(prog, c);
       let w = Math.max(MINW, tw(ModelLib.classTitle(c), FN) + PADX * 2 + 24, ...attrs.map((r) => tw(r.text, FM) + PADX * 2), ...meths.map((r) => tw(r.text, FM) + PADX * 2));
       w = Math.ceil(Math.min(MAXW, w));
-      const head = HEAD + (c === main || c.abstract ? STEREO : 0);
+      // eccezione del programma: sopra il nome si legge da quale eccezione predefinita deriva
+      const head = HEAD + (c === main || c.abstract || excParent(c) ? STEREO : 0);
       const ah = Math.max(1, attrs.length) * ROW + CPAD * 2 - (attrs.length ? 0 : ROW - 10);
       const mh = Math.max(1, meths.length) * ROW + CPAD * 2 - (meths.length ? 0 : ROW - 10);
       boxes.set(c.id, { c, x: c.x || 0, y: c.y || 0, w, h: head + ah + mh, head, ah, mh, attrs, meths, main: c === main, missing });
@@ -5155,10 +5595,10 @@ const UmlLib = (() => {
     const rels = [];
     for (const c of prog.classes) {
       const par = ModelLib.classByName(prog, c.parent);
-      if (par && par !== c) rels.push({ kind: 'inh', from: c, to: par });
+      if (par && par !== c && !par.builtin) rels.push({ kind: 'inh', from: c, to: par });
       for (const a of c.attributes) {
         const t = ModelLib.classByName(prog, ExprLib.splitType(a.type).base);
-        if (t) rels.push({ kind: 'assoc', from: c, to: t, name: a.name, mult: a.array ? '*' : '0..1', st: a.static });
+        if (t && !t.builtin) rels.push({ kind: 'assoc', from: c, to: t, name: a.name, mult: a.array ? '*' : '0..1', st: a.static });
       }
     }
     const pairCount = new Map();
@@ -5217,7 +5657,7 @@ const UmlLib = (() => {
       g += `<rect class="ubg" x="${x}" y="${y}" width="${w}" height="${b.h}" rx="6"/>`;
       g += `<path class="uheadbg" d="M${x} ${y + b.head}V${y + 6}Q${x} ${y} ${x + 6} ${y}H${x + w - 6}Q${x + w} ${y} ${x + w} ${y + 6}V${y + b.head}Z"/>`;
       g += `<rect class="uhit head" data-part="head" x="${x}" y="${y}" width="${w}" height="${b.head}"/>`;
-      if (b.main || c.abstract) g += `<text class="ustereo" x="${x + w / 2}" y="${y + 15}">${b.main ? '«principale»' : '«abstract»'}</text>`;
+      if (b.main || c.abstract || excParent(c)) g += `<text class="ustereo" x="${x + w / 2}" y="${y + 15}">${b.main ? '«principale»' : c.abstract ? '«abstract»' : `«eredita da ${esc(c.parent)}»`}</text>`;
       g += `<text class="uname" x="${x + w / 2}" y="${y + b.head - 13}">${esc(ModelLib.classTitle(c))}</text>`;
       if (warn) g += `<g class="uwarn"><circle cx="${x + 15}" cy="${y + b.head / 2}" r="8"/><text x="${x + 15}" y="${y + b.head / 2 + 4}">!</text></g>`;
       // attributi
@@ -5424,6 +5864,9 @@ const Examples = (() => {
     close: (mode) => S('close', { mode }),
     read: (variable) => S('read', { variable }),
     write: (expression) => S('write', { expression }),
+    // eccezioni: catches = [[tipo, variabile, corpo]]
+    try: (body, catches, fin) => S('try', { body, catches: catches.map(([type, variable, b]) => ModelLib.makeCatch({ type, variable, body: b })), hasFinally: !!fin, finally: fin || [] }),
+    throw: (expression) => S('throw', { expression }),
   };
   const prog = (name, about, mainBody, funcs = []) => {
     const p = ModelLib.newProgram();
@@ -5695,6 +6138,47 @@ const Examples = (() => {
         X.close('read'),
         X.out('"Somma = " & somma'),
       ]),
+    },
+    {
+      id: 'eccezioni', title: 'Eccezioni (Try, Catch, Finally, Throw)', tags: 'Eccezioni · funzioni',
+      make: () => prog('Eccezioni', 'Gli errori durante l\'esecuzione (indice fuori dall\'array, conversione non valida) diventano eccezioni che un Try può catturare; Throw lancia un\'eccezione, che risale dalle funzioni fino al Catch che la gestisce. Il Finally si esegue sempre. Provalo passo passo: la freccia rossa mostra dove salta l\'esecuzione.', [
+        X.decl('v', 'Integer', 3), X.decl('i, x', 'Integer'), X.decl('r', 'Real'),
+        X.com('Un indice fuori dall\'array: il blocco successivo non si esegue'),
+        X.try([X.set('i', '5'), X.set('v[i]', '1'), X.out('"non arriva qui"')], [['IndiceNonValido', 'e', [X.out('"indice non valido"')]]]),
+        X.com('"12a" non è un numero: si esegue il Catch giusto, poi il Finally'),
+        X.try([X.set('x', 'ToInteger("12a")')], [['DivisionePerZero', 'e', [X.out('"no"')]], ['ConversioneNonValida', 'e', [X.out('"conversione non valida"')]]], [X.out('"finally 1"')]),
+        X.com('L\'eccezione lanciata dentro media risale fino a qui: r non cambia'),
+        X.set('r', '1.5'),
+        X.try([X.set('r', 'media(0)')], [['Eccezione', 'e', [X.out('"catturata: " & e.messaggio')]]]),
+        X.out('"r resta " & r'),
+        X.try([X.set('x', 'controlla(-3)'), X.out('"no"')], [['Eccezione', 'err', [X.out('"controlla: " & err.messaggio')]]], [X.out('"finally 2"')]),
+        X.com('Il Try interno non cattura DivisionePerZero: esegue il suo Finally e l\'eccezione prosegue fino al Try esterno'),
+        X.try([X.try([X.throw('new DivisionePerZero("interna")')], [['IndiceNonValido', 'e', [X.out('"no"')]]], [X.out('"finally interno"')])], [['DivisionePerZero', 'e', [X.out('"esterno: " & e.messaggio')]]]),
+        X.set('x', 'controlla(7)'), X.out('"ok " & x'),
+      ], [
+        fn('media', 'Real', 'm', [['n', 'Integer']], [X.decl('m', 'Real'), X.if('n = 0', [X.throw('new Eccezione("nessun voto")')]), X.set('m', '10 / n')]),
+        fn('controlla', 'Integer', 'k', [['n', 'Integer']], [X.decl('k', 'Integer'), X.if('n < 0', [X.throw('new Eccezione("negativo: " & n)')]), X.set('k', 'n * 2')]),
+      ]),
+    },
+    {
+      id: 'saldo', title: 'Prelievi dal conto (eccezioni dell\'utente)', tags: 'Oggetti · eccezioni · ereditarietà',
+      make: () => ooProg('Prelievi dal conto', 'SaldoInsufficiente eredita da Eccezione e ha un attributo suo (quanto manca). Il metodo preleva lancia le eccezioni; il Main le cattura per tipo: prima quella più specifica, poi Eccezione, che cattura anche le sottoclassi.', [
+        X.decl('c', 'Conto'),
+        X.set('c', 'new Conto(100)'),
+        X.try([X.call('c.preleva(30)'), X.call('c.preleva(500)'), X.out('"no"')], [['SaldoInsufficiente', 'e', [X.out('"saldo insufficiente: mancano " & e.mancano & " (" & e.messaggio & ")"')]]], [X.out('"saldo: " & c.saldo')]),
+        X.try([X.call('c.preleva(-1)')], [['SaldoInsufficiente', 'e', [X.out('"no"')]], ['Eccezione', 'e', [X.out('"generica: " & e.messaggio')]]]),
+        X.try([X.call('c.preleva(1000)')], [['Eccezione', 'e', [X.out('"anche come Eccezione: " & e.messaggio')]]]),
+      ], {
+        Conto: { x: 360, y: 40, attrs: [['saldo', 'Integer', 'public']] },
+        SaldoInsufficiente: { parent: 'Eccezione', x: 360, y: 260, attrs: [['mancano', 'Integer', 'public']] },
+      }, [
+        { cls: 'Conto', ctor: true, params: [['s', 'Integer']], body: [X.set('saldo', 's')] },
+        { cls: 'Conto', name: 'preleva', params: [['x', 'Integer']], body: [
+          X.if('x < 0', [X.throw('new Eccezione("importo negativo")')]),
+          X.if('x > saldo', [X.throw('new SaldoInsufficiente(x - saldo)')]),
+          X.set('saldo', 'saldo - x')] },
+        { cls: 'SaldoInsufficiente', ctor: true, params: [['m', 'Integer']], body: [X.call('super("prelievo troppo grande")'), X.set('mancano', 'm')] },
+      ], { x: 40, y: 60 }),
     },
   ];
   return { list, get: (id) => list.find((e) => e.id === id) };
@@ -6284,7 +6768,10 @@ const ArrayView = (() => {
   function declaredNames(f) {
     const out = [];
     for (const p of f.params) out.push(p.name);
-    M.walk(f.body, (s) => { if (s.kind === 'declare' || s.kind === 'const') s.name.split(',').map((x) => x.trim()).filter(Boolean).forEach((n) => out.push(n)); });
+    M.walk(f.body, (s) => {
+      if (s.kind === 'declare' || s.kind === 'const') s.name.split(',').map((x) => x.trim()).filter(Boolean).forEach((n) => out.push(n));
+      if (s.kind === 'try') for (const c of s.catches || []) if (c.variable && !out.includes(c.variable)) out.push(c.variable); // variabili dei Catch
+    });
     // nella vista Oggetti anche gli attributi della classe (e di quelle madri, se non privati)
     const c = isOO() && M.classOf(st.prog, f);
     if (c) {
@@ -6622,8 +7109,10 @@ const ArrayView = (() => {
     close: '<path d="M3 4H29V19C22 16 14 26 3 19Z"/>',
     read: '<path d="M3 4H29V19C22 16 14 26 3 19Z"/>',
     write: '<path d="M3 4H29V19C22 16 14 26 3 19Z"/>',
+    try: '<rect x="3" y="4" width="26" height="18" rx="3"/><path class="inner" d="M3 9H29M20 13L16 17H20L16 21"/>',
+    throw: '<path d="M3 5H22L29 13L22 21H3Z"/><path class="inner" d="M15 8L11 13H15L11 18"/>',
   };
-  const CAT = { declare: 'decl', const: 'decl', assign: 'assign', input: 'in', output: 'out', if: 'cond', while: 'loop', for: 'loop', do: 'loop', call: 'call', comment: 'comment', breakpoint: 'brk', open: 'file', close: 'file', read: 'file', write: 'file' };
+  const CAT = { declare: 'decl', const: 'decl', assign: 'assign', input: 'in', output: 'out', if: 'cond', while: 'loop', for: 'loop', do: 'loop', call: 'call', comment: 'comment', breakpoint: 'brk', open: 'file', close: 'file', read: 'file', write: 'file', try: 'exc', throw: 'exc' };
   const icon = (k) => `<svg class="mini c-${CAT[k]}" viewBox="0 0 32 26" aria-hidden="true">${ICON[k]}</svg>`;
 
   const GROUPS = [
@@ -6631,6 +7120,7 @@ const ArrayView = (() => {
     ['Controllo', ['if', 'while', 'for', 'do']],
     ['Altro', ['comment', 'breakpoint']],
     ['File', ['open', 'read', 'write', 'close']],
+    ['Eccezioni', ['try', 'throw']],
   ];
 
   /* tasti per aggiungere i blocchi: dopo il blocco selezionato, o in fondo al diagramma */
@@ -6638,6 +7128,7 @@ const ArrayView = (() => {
     declare: 'D', const: 'K', assign: 'A', input: 'I', output: 'O', call: 'C',
     if: 'S', while: 'M', for: 'P', do: 'F', comment: '/', breakpoint: 'B',
     open: 'Maiusc+A', read: 'Maiusc+L', write: 'Maiusc+S', close: 'Maiusc+C',
+    try: 'T', throw: 'Maiusc+T',
   };
   const KEY_KIND = Object.fromEntries(Object.entries(KIND_KEY).map(([k, v]) => [v, k]));
   /* il tasto premuto scritto come in KIND_KEY (lettera, con Maiusc+ davanti) */
@@ -6751,9 +7242,11 @@ const ArrayView = (() => {
     const c = M.cloneStmt(f.stmt);
     mutate(() => { f.arr.splice(f.index + 1, 0, c); st.sel = c.id; });
   }
+  /* intestazioni dei rami Catch e Finally: appartengono al blocco Try */
+  const ownerOf = (id) => (/:(catch:|finally$)/.test(id) ? id.split(':')[0] : id);
   function containsArr(stmt, arr) {
     let found = false;
-    const visit = (s) => { for (const b of M.KINDS[s.kind].blocks || []) { if (s[b] === arr) found = true; s[b].forEach(visit); } };
+    const visit = (s) => { for (const a of M.childArrays(s)) { if (a === arr) found = true; a.forEach(visit); } };
     visit(stmt);
     return found;
   }
@@ -7048,10 +7541,58 @@ const ArrayView = (() => {
       { key: 'variable', label: 'Variabile', type: 'lvalue', required: true }] },
     write: { title: 'Scrivi su file', help: 'Aggiunge una riga al file aperto in scrittura.', fields: [
       { key: 'expression', label: 'Espressione', type: 'expr', required: true }] },
+    throw: { title: 'Throw (lancia un\'eccezione)', help: 'Interrompe il programma con un\'eccezione: la cattura il primo Try che ha un Catch del suo tipo, anche in una funzione che ha chiamato questa; se nessuno la cattura il programma si ferma.', fields: [
+      { key: 'expression', label: 'Eccezione', type: 'expr', required: true, placeholder: 'new Eccezione("messaggio")', hint: 'Si crea con new e il messaggio, es. new Eccezione("voto non valido"). In un Catch, Throw e rilancia l\'eccezione catturata.' }] },
   };
+  /* tipi di eccezione: i predefiniti e (vista Oggetti) le classi che ereditano da Eccezione */
+  const excTypes = () => [...M.EXC_CLASSES.map((c) => c.name), ...(M.hasClasses(st.prog) ? st.prog.classes.filter((c) => M.isExcClass(st.prog, c)).map((c) => c.name) : [])];
+  const excDoc = (n) => { const b = M.excClass(n); return b ? b.doc : 'classe del programma'; };
+  /* Try: rami Catch (tipo e variabile), Finally facoltativo */
+  function tryDialog(s, isNew, done) {
+    const cats = (s.catches || []).map((c) => ({ ...c }));
+    let hasF = !!s.hasFinally;
+    const body = h('div', { class: 'fields' }, h('p', { class: 'help' }, 'I blocchi dentro il Try sono protetti: se uno di loro (o una funzione che chiamano) lancia un\'eccezione, il Try si interrompe e si esegue il primo Catch del tipo giusto. Il Finally si esegue sempre, alla fine.'));
+    const list = h('div', { class: 'params' });
+    const draw = () => {
+      list.innerHTML = '';
+      if (!cats.length) list.append(h('p', { class: 'muted small' }, 'Nessun Catch: l\'eccezione prosegue dopo il Finally.'));
+      cats.forEach((c, i) => {
+        const sel = h('select', { 'aria-label': 'Tipo del Catch ' + (i + 1), onchange: (e) => { c.type = e.target.value; } }, excTypes().map((t) => h('option', { value: t, selected: t.toLowerCase() === String(c.type).toLowerCase(), title: excDoc(t) }, t)));
+        const nm = h('input', { type: 'text', class: 'mono', value: c.variable, 'aria-label': 'Variabile del Catch ' + (i + 1), placeholder: 'e', oninput: (e) => { c.variable = e.target.value.trim(); } });
+        list.append(h('div', { class: 'prow catchrow' }, h('span', { class: 'ckw' }, 'Catch'), sel, nm,
+          h('button', { class: 'iconbtn', type: 'button', title: 'Sposta su: i Catch si controllano in ordine', 'aria-label': 'Sposta su', disabled: i === 0, onclick: () => { cats.splice(i - 1, 0, cats.splice(i, 1)[0]); draw(); } }, '↑'),
+          h('button', { class: 'iconbtn', type: 'button', title: 'Rimuovi (con i suoi blocchi)', 'aria-label': 'Rimuovi il Catch', onclick: () => { cats.splice(i, 1); draw(); } }, '✕')));
+      });
+    };
+    draw();
+    const finW = field({ key: 'fin', label: 'Finally: blocchi eseguiti sempre, alla fine del Try', type: 'check' }, hasF);
+    body.append(h('div', { class: 'flabel' }, 'Catch (si controllano in ordine: prima i tipi più specifici)'), list,
+      h('button', { class: 'btn small', type: 'button', onclick: () => { const used = cats.map((c) => c.type); cats.push(M.makeCatch({ type: excTypes().find((t) => !used.includes(t)) || 'Eccezione' })); draw(); } }, '+ Aggiungi Catch'),
+      finW, h('p', { class: 'muted small', style: 'margin:0' }, 'Nel Catch e.messaggio è il messaggio dell\'eccezione. Errori come la divisione per zero o un indice fuori dall\'array diventano eccezioni dei tipi predefiniti.'));
+    openModal({
+      title: (isNew ? 'Nuovo blocco: ' : '') + 'Try', body, okText: isNew ? 'Aggiungi' : 'Salva', wide: true,
+      onOk: () => {
+        hasF = finW._get();
+        if (!cats.length && !hasF) return 'Un Try ha almeno un Catch oppure il Finally';
+        const own = declaredNames(func());
+        const catchVars = new Set(); M.walk(func().body, (x) => { if (x.kind === 'try') (x.catches || []).forEach((c) => catchVars.add(c.variable.toLowerCase())); });
+        for (const [i, c] of cats.entries()) {
+          if (!E.validIdent(c.variable)) return `Catch ${i + 1}: "${c.variable || '(vuoto)'}" non è un nome di variabile valido`;
+          if (own.some((n) => n.toLowerCase() === c.variable.toLowerCase()) && !catchVars.has(c.variable.toLowerCase())) return `Catch ${i + 1}: "${c.variable}" è già una variabile della funzione, scegli un altro nome (di solito e)`;
+          // un Catch dopo uno di un tipo più generale non si raggiungerebbe mai (in Java è un errore)
+          const prev = cats.slice(0, i).find((p) => M.isSubclass(st.prog, M.classByName(st.prog, c.type), M.classByName(st.prog, p.type)));
+          if (prev) return `Il Catch ${c.type} non verrebbe mai eseguito: viene dopo il Catch ${prev.type}, che cattura anche ${c.type}. Spostalo più in alto`;
+        }
+        done({ catches: cats, hasFinally: hasF, finally: hasF ? (s.finally || []) : [] });
+        return true;
+      },
+    });
+  }
 
   function stmtDialog(s, isNew, done) {
+    if (s.kind === 'try') { tryDialog(s, isNew, done); return; }
     let form = STMT_FORMS[s.kind];
+    if (s.kind === 'throw' && isNew && !s.expression) s = { ...s, expression: 'new Eccezione("")' };
     // nella vista Oggetti si possono dichiarare variabili di tipo classe
     if (s.kind === 'declare' && (M.hasClasses(st.prog) || (func().tparams || []).length)) form = { ...form, fields: form.fields.map((f) => (f.key === 'type' ? { ...f, type: 'typepick', ctx: typeCtx(func()) } : f)) };
     const vars = declaredNames(func());
@@ -7071,6 +7612,17 @@ const ArrayView = (() => {
       }
     };
     body.addEventListener('change', sync); sync();
+    // Throw: scelta rapida del tipo di eccezione (cambia la parte new Tipo(...) dell'espressione)
+    if (s.kind === 'throw') {
+      const inp = ws.expression._input;
+      const cur = (/^\s*new\s+([\p{L}_][\p{L}\p{N}_]*)/u.exec(s.expression || '') || [])[1] || '';
+      const sel = h('select', { id: 'f_exctype', 'aria-label': 'Tipo di eccezione', onchange: (e) => {
+        const t = e.target.value, v = inp.value;
+        inp.value = /^\s*new\s+[\p{L}_][\p{L}\p{N}_]*/u.test(v) ? v.replace(/^\s*new\s+[\p{L}_][\p{L}\p{N}_]*/u, 'new ' + t) : `new ${t}("")`;
+        inp.dispatchEvent(new Event('input')); inp.focus();
+      } }, excTypes().map((t) => h('option', { value: t, selected: t.toLowerCase() === cur.toLowerCase(), title: excDoc(t) }, `${t} — ${excDoc(t)}`)));
+      body.insertBefore(h('div', { class: 'field' }, h('label', { class: 'flabel', for: 'f_exctype' }, 'Tipo di eccezione'), sel), ws.expression);
+    }
     openModal({
       title: (isNew ? 'Nuovo blocco: ' : '') + form.title, body, okText: isNew ? 'Aggiungi' : 'Salva',
       onOk: () => {
@@ -7343,6 +7895,7 @@ const ArrayView = (() => {
       M.setRets(f, M.rets(f).map((r) => ({ name: r.name, type: T(r.type) })));
       M.walk(f.body, (x) => {
         if (x.kind === 'declare' || x.kind === 'const') x.type = T(x.type);
+        if (x.kind === 'try') for (const c of x.catches || []) c.type = T(c.type); // Catch di un'eccezione del programma
         for (const k of ['expression', 'variable', 'start', 'end', 'step', 'size']) if (typeof x[k] === 'string') x[k] = renameInExpr(x[k], old, nu);
       });
     }
@@ -7353,7 +7906,8 @@ const ArrayView = (() => {
     if (c && roGuard(c)) return;
     const nameW = field({ key: 'cname', label: 'Nome della classe', type: 'ident', required: true, placeholder: 'es. Punto', hint: 'Per convenzione inizia con la lettera maiuscola' }, c ? c.name : '');
     const banned = c ? [c, ...descendants(c)] : [];
-    const parW = field({ key: 'cpar', label: 'Eredita da (classe madre)', type: 'select', options: [['', '— nessuna —'], ...st.prog.classes.filter((k) => !banned.includes(k) && !(k.tparams || []).length).map((k) => [k.name, k.name])] }, c ? (c.parent || '') : '');
+    // si può ereditare anche da un'eccezione predefinita: la classe diventa un'eccezione da usare con Throw e Catch
+    const parW = field({ key: 'cpar', label: 'Eredita da (classe madre)', type: 'select', options: [['', '— nessuna —'], ...st.prog.classes.filter((k) => !banned.includes(k) && !(k.tparams || []).length).map((k) => [k.name, k.name]), ...M.EXC_CLASSES.map((k) => [k.name, `${k.name} (eccezione predefinita)`])] }, c ? (c.parent || '') : '');
     const isMainCls = c && c === M.mainClass(st.prog);
     const absW = isMainCls ? null : field({ key: 'cabs', label: 'Astratta: non si creano oggetti di questa classe, solo delle sue sottoclassi', type: 'check' }, c ? !!c.abstract : false);
     const body = h('div', { class: 'fields' }, h('p', { class: 'help' }, 'Una classe descrive un tipo di oggetti: i loro attributi (i dati) e i metodi (le operazioni). Con l\'ereditarietà la classe riceve attributi e metodi della classe madre e può ridefinire i metodi.'), nameW, parW, absW);
@@ -7364,6 +7918,7 @@ const ArrayView = (() => {
         const name = nameW._get().trim();
         if (E.BUILTINS[name.toLowerCase()]) return `${name} è il nome di una funzione integrata`;
         if (st.prog.classes.some((k) => k !== c && k.name.toLowerCase() === name.toLowerCase())) return `Esiste già una classe chiamata ${name}`;
+        if (M.excClass(name)) return `${name} è un'eccezione predefinita: scegli un altro nome (per una tua eccezione, es. VotoNonValido, scegli ${name} in «Eredita da»)`;
         const parent = parW._get();
         const abs = !!(absW && absW._get());
         // i Tipi Generici della classe vengono dagli attributi e dai metodi
@@ -7567,7 +8122,8 @@ const ArrayView = (() => {
       const ins = e.target.closest('.ins');
       if (ins) { if (isRunning()) { toast('Ferma il programma per modificare il diagramma', 'warn'); return; } insertMenu(+ins.dataset.ins, e.clientX + 6, e.clientY + 6); return; }
       const g = e.target.closest('.shape');
-      st.sel = g && !g.dataset.id.includes(':') ? g.dataset.id : null;
+      const gid = g ? ownerOf(g.dataset.id) : null;
+      st.sel = gid && !gid.includes(':') ? gid : null;
       decorate();
     });
     chart.addEventListener('dblclick', (e) => {
@@ -7588,7 +8144,7 @@ const ArrayView = (() => {
       const g = e.target.closest('.shape'); if (!g) return;
       const id = g.dataset.id;
       if (id.startsWith('start:') || id.startsWith('end:')) { if (isRunning()) return; st.fi === 0 ? editProgram() : editFunction(st.fi); return; }
-      editStmt(id);
+      editStmt(ownerOf(id));
     });
     chart.addEventListener('contextmenu', (e) => {
       if (isUml()) {
@@ -7599,8 +8155,9 @@ const ArrayView = (() => {
       }
       const g = e.target.closest('.shape'); if (!g) return;
       e.preventDefault();
-      if (!g.dataset.id.includes(':')) { st.sel = g.dataset.id; decorate(); }
-      shapeMenu(g.dataset.id, e.clientX, e.clientY);
+      const gid = ownerOf(g.dataset.id);
+      if (!gid.includes(':')) { st.sel = gid; decorate(); }
+      shapeMenu(gid, e.clientX, e.clientY);
     });
     chart.addEventListener('pointerdown', (e) => {
       if (isUml()) {
@@ -7713,7 +8270,7 @@ const ArrayView = (() => {
     if (!name.trim()) throw new E.FlowError('Il nome del file è vuoto');
     if (streams[mode]) throw new E.FlowError(`C'è già un file aperto in ${mode === 'read' ? 'lettura' : 'scrittura'}: chiudilo prima di aprirne un altro`);
     if (mode === 'read') {
-      if (!st.vfs.has(name)) throw new E.FlowError(`File "${name}" non trovato: caricalo nella scheda File`);
+      if (!st.vfs.has(name)) throw new E.FlowError(`File "${name}" non trovato: caricalo nella scheda File`, { exc: 'ErroreFile' });
       const lines = st.vfs.get(name).split(/\r?\n/);
       if (lines.length && lines[lines.length - 1] === '') lines.pop();
       streams.read = { name, lines, pos: 0 };
@@ -7733,7 +8290,7 @@ const ArrayView = (() => {
     fileRead: () => {
       const r = streams.read;
       if (!r) throw new E.FlowError('Nessun file aperto in lettura');
-      if (r.pos >= r.lines.length) throw new E.FlowError(`Lettura oltre la fine del file "${r.name}" (controlla con EOF())`);
+      if (r.pos >= r.lines.length) throw new E.FlowError(`Lettura oltre la fine del file "${r.name}" (controlla con EOF())`, { exc: 'ErroreFile' });
       return r.lines[r.pos++];
     },
     fileWrite: (s) => { if (!streams.write) throw new E.FlowError('Nessun file aperto in scrittura'); streams.write.lines.push(s); },
@@ -7782,7 +8339,7 @@ const ArrayView = (() => {
     if (ev.type === 'stmt') {
       run.steps++; run.curId = ev.stmt.id; run.curFrame = ev.frame;
       // percorso per il cursore: dall'ultimo blocco eseguito in questa stessa chiamata
-      run.trail = { from: ev.frame._last || null, to: ev.stmt.id, frame: ev.frame, branch: ev.frame._branch || null, step: run.steps };
+      run.trail = { from: ev.frame._last || null, to: ev.stmt.id, frame: ev.frame, branch: ev.frame._branch || null, step: run.steps, exc: ev.exc || null };
       ev.frame._last = ev.stmt.id;
       if (!run.mainFrame) run.mainFrame = ev.frame;
       return ev;
@@ -7882,6 +8439,7 @@ const ArrayView = (() => {
     cancelAnimationFrame(trailRaf);
     run.hold = null;
     const g = $('#chart svg .trail'); if (g) g.innerHTML = '';
+    const ov = $('#chart svg .exc-over'); if (ov) ov.innerHTML = '';
     run.trailShown = null;
   }
   function findPath(from, to, branch) {
@@ -7910,20 +8468,24 @@ const ArrayView = (() => {
     if (run.hold) { run.hold = null; decorate(); }
     const g = $('#chart svg .trail'); if (!g) return;
     g.innerHTML = '';
+    const ov = $('#chart svg .exc-over'); if (ov) ov.innerHTML = '';
     if (!t.from || func().id !== t.frame.func.id) return;
-    const path = findPath(t.from, t.to, t.branch);
-    if (!path) return;
-    const pts = [];
-    for (const e of path) for (const p of e.pts) { const q = pts[pts.length - 1]; if (!q || q[0] !== p[0] || q[1] !== p[1]) pts.push(p); }
+    let pts = [];
+    if (t.exc) pts = excPath(t, g); // eccezione: freccia rossa tratteggiata dal blocco da cui arriva al Catch (o al Finally)
+    else {
+      const path = findPath(t.from, t.to, t.branch);
+      if (!path) return;
+      for (const e of path) for (const p of e.pts) { const q = pts[pts.length - 1]; if (!q || q[0] !== p[0] || q[1] !== p[1]) pts.push(p); }
+    }
     if (pts.length < 2) return;
     const seg = []; let total = 0;
     for (let i = 1; i < pts.length; i++) { const l = Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); seg.push(l); total += l; }
     const NS = 'http://www.w3.org/2000/svg';
     const line = document.createElementNS(NS, 'path');
-    line.setAttribute('class', 'trail-path');
+    line.setAttribute('class', 'trail-path' + (t.exc ? ' exc' : ''));
     line.setAttribute('d', pts.map((p, i) => (i ? 'L' : 'M') + p[0] + ' ' + p[1]).join(''));
     const dot = document.createElementNS(NS, 'circle');
-    dot.setAttribute('class', 'trail-cursor'); dot.setAttribute('r', '6');
+    dot.setAttribute('class', 'trail-cursor' + (t.exc ? ' exc' : '')); dot.setAttribute('r', '6');
     g.append(line, dot);
     const at = (d) => {
       let i = 0;
@@ -7950,6 +8512,36 @@ const ArrayView = (() => {
     };
     place(0);
     trailRaf = requestAnimationFrame(tick);
+  }
+  /* percorso dell'eccezione: dal blocco da cui arriva (quello che l'ha lanciata, oppure la chiamata
+     della funzione da cui risale) all'intestazione del Catch che la cattura o del Finally; il blocco di
+     partenza si cerchia di rosso e un'etichetta dice di che eccezione si tratta */
+  function excPath(t, g) {
+    const box = (id) => { const el = $(`#chart .shape[data-id="${CSS.escape(id)}"]`); return el ? el.getBBox() : null; };
+    const a = box(t.from), b = box(t.to);
+    if (!a || !b) return [];
+    const NS = 'http://www.w3.org/2000/svg';
+    const ring = document.createElementNS(NS, 'rect');
+    ring.setAttribute('class', 'exc-src');
+    for (const [k, v] of [['x', a.x - 5], ['y', a.y - 5], ['width', a.width + 10], ['height', a.height + 10], ['rx', 8]]) ring.setAttribute(k, v);
+    const lab = document.createElementNS(NS, 'text');
+    lab.setAttribute('class', 'exc-lab');
+    lab.setAttribute('x', a.x - 4); lab.setAttribute('y', a.y - 9);
+    lab.textContent = `⚡ ${t.exc.type}${t.exc.lost && t.exc.lost.length ? ` da ${t.exc.lost[0]}()` : ''}${t.exc.pending ? ' → Finally, poi prosegue' : ''}`;
+    // sopra i blocchi, così l'etichetta si legge sempre
+    const svg = g.ownerSVGElement;
+    const over = svg.querySelector('.exc-over') || svg.appendChild(document.createElementNS(NS, 'g'));
+    over.setAttribute('class', 'exc-over'); over.innerHTML = '';
+    over.append(ring, lab);
+    const sy = a.y + a.height / 2, hy = b.y + b.height / 2;
+    if (b.x > a.x + a.width) {
+      // Catch a destra: corsia appena a sinistra della sua colonna
+      const lane = b.x - 14;
+      return [[a.x + a.width, sy], [lane, sy], [lane, hy], [b.x, hy]];
+    }
+    // Finally (sotto, al centro): corsia a sinistra
+    const lane = Math.min(a.x, b.x) - 18;
+    return [[a.x, sy], [lane, sy], [lane, hy], [b.x, hy]];
   }
   function scrollIntoViewIfNeeded(el) {
     const wrap = $('#canvasWrap');
@@ -9019,7 +9611,8 @@ const ArrayView = (() => {
     const cs = getComputedStyle(document.documentElement);
     const v = (n) => cs.getPropertyValue(n).trim();
     let css = `text{font:${RenderLib.R_.font};fill:${v('--sh-text')};text-anchor:middle}.cline-t{text-anchor:start}.comment text{font-weight:400;font-style:italic}.badge{font-size:10px}.c-in .badge{fill:${v('--s-in')}}.c-out .badge{fill:${v('--s-out')}}.c-decl .badge{fill:${v('--s-decl')}}.blabel{font-size:11px;font-weight:600;fill:${v('--muted')}}.flow{fill:none;stroke:${v('--flow')};stroke-width:1.6}.ahead{fill:${v('--flow')}}.joint{fill:${v('--flow')}}.shape>path,.shape>rect{stroke-width:1.6}.inner{fill:none!important}.note{stroke-dasharray:4 3}svg{background:${v('--paper')}}`;
-    for (const c of ['term', 'decl', 'assign', 'in', 'out', 'cond', 'loop', 'call', 'comment', 'brk', 'file', 'inc']) css += `.c-${c}>path,.c-${c}>rect{fill:${v('--f-' + c)};stroke:${v('--s-' + c)}}`;
+    for (const c of ['term', 'decl', 'assign', 'in', 'out', 'cond', 'loop', 'call', 'comment', 'brk', 'file', 'inc', 'exc']) css += `.c-${c}>path,.c-${c}>rect{fill:${v('--f-' + c)};stroke:${v('--s-' + c)}}`;
+    css += `.flow.exc{stroke:${v('--s-exc')};stroke-dasharray:5 4}`;
     // diagramma delle classi
     css += `.ubg{fill:${v('--paper')};stroke:${v('--s-call')};stroke-width:1.6}.uheadbg{fill:${v('--f-call')}}.main .uheadbg{fill:${v('--f-term')}}.main .ubg{stroke:${v('--s-term')}}.usep{stroke:${v('--s-call')};stroke-width:1.2}.uname{font:700 14px "Atkinson Hyperlegible",sans-serif;text-anchor:middle}.ustereo{font:italic 11.5px "Atkinson Hyperlegible",sans-serif;fill:${v('--muted')};text-anchor:middle}.umem{font:400 12.5px "JetBrains Mono",monospace;text-anchor:start}.urel{fill:none;stroke:${v('--flow')};stroke-width:1.6}.minh{fill:${v('--paper')};stroke:${v('--flow')};stroke-width:1.6}.mopen{fill:none;stroke:${v('--flow')};stroke-width:1.6}.ulab{font:600 11.5px "JetBrains Mono",monospace;fill:${v('--muted')};text-anchor:start}`;
     return css;
@@ -9119,6 +9712,9 @@ const ArrayView = (() => {
       ['&', 'Unisce testi e numeri: "Totale: " & t'], ['=  ==   !=  <>', 'Uguale, diverso'], ['<  <=  >  >=', 'Confronti'],
       ['and  &&   or  ||   not  !', 'Operatori logici'], ['true  false  Pi', 'Costanti'], ['v[i]', 'Elemento i di un array (da 0)'],
       ['v ← quadrati(10)', 'Funzione che restituisce un array: v diventa l\'array restituito (forma «array» nel valore restituito)'],
+      ['Try  Catch  Finally', 'Eccezioni: se un blocco del Try (o una funzione che chiama) lancia un\'eccezione, si esegue il primo Catch del tipo giusto; il Finally si esegue sempre'],
+      ['Throw new Eccezione("…")', 'Lancia un\'eccezione. Tipi predefiniti: Eccezione, DivisionePerZero, IndiceNonValido, ConversioneNonValida, OggettoNullo, ErroreFile; nella vista Oggetti anche le classi che ereditano da Eccezione'],
+      ['e.messaggio', 'Nel Catch: il messaggio dell\'eccezione catturata e'],
       ['massimo<T>(v: T[], n)', 'Tipo Generico T: un tipo qualsiasi, ricavato dagli argomenti della chiamata. Si sceglie «Nuovo Tipo Generico» nel menu del tipo di un parametro'],
     ].map(([a, b]) => h('tr', null, h('td', { class: 'mono' }, a), h('td', null, b)));
     const oo = [
@@ -9160,6 +9756,7 @@ const ArrayView = (() => {
     ['Aggiungi un blocco (dopo quello selezionato o in fondo; anche nel menu «Aggiungi un blocco»)', [
       ['D  K  A', 'Dichiara, Costante, Assegna'], ['I  O  C', 'Input, Output, Chiama'], ['S  M  P  F', 'Se, Mentre, Per, Fai-mentre'], ['/  B', 'Commento, Interruzione'],
       ['Maiusc+A  L  S  C', 'Apri file, Leggi da file, Scrivi su file, Chiudi file'],
+      ['T  ·  Maiusc+T', 'Try (con Catch e Finally), Throw'],
     ]],
     ['Funzioni, metodi e classi', [
       ['N', 'Nuova funzione o nuovo metodo (nel diagramma delle classi: nuova classe)'], ['F2', 'Modifica la funzione o il metodo (nel diagramma delle classi: l\'elemento selezionato)'],

@@ -427,12 +427,12 @@ const BUILTINS = {
   sqrt:     { sig: [N], ret: 'Real', fn: (a, n) => { if (num(a[0]) < 0) throw new FlowError('Sqrt: radice quadrata di un numero negativo', { node: n }); return V.real(Math.sqrt(num(a[0]))); }, doc: 'Sqrt(n) — radice quadrata' },
   random:   { sig: ['Integer'], ret: 'Integer', fn: (a, n) => { if (a[0].v <= 0) throw new FlowError('Random: l\'argomento deve essere maggiore di 0', { node: n }); return V.int(Math.floor(Math.random() * a[0].v)); }, doc: 'Random(n) — intero casuale da 0 a n-1' },
   len:      { sig: ['String'], ret: 'Integer', fn: (a) => V.int([...a[0].v].length), doc: 'Len(s) — lunghezza della stringa' },
-  char:     { sig: ['String', 'Integer'], ret: 'String', fn: (a, n) => { const ch = [...a[0].v]; const i = a[1].v; if (i < 0 || i >= ch.length) throw new FlowError(`Char: indice ${i} fuori dalla stringa (lunghezza ${ch.length})`, { node: n }); return V.str(ch[i]); }, doc: 'Char(s, i) — carattere in posizione i (da 0)' },
+  char:     { sig: ['String', 'Integer'], ret: 'String', fn: (a, n) => { const ch = [...a[0].v]; const i = a[1].v; if (i < 0 || i >= ch.length) throw new FlowError(`Char: indice ${i} fuori dalla stringa (lunghezza ${ch.length})`, { node: n, exc: 'IndiceNonValido' }); return V.str(ch[i]); }, doc: 'Char(s, i) — carattere in posizione i (da 0)' },
   tochar:   { sig: ['Integer'], ret: 'String', fn: (a) => V.str(String.fromCodePoint(a[0].v)), doc: 'ToChar(n) — carattere con codice n' },
   tocode:   { sig: ['String'], ret: 'Integer', fn: (a, n) => { if (!a[0].v.length) throw new FlowError('ToCode: stringa vuota', { node: n }); return V.int(a[0].v.codePointAt(0)); }, doc: 'ToCode(s) — codice del primo carattere' },
   tofixed:  { sig: [N, 'Integer'], ret: 'String', fn: (a) => V.str(Number(num(a[0])).toFixed(Math.max(0, Math.min(20, a[1].v)))), doc: 'ToFixed(r, d) — numero come testo con d decimali' },
-  tointeger:{ sig: ['String'], ret: 'Integer', fn: (a, n) => { try { return parseInputText(a[0].v, 'Integer'); } catch (e) { throw new FlowError(`ToInteger: ${e.message}`, { node: n }); } }, doc: 'ToInteger(s) — converte testo in intero' },
-  toreal:   { sig: ['String'], ret: 'Real', fn: (a, n) => { try { return parseInputText(a[0].v, 'Real'); } catch (e) { throw new FlowError(`ToReal: ${e.message}`, { node: n }); } }, doc: 'ToReal(s) — converte testo in reale' },
+  tointeger:{ sig: ['String'], ret: 'Integer', fn: (a, n) => { try { return parseInputText(a[0].v, 'Integer'); } catch (e) { throw new FlowError(`ToInteger: ${e.message}`, { node: n, exc: 'ConversioneNonValida' }); } }, doc: 'ToInteger(s) — converte testo in intero' },
+  toreal:   { sig: ['String'], ret: 'Real', fn: (a, n) => { try { return parseInputText(a[0].v, 'Real'); } catch (e) { throw new FlowError(`ToReal: ${e.message}`, { node: n, exc: 'ConversioneNonValida' }); } }, doc: 'ToReal(s) — converte testo in reale' },
   tostring: { sig: ['Any'], ret: 'String', fn: (a) => V.str(fmtValue(a[0])), doc: 'ToString(x) — converte in testo' },
   size:     { sig: ['Array'], ret: 'Integer', fn: null, doc: 'Size(a) — numero di elementi dell\'array; Size(m, d) — elementi della dimensione d (da 0)' },
   eof:      { sig: [], ret: 'Boolean', fn: null, doc: 'EOF() — vero se il file in lettura è finito' },
@@ -496,7 +496,7 @@ function arrOffset(ivs, cell, node) {
     const iv = ivs[k];
     if (iv.t !== 'Integer') throw new FlowError(`Gli indici di "${node.name}" devono essere interi, non ${TYPE_IT[iv.t]}`, { node });
     if (iv.v < 0 || iv.v >= dims[k]) {
-      throw new FlowError(dims.length === 1 ? `Indice ${iv.v} fuori dai limiti: "${node.name}" ha ${dims[0]} elementi (indici da 0 a ${dims[0] - 1})` : `Indice ${iv.v} fuori dai limiti nella dimensione ${k + 1} di "${node.name}" (indici da 0 a ${dims[k] - 1})`, { node });
+      throw new FlowError(dims.length === 1 ? `Indice ${iv.v} fuori dai limiti: "${node.name}" ha ${dims[0]} elementi (indici da 0 a ${dims[0] - 1})` : `Indice ${iv.v} fuori dai limiti nella dimensione ${k + 1} di "${node.name}" (indici da 0 a ${dims[k] - 1})`, { node, exc: 'IndiceNonValido' });
     }
     off = off * dims[k] + iv.v;
   }
@@ -504,7 +504,7 @@ function arrOffset(ivs, cell, node) {
 }
 function arrIndex(iv, cell, node) {
   if (iv.t !== 'Integer') throw new FlowError(`L'indice di "${node.name}" deve essere intero, non ${TYPE_IT[iv.t]}`, { node });
-  if (iv.v < 0 || iv.v >= cell.items.length) throw new FlowError(`Indice ${iv.v} fuori dai limiti: "${node.name}" ha ${cell.items.length} elementi (indici da 0 a ${cell.items.length - 1})`, { node });
+  if (iv.v < 0 || iv.v >= cell.items.length) throw new FlowError(`Indice ${iv.v} fuori dai limiti: "${node.name}" ha ${cell.items.length} elementi (indici da 0 a ${cell.items.length - 1})`, { node, exc: 'IndiceNonValido' });
   return iv.v;
 }
 
@@ -541,10 +541,10 @@ function* evalBin(node, ctx) {
         case '-': return bothInt ? checkInt(l.v - r.v, node) : V.real(l.v - r.v);
         case '*': return bothInt ? checkInt(l.v * r.v, node) : V.real(l.v * r.v);
         case '/':
-          if (r.v === 0) throw new FlowError('Divisione per zero', { node });
+          if (r.v === 0) throw new FlowError('Divisione per zero', { node, exc: 'DivisionePerZero' });
           return V.real(l.v / r.v);
         case '%':
-          if (r.v === 0) throw new FlowError('Modulo per zero', { node });
+          if (r.v === 0) throw new FlowError('Modulo per zero', { node, exc: 'DivisionePerZero' });
           return bothInt ? V.int(l.v % r.v) : V.real(l.v % r.v);
         case '^': {
           const v = Math.pow(l.v, r.v);

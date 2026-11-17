@@ -15,7 +15,7 @@
   --f-loop: #fde6c9; --s-loop: #b57d32;
   --f-call: #ebe4f6; --s-call: #8167b0;
   --f-comment: #ffffff; --s-comment: #9aa6b2;
-  --f-brk: #f6d8d8; --s-brk: #ad4545;
+  --f-brk: #f6d8d8; --s-brk: #ad4545; --f-exc: #f8dcea; --s-exc: #a8457a;
   --f-file: #e6e9ef; --s-file: #687384;
   --f-inc: #eceff2; --s-inc: #8f9aa6;
   --con-bg: #10161c; --con-ink: #dbe6ee; --con-echo: #7fd1e3; --con-sys: #7f8d99; --con-err: #ff8f8f;
@@ -35,7 +35,7 @@
     --f-term: #352d48; --s-term: #a996d6; --f-decl: #37352a; --s-decl: #c9bb78; --f-assign: #3c3622; --s-assign: #d6bd5c;
     --f-in: #1f3249; --s-in: #7eabdb; --f-out: #1f3a29; --s-out: #74c08a; --f-cond: #462826; --s-cond: #e08b81;
     --f-loop: #43331d; --s-loop: #e0a85a; --f-call: #332a45; --s-call: #ae95dc; --f-comment: #1b232b; --s-comment: #6d7b88;
-    --f-brk: #452424; --s-brk: #e07a7a; --f-file: #262d36; --s-file: #9aa5b3;
+    --f-brk: #452424; --s-brk: #e07a7a; --f-exc: #43233a; --s-exc: #e58ab9; --f-file: #262d36; --s-file: #9aa5b3;
     --f-inc: #232a31; --s-inc: #6d7883;
     --con-bg: #0a0e11; --shadow: 0 12px 34px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.4);
     color-scheme: dark;
@@ -50,7 +50,7 @@
   --f-term: #352d48; --s-term: #a996d6; --f-decl: #37352a; --s-decl: #c9bb78; --f-assign: #3c3622; --s-assign: #d6bd5c;
   --f-in: #1f3249; --s-in: #7eabdb; --f-out: #1f3a29; --s-out: #74c08a; --f-cond: #462826; --s-cond: #e08b81;
   --f-loop: #43331d; --s-loop: #e0a85a; --f-call: #332a45; --s-call: #ae95dc; --f-comment: #1b232b; --s-comment: #6d7b88;
-  --f-brk: #452424; --s-brk: #e07a7a; --f-file: #262d36; --s-file: #9aa5b3;
+  --f-brk: #452424; --s-brk: #e07a7a; --f-exc: #43233a; --s-exc: #e58ab9; --f-file: #262d36; --s-file: #9aa5b3;
   --f-inc: #232a31; --s-inc: #6d7883;
   --con-bg: #0a0e11; --shadow: 0 12px 34px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.4);
   color-scheme: dark;
@@ -169,6 +169,9 @@ body.side-hidden #sideToggle { left: auto; right: 3px; transform: translateY(-50
 .c-call > path, .c-call > rect { fill: var(--f-call); stroke: var(--s-call); }
 .c-comment > path, .c-comment > rect { fill: var(--f-comment); stroke: var(--s-comment); }
 .c-brk > path, .c-brk > rect { fill: var(--f-brk); stroke: var(--s-brk); }
+.c-exc > path, .c-exc > rect { fill: var(--f-exc); stroke: var(--s-exc); }
+.c-exc > path.inner { fill: none; }
+.chart path.flow.exc { stroke: var(--s-exc); stroke-dasharray: 5 4; }
 .c-file > path, .c-file > rect { fill: var(--f-file); stroke: var(--s-file); }
 .c-inc > path, .c-inc > rect { fill: var(--f-inc); stroke: var(--s-inc); }
 .chart .shape:hover > path, .chart .shape:hover > rect { stroke-width: 2.4; }
@@ -180,6 +183,12 @@ body.side-hidden #sideToggle { left: auto; right: 3px; transform: translateY(-50
 .chart .trail { pointer-events: none; }
 .chart .trail-path { fill: none; stroke: var(--exec); stroke-width: 4.5; stroke-linecap: round; stroke-linejoin: round; opacity: 0.75; }
 .chart .trail-cursor { fill: var(--exec); stroke: var(--paper); stroke-width: 2.5; filter: drop-shadow(0 0 5px var(--exec)); }
+/* eccezione durante l'esecuzione: freccia rossa tratteggiata verso il Catch, blocco di partenza cerchiato */
+.chart .trail-path.exc { stroke: var(--err); stroke-dasharray: 7 6; stroke-width: 3.5; opacity: 0.9; }
+.chart .trail-cursor.exc { fill: var(--err); filter: drop-shadow(0 0 5px var(--err)); }
+.chart .exc-src { fill: none; stroke: var(--err); stroke-width: 2.5; stroke-dasharray: 5 4; }
+.chart .exc-lab { font: 700 12px var(--font-ui); fill: var(--err); text-anchor: start; paint-order: stroke; stroke: var(--paper); stroke-width: 4px; pointer-events: none; }
+.chart .exc-over { pointer-events: none; }
 .chart .ins { cursor: copy; }
 .chart .ins rect { fill: transparent; }
 .chart .ins circle { fill: var(--accent); opacity: 0; transition: opacity .12s, transform .12s; }

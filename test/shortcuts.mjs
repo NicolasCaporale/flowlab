@@ -32,7 +32,7 @@ await key('Alt+ArrowDown'); ok('Alt+↓ sposta: ' + await kinds(), (await kinds(
 await key('Alt+ArrowUp'); ok('Alt+↑ lo riporta: ' + await kinds(), (await kinds()) === 'declare,comment,assign,output');
 // menu «Aggiungi un blocco» aperto: la lettera sceglie il blocco
 await page.click('#chart .ins >> nth=0'); await wait(80);
-ok('il menu mostra i tasti', (await page.locator('#pop .ikey').count()) === 16);
+ok('il menu mostra i tasti', (await page.locator('#pop .ikey').count()) === 18);
 await key('i'); ok('I nel menu apre Input', (await title()) === 'Nuovo blocco: Input'); await cancel();
 // esecuzione F5
 await key('F5'); await wait(300);

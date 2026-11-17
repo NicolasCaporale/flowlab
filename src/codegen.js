@@ -86,9 +86,101 @@ function setupGen(prog, lang) {
     if (c.name === spec.cls) native.set(c.name.toLowerCase(), spec);
   }
   const tps = [...cs.flatMap((c) => c.tparams || []), ...prog.functions.flatMap((f) => f.tparams || [])].map((t) => t.toLowerCase());
-  GEN = { native, skip, tparams: new Set(tps), helpers: new Set(), bound: new Set(), boxed: new Set(), cur: null };
+  GEN = { native, skip, tparams: new Set(tps), helpers: new Set(), bound: new Set(), boxed: new Set(), cur: null, exc: excInfo(prog), jthrows: new Map() };
   if (tps.length) analyzeGenerics(prog, lang);
+  if (lang === 'java' && GEN.exc.used) analyzeThrows(prog);
 }
+/* ------------------------------ Eccezioni ----------------------------------
+   Le eccezioni predefinite di FlowLab corrispondono a quelle dei linguaggi; dove il linguaggio
+   non lancia nulla (divisione tra reali per zero, indice fuori dall'array in JavaScript…) il codice
+   usa piccole funzioni di controllo, solo se il programma cattura quel tipo di eccezione. */
+const EXC_LANG = {
+  java: { Eccezione: 'Exception', DivisionePerZero: 'ArithmeticException', IndiceNonValido: 'IndexOutOfBoundsException', ConversioneNonValida: 'NumberFormatException', OggettoNullo: 'NullPointerException', ErroreFile: 'java.io.IOException' },
+  csharp: { Eccezione: 'Exception', DivisionePerZero: 'DivideByZeroException', IndiceNonValido: 'IndexOutOfRangeException', ConversioneNonValida: 'FormatException', OggettoNullo: 'NullReferenceException', ErroreFile: 'System.IO.IOException' },
+  python: { Eccezione: 'Exception', DivisionePerZero: 'ZeroDivisionError', IndiceNonValido: 'IndexError', ConversioneNonValida: 'ValueError', OggettoNullo: 'AttributeError', ErroreFile: 'OSError' },
+  cpp: { Eccezione: 'runtime_error', DivisionePerZero: 'DivisionePerZero', IndiceNonValido: 'out_of_range', ConversioneNonValida: 'invalid_argument', OggettoNullo: 'OggettoNullo', ErroreFile: 'ErroreFile' },
+  javascript: { Eccezione: 'Error', DivisionePerZero: 'DivisionePerZero', IndiceNonValido: 'IndiceNonValido', ConversioneNonValida: 'ConversioneNonValida', OggettoNullo: 'OggettoNullo', ErroreFile: 'ErroreFile' },
+};
+/* nome dell'eccezione nel linguaggio (le classi del programma restano come sono) */
+const excL = (lang, name) => { const b = _CM.excClass(name); if (!b) return name; if ((lang === 'cpp' || lang === 'javascript') && EXC_LANG[lang][b.name] === b.name) need('exc:' + b.name); return EXC_LANG[lang][b.name]; };
+/* classe madre nel linguaggio (una classe del programma può ereditare da un'eccezione predefinita) */
+const parentL = (lang, c) => (c.parent && _CM.excClass(c.parent) ? excL(lang, c.parent) : c.parent);
+/* che cosa usa il programma: Try/Throw, e quali errori di esecuzione vengono catturati */
+function excInfo(prog) {
+  const caught = new Set(); let used = false;
+  for (const f of prog.functions) _CM.walk(f.body, (st) => {
+    if (st.kind === 'throw') used = true;
+    if (st.kind !== 'try') return;
+    used = true;
+    for (const c of st.catches || []) { const k = _CM.classByName(prog, c.type); for (const b of _CM.EXC_CLASSES) if (k && _CM.isSubclass(prog, b, k)) caught.add(b.name); }
+  });
+  return { used, div: caught.has('DivisionePerZero'), idx: caught.has('IndiceNonValido'), conv: caught.has('ConversioneNonValida') };
+}
+/* tipo dell'eccezione lanciata: new X(...) oppure il tipo della variabile */
+function thrownType(node, sc) { const n = strip(node); if (!n) return null; if (n.k === 'new') return n.cls; const t = _CE.inferType(n, sc); return t && t !== 'Unknown' ? _CE.splitType(t).base : null; }
+/* Java: eccezioni controllate (vanno dichiarate con throws): Eccezione, ErroreFile e le classi del programma che ne derivano */
+function jChecked(prog, name) {
+  const k = _CM.classByName(prog, name); if (!k) return false;
+  const b = _CM.chainOf(prog, k).find((x) => x.builtin);
+  return !!b && (b.name === 'Eccezione' || b.name === 'ErroreFile');
+}
+/* Java: per ogni funzione, le eccezioni controllate che possono uscire (non catturate da un Try) */
+function analyzeThrows(prog) {
+  const oo = _CM.hasClasses(prog);
+  const fl = prog.functions.filter((f) => !(oo && GEN.skip.has(f.cls)));
+  const out = new Map(fl.map((f) => [f, new Set()])), scopes = new Map(fl.map((f) => [f, buildScope(prog, f)]));
+  const caughtBy = (t, catches) => catches.some((ct) => _CM.isSubclass(prog, _CM.classByName(prog, t), _CM.classByName(prog, ct)));
+  for (let changed = true, guard = 0; changed && guard < 30; guard++) {
+    changed = false;
+    for (const f of fl) {
+      const sc = scopes.get(f), set = out.get(f);
+      const add = (t, catches) => { if (!t || !jChecked(prog, t) || caughtBy(t, catches)) return; const k = _CM.classByName(prog, t).name; if (!set.has(k)) { set.add(k); changed = true; } };
+      const visitExpr = (src, catches) => { const t = String(src || '').trim() && tryParse(src); if (t) walkNodes(t, (n) => { const g = calleeNode(n, sc, prog); if (g && out.has(g)) for (const x of out.get(g)) add(x, catches); }); };
+      const visit = (stmts, catches) => {
+        for (const st of stmts) {
+          if (st.kind === 'try') {
+            visit(st.body, [...catches, ...(st.catches || []).map((c) => c.type)]);
+            for (const c of st.catches || []) visit(c.body, catches);
+            if (st.hasFinally) visit(st.finally || [], catches);
+            continue;
+          }
+          if (st.kind === 'throw') { const t = tryParse(st.expression); add(t && thrownType(t, sc), catches); }
+          for (const src of exprSources(st)) visitExpr(src, catches);
+          for (const arr of _CM.childArrays(st)) visit(arr, catches);
+        }
+      };
+      visit(f.body, []);
+      // un costruttore senza super(...) chiama quello della classe madre
+    }
+    // un metodo ridefinito dichiara le stesse eccezioni in tutta la gerarchia (in Java la ridefinizione non può aggiungerne)
+    if (oo) {
+      const groups = new Map();
+      for (const f of fl) {
+        if (f.ctor || f.static) continue;
+        const c = _CM.classOf(prog, f); if (!c) continue;
+        const root = _CM.chainOf(prog, c).filter((k) => !k.builtin).pop();
+        const key = root.id + ':' + f.name.toLowerCase() + '(' + OO.sig(f) + ')';
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(f);
+      }
+      for (const g of groups.values()) {
+        if (g.length < 2) continue;
+        const all = new Set(g.flatMap((f) => [...out.get(f)]));
+        for (const f of g) for (const x of all) if (!out.get(f).has(x)) { out.get(f).add(x); changed = true; }
+      }
+    }
+  }
+  GEN.jthrows = out;
+}
+/* Java: " throws …" della funzione (con i file c'è già throws Exception) */
+const jThrows = (f, files) => {
+  if (files) return ' throws Exception';
+  const set = GEN.jthrows.get(f);
+  if (!set || !set.size) return '';
+  if (set.has('Eccezione')) return ' throws Exception';
+  return ' throws ' + [...set].map((n) => excL('java', n)).join(', ');
+};
+
 /* ---- generici: chi possiede un parametro di tipo (la funzione o la classe) ---- */
 const FKEY = (f, t) => 'f:' + f.id + ':' + String(t).toLowerCase();
 const CKEY = (c, t) => 'c:' + c.id + ':' + String(t).toLowerCase();
@@ -106,7 +198,7 @@ const boundHere = (t) => !!GEN.cur && isBound(t, GEN.cur.f, GEN.cur.c);
 function exprSources(s) {
   switch (s.kind) {
     case 'declare': return [..._CE.splitTop(s.array ? s.size || '' : ''), s.init || ''];
-    case 'const': case 'output': case 'write': case 'if': case 'while': case 'do': case 'call': case 'open': return [s.expression];
+    case 'const': case 'output': case 'write': case 'if': case 'while': case 'do': case 'call': case 'open': case 'throw': return [s.expression];
     case 'breakpoint': return s.always ? [] : [s.expression];
     case 'assign': return [..._CE.splitTop(s.variable), s.expression];
     case 'input': case 'read': return [s.variable];
@@ -219,6 +311,8 @@ function buildScope(prog, func) {
   _CM.walk(func.body, (s) => {
     if (s.kind === 'const' && s.name.trim() && !vars.has(s.name.trim().toLowerCase())) vars.set(s.name.trim().toLowerCase(), { type: s.type, array: false, name: s.name.trim(), constant: true });
     if (s.kind === 'declare') for (const n of s.name.split(',').map((x) => x.trim()).filter(Boolean)) if (!vars.has(n.toLowerCase())) vars.set(n.toLowerCase(), { type: s.type, array: s.array, dims: s.array ? _CE.splitTop(s.size).length : 0, name: n });
+    // variabile di un Catch: l'eccezione catturata
+    if (s.kind === 'try') for (const c of s.catches || []) if (c.variable && !vars.has(c.variable.toLowerCase())) vars.set(c.variable.toLowerCase(), { type: (_CM.classByName(prog, c.type) || { name: c.type }).name, array: false, dims: 0, name: c.variable, catchVar: true });
   });
   const funcs = new Map();
   const ooMode = _CM.hasClasses(prog);
@@ -228,6 +322,8 @@ function buildScope(prog, func) {
   else for (const k of _CM.chainOf(prog, cls)) for (const f of _CM.membersOf(prog, k)) if (!f.ctor && !funcs.has(f.name.toLowerCase()) && !_CE.BUILTINS[f.name.toLowerCase()]) funcs.set(f.name.toLowerCase(), { type: f.type, rets: _CM.rets(f), f, name: f.name, owner: k });
   const sc = { vars, funcs, func, prog, cls, ooMode };
   if (ooMode) ooScope(prog, sc);
+  // vista Funzioni: degli oggetti ci sono solo le eccezioni (new Eccezione("…"), e.messaggio)
+  else sc.oo = (node) => (node.k === 'new' ? node.cls : node.k === 'member' && node.name.toLowerCase() === 'messaggio' ? 'String' : undefined);
   return sc;
 }
 
@@ -290,7 +386,7 @@ const OO = {
   ordered(prog, mainFirst) {
     const main = _CM.mainClass(prog);
     const out = [], done = new Set();
-    const visit = (c) => { if (!c || done.has(c)) return; done.add(c); visit(_CM.classByName(prog, c.parent)); out.push(c); };
+    const visit = (c) => { if (!c || c.builtin || done.has(c)) return; done.add(c); visit(_CM.classByName(prog, c.parent)); out.push(c); };
     const rest = prog.classes.filter((c) => c !== main && !GEN.skip.has(c.id));
     if (mainFirst) { visit(main); rest.forEach(visit); } else { rest.forEach(visit); visit(main); }
     return out;
@@ -374,6 +470,8 @@ function exprPrinter(L) {
       case 'new': {
         const c = sc.classNamed ? sc.classNamed(n.cls) : null; const nm = c ? c.name : n.cls;
         const a = n.args.map((x) => pr(x, sc).s).join(', ');
+        // eccezione predefinita: la classe del linguaggio
+        if (_CM.excClass(n.cls) && EXC_LANG[L.lang]) { const t = excL(L.lang, n.cls); return { s: L.newObj ? L.newObj(t, a) : `new ${t}(${a})`, p: P.atom }; }
         // argomenti di tipo: quelli scritti, altrimenti quelli della variabile a cui si assegna
         let targs = n.targs && n.targs.length ? n.targs : null;
         const gen = c && (c.tparams || []).length;
@@ -385,6 +483,11 @@ function exprPrinter(L) {
       }
       case 'supercall': { const a = n.args.map((x) => pr(x, sc).s).join(', '); return { s: L.superCtor ? L.superCtor(a, sc) : `super(${a})`, p: P.atom }; }
       case 'member': {
+        // messaggio di un'eccezione: getMessage(), Message, str(e), what()…
+        if (n.name.toLowerCase() === 'messaggio' && L.excMsg && !n.indices) {
+          const t = _CE.inferType(n.obj, sc);
+          if (t && _CM.isExcClass(sc.prog, _CE.splitType(t).base)) { const o = pr(n.obj, sc); return { s: L.excMsg(o.p < P.atom ? `(${o.s})` : o.s), p: P.atom }; }
+        }
         const ref = objRef(n.obj, sc);
         const c = ref.cls || (sc.objClass && sc.objClass(n.obj));
         const h = c && sc.fieldHit(c, n.name.toLowerCase());
@@ -551,6 +654,12 @@ LANGS.pseudo = {
           case 'close': o.line(`CHIUDI FILE IN ${s.mode === 'read' ? 'LETTURA' : 'SCRITTURA'}`); break;
           case 'read': o.line(`LEGGI ${E(s.variable, sc)} DAL FILE`); break;
           case 'write': o.line(`SCRIVI ${E(s.expression, sc)} NEL FILE`); break;
+          case 'throw': o.line(`THROW ${E(s.expression, sc)}`); break;
+          case 'try':
+            o.line('TRY'); o.in(); block(s.body, sc); o.out();
+            for (const c of s.catches || []) { o.line(`CATCH ${c.type} ${c.variable}`); o.in(); block(c.body, sc); o.out(); }
+            if (s.hasFinally) { o.line('FINALLY'); o.in(); block(s.finally || [], sc); o.out(); }
+            o.line('FINE TRY'); break;
         }
       }
     };
@@ -616,6 +725,9 @@ LANGS.python = {
       str: (s) => escStr(s, '"'), T: 'True', F: 'False', pi: 'math.pi', use: (x) => used.add(x === 'pi' ? 'math' : x), not: 'not ', notPrec: P.notLow, or: 'or', and: 'and', pow: '**',
       rel: { '==': '==', '!=': '!=', '<': '<', '<=': '<=', '>': '>', '>=': '>=' },
       lang: 'python', nul: 'None', self: 'self', newObj: (c, a) => `${c}(${a})`, superCtor: (a) => `super().__init__(${a})`, superMethod: (m, a) => `super().${m}(${a})`,
+      excMsg: (o) => `str(${o})`,
+      // indici controllati (Python accetterebbe gli indici negativi): solo se il programma cattura IndiceNonValido
+      idx: GEN.exc.idx ? (nm, ix) => { used.add('indice'); return ix.reduce((c, i) => `${c}[indice(${c}, ${i})]`, nm); } : undefined,
       field: (h, sc) => (h.attr.static ? `${h.owner.name}.${h.attr.name}` : `self.${h.attr.name}`),
       bin(n, sc, pr, generic) {
         // confronto con None: is / is not
@@ -735,6 +847,12 @@ LANGS.python = {
             break;
           }
           case 'write': used.add('files'); o.line(`file_scrittura.write(str(${E(s.expression, sc)}) + "\\n")`); break;
+          case 'throw': o.line(`raise ${E(s.expression, sc)}`); break;
+          case 'try':
+            o.line('try:'); o.in(); block(s.body, sc, o); o.out();
+            for (const c of s.catches || []) { o.line(`except ${excL('python', c.type)} as ${c.variable}:`); o.in(); block(c.body, sc, o); o.out(); }
+            if (s.hasFinally) { o.line('finally:'); o.in(); block(s.finally || [], sc, o); o.out(); }
+            break;
         }
       }
       if (o.lines.length === start) o.line('pass');
@@ -748,6 +866,7 @@ LANGS.python = {
       if (used.has('abc')) hd.push('from abc import ABC, abstractmethod');
       if (GEN.helpers.has('deque')) hd.push('from collections import deque');
       if (hd.length) hd.push('');
+      if (used.has('indice')) hd.push('def indice(v, i):', '    # come in FlowLab: un indice negativo o troppo grande è un errore', '    if i < 0 or i >= len(v):', '        raise IndexError("Indice " + str(i) + " fuori dai limiti")', '    return i', '', '');
       if (used.has('eof')) hd.push('def fine_file():', '    pos = file_lettura.tell()', '    riga = file_lettura.readline()', '    file_lettura.seek(pos)', '    return riga == ""', '', '');
       return hd.join('\n') + (hd.length ? '\n' : '');
     };
@@ -761,7 +880,7 @@ LANGS.python = {
       for (const c of OO.ordered(prog, false)) {
         // classe astratta: deriva da ABC (se la madre non lo è già)
         const par = _CM.classByName(prog, c.parent);
-        const bases = [...(c.parent ? [c.parent] : []), ...(c.abstract && !(par && _CM.chainOf(prog, par).some((k) => k.abstract)) ? ['ABC'] : [])];
+        const bases = [...(c.parent ? [parentL('python', c)] : []), ...(c.abstract && !(par && _CM.chainOf(prog, par).some((k) => k.abstract)) ? ['ABC'] : [])];
         if (c.abstract) used.add('abc');
         o.line(`class ${c.name}${bases.length ? `(${bases.join(', ')})` : ''}:`); o.in();
         const start = o.lines.length;
@@ -857,10 +976,11 @@ function cFamily(cfg) {
     generate(prog) {
       const used = new Set();
       const L = {
-        idx: cfg.idx, str: (s) => cfg.strLit(s), T: 'true', F: 'false', pi: cfg.pi, use: () => used.add('pi'),
+        // indici controllati solo se il programma cattura IndiceNonValido (C++ .at(), JavaScript indice())
+        idx: GEN.exc.idx && cfg.idxChk ? (nm, ix) => cfg.idxChk(nm, ix, used) : cfg.idx, str: (s) => cfg.strLit(s), T: 'true', F: 'false', pi: cfg.pi, use: () => used.add('pi'),
         not: '!', notPrec: P.un, or: '||', and: '&&', pow: '**',
         rel: { '==': cfg.eq || '==', '!=': cfg.neq || '!=', '<': '<', '<=': '<=', '>': '>', '>=': '>=' },
-        lang: cfg.lang, targ: cfg.targ, diamond: cfg.diamond, garg: cfg.garg,
+        lang: cfg.lang, targ: cfg.targ, diamond: cfg.diamond, garg: cfg.garg, excMsg: cfg.excMsg,
         nul: cfg.nul, self: cfg.self, arrow: cfg.arrow, staticSep: cfg.staticSep, newObj: cfg.newObj, superCtor: cfg.superCtor, superMethod: cfg.superMethod, field: cfg.field,
         bin(n, sc, pr) {
           const lt = _CE.inferType(n.l, sc), rt = _CE.inferType(n.r, sc);
@@ -869,6 +989,9 @@ function cFamily(cfg) {
             if (cfg.concatPrefix && _CE.inferType(concatParts(n)[0], sc) !== 'String') parts.unshift(cfg.concatPrefix);
             return { s: parts.join(' + '), p: P.add };
           }
+          // divisione e resto per zero: dove il linguaggio non lancia un'eccezione, una funzione di controllo
+          if (GEN.exc.div && n.op === '/' && cfg.divFn) return { s: cfg.divFn(pr(n.l, sc).s, pr(n.r, sc).s, used), p: P.atom };
+          if (GEN.exc.div && n.op === '%' && cfg.modFn && lt !== 'Real' && rt !== 'Real') return { s: cfg.modFn(pr(n.l, sc).s, pr(n.r, sc).s, used), p: P.atom };
           if (n.op === '/' && cfg.intDiv && lt !== 'Real' && rt !== 'Real') {
             const l = pr(n.l, sc), r = pr(n.r, sc);
             return { s: `(double) ${l.p < P.atom ? '(' + l.s + ')' : l.s} / ${r.p <= P.mul ? '(' + r.s + ')' : r.s}`, p: P.mul };
@@ -953,6 +1076,15 @@ function cFamily(cfg) {
             case 'open': case 'close': case 'read': case 'write':
               if (cfg.files) cfg.files(o, s, E, sc, lvInfo, used); else unsupported(o, `file: ${s.kind} ${s.expression || s.variable || s.mode}`);
               break;
+            case 'throw': o.line(cfg.throwStmt ? cfg.throwStmt(s, E, sc, pr) : `throw ${E(s.expression, sc)};`); break;
+            case 'try': {
+              if (cfg.tryStmt) { cfg.tryStmt(o, s, sc, blk, used); break; }
+              o.line('try {'); blk(o, s.body, sc);
+              for (const c of s.catches || []) { o.line(`} catch (${excL(cfg.lang, c.type)} ${c.variable}) {`); blk(o, c.body, sc); }
+              if (s.hasFinally) { o.line('} finally {'); blk(o, s.finally || [], sc); }
+              o.line('}');
+              break;
+            }
           }
         }
       }
@@ -967,7 +1099,7 @@ const T_CPP = { Integer: 'int', Real: 'double', String: 'string', Boolean: 'bool
 /* gli oggetti in C++ sono puntatori (creati con new); T resta T; ArrayList<int> nativo diventa vector<int>* */
 const tCpp = (t) => {
   const g = _CE.splitType(t);
-  if (!g.args.length) return T_CPP[t] || (isTP(t) ? t : t + '*');
+  if (!g.args.length) return T_CPP[t] || (isTP(t) ? t : (_CM.excClass(t) ? excL('cpp', t) : t) + '*');
   const a = g.args.map(tCpp), n = nativeOf(g.base);
   return n && n.cpp ? n.cpp.type(a) : `${g.base}<${a.join(', ')}>*`;
 };
@@ -987,6 +1119,34 @@ function cppHeaderExtras(o) {
   if (GEN.helpers.has('stack')) o.line('#include <stack>');
   if (GEN.helpers.has('queue')) o.line('#include <queue>');
 }
+/* eccezioni in C++: include, classi delle eccezioni predefinite che il C++ non ha, funzioni di controllo */
+function cppExcIncludes(o, u) {
+  if (!GEN.exc.used && !u.has('dividi') && !u.has('conv')) return;
+  o.line('#include <stdexcept>');
+  if (u.has('excptr')) o.line('#include <exception>');
+}
+function cppExcHelpers(o, u) {
+  const lines = [];
+  for (const b of _CM.EXC_CLASSES) if (GEN.helpers.has('exc:' + b.name)) lines.push(`class ${b.name} : public runtime_error { public: using runtime_error::runtime_error; };`);
+  if (u.has('dividi')) lines.push('// divisione e resto che lanciano un\'eccezione se il divisore è zero (come in FlowLab)', 'double dividi(double a, double b) { if (b == 0) throw DivisionePerZero("Divisione per zero"); return a / b; }');
+  if (u.has('resto')) lines.push('int resto(int a, int b) { if (b == 0) throw DivisionePerZero("Modulo per zero"); return a % b; }');
+  if (u.has('conv')) lines.push('// conversioni che accettano solo un numero intero (stoi accetterebbe anche "12abc")',
+    'int aIntero(const string& s) { size_t n = 0; int v = stoi(s, &n); if (n != s.size()) throw invalid_argument("\\"" + s + "\\" non è un numero intero valido"); return v; }',
+    'double aReale(const string& s) { size_t n = 0; double v = stod(s, &n); if (n != s.size()) throw invalid_argument("\\"" + s + "\\" non è un numero reale valido"); return v; }');
+  if (lines.length) { o.line(''); lines.forEach((l) => o.line(l)); }
+}
+/* JavaScript: classi delle eccezioni predefinite (tranne Eccezione = Error) e funzioni di controllo */
+function jsExcHelpers(u) {
+  const lines = [];
+  const add = (...l) => { if (lines.length) lines.push(''); lines.push(...l); };
+  for (const b of _CM.EXC_CLASSES) if (GEN.helpers.has('exc:' + b.name)) add(`class ${b.name} extends Error {}`);
+  if (u.has('dividi')) add('// divisione e resto che lanciano un\'eccezione se il divisore è zero (come in FlowLab)', 'function dividi(a, b) { if (b === 0) throw new DivisionePerZero("Divisione per zero"); return a / b; }');
+  if (u.has('resto')) add('function resto(a, b) { if (b === 0) throw new DivisionePerZero("Modulo per zero"); return a % b; }');
+  if (u.has('indice')) add('// indice controllato: fuori dai limiti è un errore (come in FlowLab)', 'function indice(v, i) { if (i < 0 || i >= v.length) throw new IndiceNonValido("Indice " + i + " fuori dai limiti"); return i; }');
+  if (u.has('conv')) add('// conversioni che accettano solo un numero', 'function aIntero(s) { if (!/^\\s*[-+]?\\d+\\s*$/.test(s)) throw new ConversioneNonValida(\'"\' + s + \'" non è un numero intero valido\'); return parseInt(s); }',
+    'function aReale(s) { const v = Number(s); if (String(s).trim() === "" || isNaN(v)) throw new ConversioneNonValida(\'"\' + s + \'" non è un numero reale valido\'); return v; }');
+  return lines;
+}
 function cppHelpers(o) {
   const hs = Object.keys(CPP_HELPERS).filter((k) => GEN.helpers.has(k));
   if (!hs.length) return;
@@ -1005,6 +1165,40 @@ function cppParts(t, arr, D) {
 }
 LANGS.cpp = cFamily({
   lang: 'cpp', targ: (t) => tCpp(t),
+  excMsg: (o) => `string(${o}->what())`,
+  divFn: (a, b, used) => { used.add('dividi'); need('exc:DivisionePerZero'); return `dividi(${a}, ${b})`; },
+  modFn: (a, b, used) => { used.add('resto'); need('exc:DivisionePerZero'); return `resto(${a}, ${b})`; },
+  idxChk: (nm, ix) => ix.reduce((c, i) => `${c}.at(${i})`, nm),
+  // Throw: si lancia l'oggetto (non il puntatore), come si fa in C++
+  throwStmt(s, E, sc, pr) {
+    const n = strip(tryParse(s.expression));
+    if (n && n.k === 'new') { const t = _CM.excClass(n.cls) ? excL('cpp', n.cls) : ((sc.classNamed && sc.classNamed(n.cls)) || { name: n.cls }).name; return `throw ${t}(${n.args.map((a) => pr(a, sc).s).join(', ')});`; }
+    return `throw *${E(s.expression, sc)};`;
+  },
+  // Catch: l'eccezione si cattura per riferimento e si usa tramite un puntatore (come gli altri oggetti);
+  // il Finally non esiste in C++: si cattura tutto, si esegue il Finally e poi l'eccezione prosegue
+  tryStmt(o, s, sc, blk, used) {
+    const cats = s.catches || [];
+    const inner = () => {
+      o.line('try {'); blk(o, s.body, sc);
+      for (const c of cats) {
+        const T = _CM.excClass(c.type) && _CM.excClass(c.type).name === 'Eccezione' ? 'exception' : excL('cpp', c.type);
+        o.line(`} catch (${T}& ecc_) {`);
+        if (new RegExp('\\b' + c.variable + '\\b', 'i').test(JSON.stringify(c.body))) { o.in(); o.line(`${T}* ${c.variable} = &ecc_;`); o.out(); }
+        blk(o, c.body, sc);
+      }
+      o.line('}');
+    };
+    if (!s.hasFinally) { inner(); return; }
+    used.add('excptr');
+    o.line('{'); o.in();
+    o.line('exception_ptr pendente = nullptr; // Finally: si esegue sempre, poi l\'eccezione (se c\'è) prosegue');
+    if (cats.length) { o.line('try {'); o.in(); inner(); o.out(); } else { o.line('try {'); blk(o, s.body, sc); }
+    o.line('} catch (...) {'); o.in(); o.line('pendente = current_exception();'); o.out(); o.line('}');
+    o.line('// Finally'); o.out(); blk(o, s.finally || [], sc); o.in();
+    o.line('if (pendente) rethrow_exception(pendente);');
+    o.out(); o.line('}');
+  },
   // funzioni generiche: "testo" è un const char*, con string("testo") T diventa string
   garg: (node, s) => (strip(node) && strip(node).k === 'str' ? `string(${s})` : s),
   label: 'C++', ext: 'cpp', intDiv: true, fmod: true, powFn: 'pow', intCast: '(int) ', wrapOut: true,
@@ -1032,8 +1226,8 @@ LANGS.cpp = cFamily({
       case 'tochar': return `string(1, (char) ${At(0)})`;
       case 'tocode': return `(int) ${At(0)}[0]`;
       case 'tofixed': used.add('fixed'); return `aDecimali(${A(0)}, ${A(1)})`;
-      case 'tointeger': return `stoi(${A(0)})`;
-      case 'toreal': return `stod(${A(0)})`;
+      case 'tointeger': if (GEN.exc.conv) { used.add('conv'); return `aIntero(${A(0)})`; } return `stoi(${A(0)})`;
+      case 'toreal': if (GEN.exc.conv) { used.add('conv'); return `aReale(${A(0)})`; } return `stod(${A(0)})`;
       case 'tostring': { const t = _CE.inferType(n.args[0], sc); if (t === 'String') return A(0); if (t === 'Real') { used.add('fmt'); return `formatta(${A(0)})`; } if (t === 'Boolean') return `string(${A(0)} ? "true" : "false")`; return `to_string(${A(0)})`; }
       case 'eof': return 'fileLettura.peek() == EOF';
     }
@@ -1075,6 +1269,7 @@ LANGS.cpp = cFamily({
     mainOut.in(); g.block(mainOut, prog.functions[0].body, g.buildScope(prog.functions[0])); mainOut.out();
     const u = g.used;
     o.line('#include <iostream>'); o.line('#include <string>'); o.line('#include <vector>'); o.line('#include <cmath>');
+    cppExcIncludes(o, u);
     if (u.has('rand')) { o.line('#include <cstdlib>'); o.line('#include <ctime>'); }
     if (u.has('fmt') || u.has('fixed')) { o.line('#include <sstream>'); o.line('#include <iomanip>'); }
     if (u.has('fstream')) o.line('#include <fstream>');
@@ -1084,6 +1279,7 @@ LANGS.cpp = cFamily({
     if (u.has('fstream')) { o.line('ifstream fileLettura;'); o.line('ofstream fileScrittura;'); }
     if (u.has('fmt')) { o.line(''); o.line('string formatta(double x) {'); o.line('    ostringstream s;'); o.line('    s << setprecision(15) << x;'); o.line('    return s.str();'); o.line('}'); }
     if (u.has('fixed')) { o.line(''); o.line('string aDecimali(double x, int cifre) {'); o.line('    ostringstream s;'); o.line('    s << fixed << setprecision(cifre) << x;'); o.line('    return s.str();'); o.line('}'); }
+    cppExcHelpers(o, u);
     if (fns.length) { o.line(''); o.line('// Prototipi'); for (const f of fns) o.line(sig(f) + ';'); }
     o.line(''); o.line('int main() {');
     if (u.has('rand')) o.line('    srand(time(0));');
@@ -1118,7 +1314,10 @@ LANGS.cpp = cFamily({
       }
       decls.line('');
       if (tplOf(c)) decls.line(tplOf(c));
-      decls.line(`class ${c.name}${c.parent ? ' : public ' + c.parent : ''} {${c.abstract ? ' // classe astratta' : ''}`);
+      // eccezione del programma senza costruttori: il C++ vuole comunque il messaggio per runtime_error
+      const excRoot = c.parent && _CM.excClass(c.parent);
+      if (excRoot && !OO.ctors(prog, c).length) sec.public.unshift(`${c.name}() : ${parentL('cpp', c)}("") {}`);
+      decls.line(`class ${c.name}${c.parent ? ' : public ' + parentL('cpp', c) : ''} {${c.abstract ? ' // classe astratta' : ''}`);
       for (const v of ['public', 'protected', 'private']) if (sec[v].length) { decls.line(v + ':'); decls.in(); sec[v].forEach((l) => decls.line(l)); decls.out(); }
       decls.line('};');
       // definizioni di costruttori e metodi
@@ -1129,7 +1328,7 @@ LANGS.cpp = cFamily({
         if (tplOf(c)) defs.line(tplOf(c));
         if (f.ctor) {
           const sp = OO.splitSuper(f);
-          defs.line(`${qualOf(c)}::${c.name}(${params(f)})${sp.args ? ` : ${c.parent}(${sp.args.map((x) => g.pr(x, sc).s).join(', ')})` : ''} {`);
+          defs.line(`${qualOf(c)}::${c.name}(${params(f)})${sp.args ? ` : ${parentL('cpp', c)}(${sp.args.map((x) => g.pr(x, sc).s).join(', ')})` : (c.parent && _CM.excClass(c.parent) ? ` : ${parentL('cpp', c)}("")` : '')} {`);
           defs.in(); g.block(defs, sp.rest, sc); defs.out(); defs.line('}');
           continue;
         }
@@ -1142,7 +1341,7 @@ LANGS.cpp = cFamily({
     }
     const o = new g.Out(); const u = g.used;
     o.line('#include <iostream>'); o.line('#include <string>'); o.line('#include <vector>'); o.line('#include <cmath>');
-    cppHeaderExtras(o);
+    cppHeaderExtras(o); cppExcIncludes(o, u);
     if (u.has('rand')) { o.line('#include <cstdlib>'); o.line('#include <ctime>'); }
     if (u.has('fmt') || u.has('fixed')) { o.line('#include <sstream>'); o.line('#include <iomanip>'); }
     if (u.has('fstream')) o.line('#include <fstream>');
@@ -1152,7 +1351,7 @@ LANGS.cpp = cFamily({
     if (u.has('fstream')) { o.line('ifstream fileLettura;'); o.line('ofstream fileScrittura;'); }
     if (u.has('fmt')) { o.line(''); o.line('string formatta(double x) {'); o.line('    ostringstream s;'); o.line('    s << setprecision(15) << x;'); o.line('    return s.str();'); o.line('}'); }
     if (u.has('fixed')) { o.line(''); o.line('string aDecimali(double x, int cifre) {'); o.line('    ostringstream s;'); o.line('    s << fixed << setprecision(cifre) << x;'); o.line('    return s.str();'); o.line('}'); }
-    cppHelpers(o);
+    cppHelpers(o); cppExcHelpers(o, u);
     o.line(''); o.line('// Classi (gli oggetti si creano con new e si usano tramite puntatori)');
     o.line(ordered.map((c) => `${tplOf(c) ? tplOf(c) + ' ' : ''}class ${c.name};`).join(' '));
     o.lines.push(...decls.lines);
@@ -1172,7 +1371,7 @@ const BOX_J = { Integer: 'Integer', Real: 'Double', String: 'String', Boolean: '
 /* tipi Java: ArrayList<Integer> con i tipi base "inscatolati"; i moduli nativi usano le classi di java.util */
 const tJava = (t) => {
   const g = _CE.splitType(t);
-  if (!g.args.length) return T_JAVA[t] || t;
+  if (!g.args.length) return T_JAVA[t] || (_CM.excClass(t) ? excL('java', t) : t);
   const a = g.args.map((x) => BOX_J[x] || tJava(x)), n = nativeOf(g.base);
   return n && n.java ? n.java.type(a) : `${g.base}<${a.join(', ')}>`;
 };
@@ -1205,6 +1404,9 @@ let J_PFX = ''; // dalle altre classi lo Scanner e i file stanno nella classe pr
 const DEF_C = { Integer: '0', Real: '0.0', String: '""', Boolean: 'false' };
 LANGS.java = cFamily({
   lang: 'java', targ: (t) => BOX_J[t] || tJava(t), diamond: '<>',
+  excMsg: (o) => `${o}.getMessage()`,
+  // in Java la divisione tra reali per zero non lancia eccezioni: dividi() la controlla
+  divFn: (a, b, used) => { used.add('dividi'); return `${J_PFX}dividi(${a}, ${b})`; },
   label: 'Java', ext: 'java', intDiv: true, powFn: 'Math.pow', intCast: '(int) ', concatPrefix: '""',
   keywords: ['public', 'static', 'void', 'class', 'int', 'double', 'String', 'boolean', 'return', 'if', 'else', 'while', 'for', 'do', 'true', 'false', 'new', 'import', 'Scanner', 'System', 'Math', 'private', 'protected', 'extends', 'this', 'super', 'null', 'final', 'record', 'throws', 'abstract'],
   pi: 'Math.PI',
@@ -1290,7 +1492,7 @@ LANGS.java = cFamily({
       const rl = _CM.rets(f);
       inner.line('');
       if (jUnchecked(f)) inner.line('@SuppressWarnings("unchecked")');
-      inner.line(`public static ${jFunTP(f)}${rl.length > 1 ? recName(f) : jRetT(f)} ${f.name}(${jParams(f)})${g.used.has('files') ? ' throws Exception' : ''} {`);
+      inner.line(`public static ${jFunTP(f)}${rl.length > 1 ? recName(f) : jRetT(f)} ${f.name}(${jParams(f)})${jThrows(f, g.used.has('files'))} {`);
       inner.in(); g.block(inner, f.body, sc);
       if (rl.length) { inner.line(rl.length > 1 ? `return new ${recName(f)}(${rl.map((r) => r.name).join(', ')});` : `return ${rl[0].name};`); }
       inner.out(); inner.line('}');
@@ -1302,9 +1504,10 @@ LANGS.java = cFamily({
     for (const f of records) o.line(`    record ${recName(f)}(${_CM.rets(f).map((r, i) => `${jRet(f, r, i)} ${r.name}`).join(', ')}) {}`);
     if (g.used.has('files')) { o.line('    private static Scanner fileLettura;'); o.line('    private static java.io.PrintWriter fileScrittura;'); }
     o.line('');
-    o.line(`    public static void main(String[] args)${g.used.has('files') ? ' throws Exception' : ''} {`);
+    o.line(`    public static void main(String[] args)${jThrows(prog.functions[0], g.used.has('files'))} {`);
     o.lines.push(...main.lines);
     o.line('    }');
+    if (g.used.has('dividi')) { o.line(''); o.line('    // divisione che lancia un\'eccezione se il divisore è zero (come in FlowLab)'); o.line('    static double dividi(double a, double b) { if (b == 0) throw new ArithmeticException("Divisione per zero"); return a / b; }'); }
     o.lines.push(...inner.lines);
     o.line('}');
     return o.text();
@@ -1312,7 +1515,7 @@ LANGS.java = cFamily({
   programOO(prog, g) {
     const main = _CM.mainClass(prog);
     const files = usesFiles(prog);
-    const thr = files ? ' throws Exception' : '';
+    const thrOf = (f) => jThrows(f, files);
     const params = jParams;
     const recName = (f) => 'Risultato' + cap(f.name);
     const V = (v) => (v || 'public') + ' ';
@@ -1339,7 +1542,8 @@ LANGS.java = cFamily({
         const sc = g.buildScope(f);
         const rl = _CM.rets(f);
         if (o.lines.length) o.line('');
-        if (f.abstract) { o.line(`${V(f.visibility)}abstract ${jFunTP(f)}${rl.length > 1 ? recName(f) : jRetT(f)} ${f.name}(${params(f)});`); continue; }
+        if (f.abstract) { o.line(`${V(f.visibility)}abstract ${jFunTP(f)}${rl.length > 1 ? recName(f) : jRetT(f)} ${f.name}(${params(f)})${thrOf(f)};`); continue; }
+        const thr = thrOf(f);
         if (jUnchecked(f)) o.line('@SuppressWarnings("unchecked")');
         if (f.ctor) o.line(`${V(f.visibility)}${c.name}(${params(f)})${thr} {`);
         else if (OO.isMain(prog, f)) o.line(`public static void main(String[] args)${thr} {`);
@@ -1357,8 +1561,9 @@ LANGS.java = cFamily({
     for (const { c, lines } of parts) {
       o.line('');
       if ((c.tparams || []).length) o.line('@SuppressWarnings("unchecked")');
-      o.line(`${c === main ? 'public ' : ''}${c.abstract ? 'abstract ' : ''}class ${jClassTitle(c)}${c.parent ? ' extends ' + c.parent : ''} {`);
+      o.line(`${c === main ? 'public ' : ''}${c.abstract ? 'abstract ' : ''}class ${jClassTitle(c)}${c.parent ? ' extends ' + parentL('java', c) : ''} {`);
       o.lines.push(...lines);
+      if (c === main && g.used.has('dividi')) { o.line(''); o.line('    // divisione che lancia un\'eccezione se il divisore è zero (come in FlowLab)'); o.line('    static double dividi(double a, double b) { if (b == 0) throw new ArithmeticException("Divisione per zero"); return a / b; }'); }
       o.line('}');
     }
     return o.text();
@@ -1367,7 +1572,7 @@ LANGS.java = cFamily({
 
 const tCs = (t) => {
   const g = _CE.splitType(t);
-  if (!g.args.length) return T_CPP[t] || t;
+  if (!g.args.length) return T_CPP[t] || (_CM.excClass(t) ? excL('csharp', t) : t);
   const a = g.args.map(tCs), n = nativeOf(g.base);
   return n && n.csharp ? n.csharp.type(a) : `${g.base}<${a.join(', ')}>`;
 };
@@ -1380,6 +1585,8 @@ const csWhereF = (f) => csWhere(f.tparams || [], (t) => FKEY(f, t));
 const csWhereC = (c) => csWhere(c.tparams || [], (t) => CKEY(c, t));
 LANGS.csharp = cFamily({
   lang: 'csharp', targ: (t) => tCs(t),
+  excMsg: (o) => `${o}.Message`,
+  divFn: (a, b, used) => { used.add('dividi'); return `${CS_PFX}Dividi(${a}, ${b})`; },
   label: 'C#', ext: 'cs', intDiv: true, powFn: 'Math.Pow', intCast: '(int) ',
   keywords: ['using', 'class', 'static', 'void', 'int', 'double', 'string', 'bool', 'return', 'if', 'else', 'while', 'for', 'do', 'true', 'false', 'new', 'Console', 'Math', 'System', 'public', 'private', 'protected', 'this', 'base', 'null', 'virtual', 'override', 'const', 'abstract'],
   pi: 'Math.PI',
@@ -1452,6 +1659,7 @@ LANGS.csharp = cFamily({
     }
     o.line('using System;'); o.line('');
     o.line('class Program {');
+    if (g.used.has('dividi')) o.line('    static double Dividi(double a, double b) { if (b == 0) throw new DivideByZeroException("Divisione per zero"); return a / b; }');
     if (g.used.has('rnd')) o.line('    static Random rnd = new Random();');
     if (g.used.has('files')) { o.line('    static System.IO.StreamReader fileLettura;'); o.line('    static System.IO.StreamWriter fileScrittura;'); }
     o.line('    static void Main() {');
@@ -1509,8 +1717,9 @@ LANGS.csharp = cFamily({
     }
     for (const { c, lines } of parts) {
       o.line('');
-      o.line(`${c.abstract ? 'abstract ' : ''}class ${_CM.classTitle(c)}${c.parent ? ' : ' + c.parent : ''}${csWhereC(c)} {`);
+      o.line(`${c.abstract ? 'abstract ' : ''}class ${_CM.classTitle(c)}${c.parent ? ' : ' + parentL('csharp', c) : ''}${csWhereC(c)} {`);
       if (c === main) {
+        if (g.used.has('dividi')) o.line('    public static double Dividi(double a, double b) { if (b == 0) throw new DivideByZeroException("Divisione per zero"); return a / b; }');
         if (g.used.has('rnd')) o.line('    public static Random rnd = new Random();');
         if (g.used.has('files')) { o.line('    public static System.IO.StreamReader fileLettura;'); o.line('    public static System.IO.StreamWriter fileScrittura;'); }
         if ((g.used.has('rnd') || g.used.has('files')) && lines.length) o.line('');
@@ -1524,12 +1733,29 @@ LANGS.csharp = cFamily({
 
 LANGS.javascript = cFamily({
   lang: 'javascript',
+  excMsg: (o) => `${o}.message`,
+  divFn: (a, b, used) => { used.add('dividi'); need('exc:DivisionePerZero'); return `dividi(${a}, ${b})`; },
+  modFn: (a, b, used) => { used.add('resto'); need('exc:DivisionePerZero'); return `resto(${a}, ${b})`; },
+  idxChk: (nm, ix, used) => { used.add('indice'); need('exc:IndiceNonValido'); return ix.reduce((c, i) => `${c}[indice(${c}, ${i})]`, nm); },
+  // un solo catch: si sceglie il ramo con instanceof; se nessuno va bene l'eccezione prosegue
+  tryStmt(o, s, sc, blk) {
+    const cats = s.catches || [];
+    o.line('try {'); blk(o, s.body, sc);
+    if (cats.length) {
+      o.line('} catch (ecc_) {'); o.in();
+      cats.forEach((c, i) => { o.line(`${i ? '} else if' : 'if'} (ecc_ instanceof ${excL('javascript', c.type)}) {`); o.in(); o.line(`const ${c.variable} = ecc_;`); o.out(); blk(o, c.body, sc); });
+      o.line('} else {'); o.in(); o.line('throw ecc_;'); o.out(); o.line('}');
+      o.out();
+    }
+    if (s.hasFinally) { o.line('} finally {'); blk(o, s.finally || [], sc); }
+    o.line('}');
+  },
   label: 'JavaScript', ext: 'js',
   keywords: ['let', 'const', 'function', 'return', 'if', 'else', 'while', 'for', 'do', 'true', 'false', 'new', 'Math', 'console', 'prompt', 'parseInt', 'parseFloat', 'String', 'Array', 'class', 'extends', 'constructor', 'static', 'this', 'super', 'null', 'throw', 'args', 'typeof', 'instanceof'],
   pi: 'Math.PI', eq: '===', neq: '!==', concatPrefix: '""',
   strLit: (s) => escStr(s, '"'),
   toStr: (x, t, e) => (e.p <= P.add ? `(${e.s})` : e.s),
-  builtin(low, a, n, sc) {
+  builtin(low, a, n, sc, used) {
     const A = (i) => (a[i] ? a[i].s : ''); const At = (i) => (a[i] ? (a[i].p < P.atom ? `(${a[i].s})` : a[i].s) : '');
     const map = { abs: 'abs', arccos: 'acos', arcsin: 'asin', arctan: 'atan', cos: 'cos', sin: 'sin', tan: 'tan', cosh: 'cosh', sinh: 'sinh', tanh: 'tanh', arccosh: 'acosh', arcsinh: 'asinh', arctanh: 'atanh', ln: 'log', log: 'log', log10: 'log10', sqrt: 'sqrt', sgn: 'sign', int: 'trunc' };
     if (map[low]) return `Math.${map[low]}(${A(0)})`;
@@ -1541,8 +1767,8 @@ LANGS.javascript = cFamily({
       case 'tochar': return `String.fromCharCode(${A(0)})`;
       case 'tocode': return `${At(0)}.charCodeAt(0)`;
       case 'tofixed': return `${At(0)}.toFixed(${A(1)})`;
-      case 'tointeger': return `parseInt(${A(0)})`;
-      case 'toreal': return `parseFloat(${A(0)})`;
+      case 'tointeger': if (GEN.exc.conv) { used.add('conv'); need('exc:ConversioneNonValida'); return `aIntero(${A(0)})`; } return `parseInt(${A(0)})`;
+      case 'toreal': if (GEN.exc.conv) { used.add('conv'); need('exc:ConversioneNonValida'); return `aReale(${A(0)})`; } return `parseFloat(${A(0)})`;
       case 'tostring': return `String(${A(0)})`;
     }
     return null;
@@ -1563,6 +1789,7 @@ LANGS.javascript = cFamily({
     o.line('    rigaCorrente += String(valore);');
     o.line('    if (aCapo) { console.log(rigaCorrente); rigaCorrente = ""; }');
     o.line('}');
+    const helpAt = o.lines.length;
     for (const f of prog.functions.slice(1)) {
       const sc = g.buildScope(f);
       o.line('');
@@ -1575,6 +1802,7 @@ LANGS.javascript = cFamily({
     o.line(''); o.line('// Main');
     g.block(o, prog.functions[0].body, g.buildScope(prog.functions[0]));
     o.line('if (rigaCorrente) console.log(rigaCorrente);');
+    { const hl = jsExcHelpers(g.used); if (hl.length) o.lines.splice(helpAt, 0, '', ...hl); }
     if (g.used.has('creaArray')) {
       o.line('');
       o.line('// array a più dimensioni: creaArray([3, 4]) crea una matrice 3 × 4');
@@ -1595,6 +1823,7 @@ LANGS.javascript = cFamily({
     o.line('    rigaCorrente += String(valore);');
     o.line('    if (aCapo) { console.log(rigaCorrente); rigaCorrente = ""; }');
     o.line('}');
+    const ooHelpAt = o.lines.length;
     const test = {
       len: (n) => `args.length === ${n}`,
       type: (p, i) => { const a = `args[${i}]`; if (p.array) return `Array.isArray(${a})`; if (isTP(p.type)) return 'true'; return { Integer: `Number.isInteger(${a})`, Real: `typeof ${a} === "number"`, String: `typeof ${a} === "string"`, Boolean: `typeof ${a} === "boolean"` }[p.type] || `${a} instanceof ${_CE.splitType(p.type).base}`; },
@@ -1602,7 +1831,7 @@ LANGS.javascript = cFamily({
     let multiDim = false;
     for (const c of OO.ordered(prog, false)) {
       o.line('');
-      o.line(`class ${c.name}${c.parent ? ' extends ' + c.parent : ''} {${c.abstract ? ' // classe astratta: non si creano oggetti' : ''}`); o.in();
+      o.line(`class ${c.name}${c.parent ? ' extends ' + parentL('javascript', c) : ''} {${c.abstract ? ' // classe astratta: non si creano oggetti' : ''}`); o.in();
       const start = o.lines.length;
       for (const a of c.attributes) {
         const sc = OO.classScope(prog, c, a.static);
@@ -1634,6 +1863,7 @@ LANGS.javascript = cFamily({
       for (const gr of OO.groups(OO.methods(prog, c))) emit(gr, false);
       o.out(); o.line('}');
     }
+    { const hl = jsExcHelpers(g.used); if (hl.length) o.lines.splice(ooHelpAt, 0, '', ...hl); }
     o.line(''); o.line('// Main');
     o.line(`${main.name}.main();`);
     o.line('if (rigaCorrente) console.log(rigaCorrente);');

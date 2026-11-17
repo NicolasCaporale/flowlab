@@ -6,6 +6,9 @@ const progs = { punto: P.punto(), forme: P.forme(), lista: P.lista(), vettore: P
 // funzioni generiche (programma a funzioni e a oggetti)
 const G = require('./gen_progs.js');
 Object.assign(progs, { gen_fun: G.genfun(), gen_oo: G.genoo(), arr_ret: G.arrret() });
+// eccezioni (vista Funzioni e vista Oggetti)
+const X = require('./exc_progs.js');
+Object.assign(progs, { exc_fun: X.excfun(), exc_oo: X.excoo() });
 // anche gli esempi a oggetti dell'applicazione
 global.ExprLib = require('../src/expr.js'); global.ModelLib = M;
 const Examples = eval(fs.readFileSync(path.join(__dirname, '../src/examples.js'), 'utf8') + ';Examples');
