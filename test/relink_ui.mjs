@@ -36,5 +36,18 @@ for (let i = 0; i < 40 && !(await titles()).includes('Nodo#3'); i++) await step(
 ok('terzo nodo: ' + (await titles()).join(', '), (await titles()).join() === 'Lista#1,Nodo#1,Nodo#2,Nodo#3');
 await wait(200);
 await page.screenshot({ path: 'test/relink3.png' });
+// una vista (finestra in primo piano) sopra le righe e i connettori: li copre
+await page.evaluate(() => { const w = FlowLab.openView(); const r = document.querySelector('#varsBody').getBoundingClientRect(); w.win.style.left = (r.left - 300) + 'px'; w.win.style.top = '120px'; w.win.style.width = '500px'; w.win.style.height = '500px'; });
+await wait(300);
+const masked = await page.evaluate(() => {
+  const aw = document.querySelector('.auxwin').getBoundingClientRect();
+  return [...document.querySelectorAll('.wlinks .wlink')].map((g) => { const m = g.getAttribute('mask'); if (!m) return false; const id = m.slice(5, -1); return [...document.querySelectorAll(`#${id} rect[fill="#000"]`)].some((r) => Math.abs(+r.getAttribute('x') - aw.left) < 1 && Math.abs(+r.getAttribute('width') - aw.width) < 1); });
+});
+ok('connettori coperti dalla vista in primo piano: ' + masked.join(', '), masked.length > 0 && masked.every(Boolean));
+// la finestra di un oggetto portata in primo piano sopra la vista: i suoi connettori non sono coperti dalla vista
+await page.evaluate(() => document.querySelector('.ovwin').dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))); await wait(200);
+const top = await page.evaluate(() => { const ws = [...document.querySelectorAll('.ovwin')]; const z = Math.max(...ws.map((w) => +getComputedStyle(w).zIndex)); return z > +getComputedStyle(document.querySelector('.auxwin')).zIndex; });
+ok('finestra dell\'oggetto sopra la vista', top);
+await page.screenshot({ path: 'test/relink4.png' });
 console.log('ERR', errs);
 await browser.close();

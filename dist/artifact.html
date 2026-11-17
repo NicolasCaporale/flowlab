@@ -6284,7 +6284,7 @@ const ArrayView = (() => {
       const sc = el.closest('#varsBody, .ov-body, .fwin-body, .pane');
       // in una tabella si evidenzia tutta la riga: la linea parte dal suo bordo senza attraversare il testo
       const r = rectOf(el.closest('tr') || el);
-      return sc ? clipTo(r, rectOf(sc)) : { r, out: false };
+      return Object.assign(sc ? clipTo(r, rectOf(sc)) : { r, out: false }, { win: el.closest('.fwin') });
     };
     f.sel = selector;
     return f;
@@ -6295,10 +6295,10 @@ const ArrayView = (() => {
       if (!v.win.isConnected) return null;
       const ix = v.indices(off), N = v.dims.length;
       const body = rectOf(v.body);
-      if (N >= 3 && (ix[N - 3] !== v.page || v.lead.some((x, k) => x !== ix[k]))) return clipTo({ left: body.right + 99, right: body.right + 99, top: body.top, bottom: body.top }, body);
+      if (N >= 3 && (ix[N - 3] !== v.page || v.lead.some((x, k) => x !== ix[k]))) return Object.assign(clipTo({ left: body.right + 99, right: body.right + 99, top: body.top, bottom: body.top }, body), { win: v.win });
       const r = N === 1 ? 0 : ix[N - 2], c = ix[N - 1];
       const left = body.left + c * v.cw - v.body.scrollLeft, top = body.top + r * CH - v.body.scrollTop;
-      return clipTo({ left, top, right: left + v.cw, bottom: top + CH, width: v.cw, height: CH }, body);
+      return Object.assign(clipTo({ left, top, right: left + v.cw, bottom: top + CH, width: v.cw, height: CH }, body), { win: v.win });
     };
   }
   function drawLinks() {
@@ -6308,8 +6308,21 @@ const ArrayView = (() => {
     if (!linkSvg || !linkSvg.isConnected) { linkSvg = document.createElementNS(NS, 'svg'); linkSvg.setAttribute('class', 'wlinks'); linkSvg.setAttribute('aria-hidden', 'true'); opts.host().append(linkSvg); }
     let html = '';
     const top = Math.max(...wins.map((w) => +w.win.style.zIndex || 0));
+    // le finestre in primo piano coprono i connettori che stanno sotto di loro (anche quelli
+    // della scheda Variabili, che sta sotto tutte le finestre)
+    const zOf = (el) => (el ? +getComputedStyle(el).zIndex || 0 : 0);
+    const fws = [...opts.host().querySelectorAll('.fwin')].filter((x) => x.getClientRects().length).map((x) => ({ el: x, z: zOf(x), r: rectOf(x) }));
+    let mi = 0;
     for (const w of wins) {
       const s = w.src(); if (!s) continue;
+      const level = Math.max(zOf(w.win), zOf(s.win));
+      const occ = fws.filter((o) => o.z > level && o.el !== w.win && o.el !== s.win);
+      let mask = '';
+      if (occ.length) {
+        const id = 'wlm' + (++mi);
+        html += `<mask id="${id}" maskUnits="userSpaceOnUse" x="-10" y="-10" width="${window.innerWidth + 20}" height="${window.innerHeight + 20}"><rect x="-10" y="-10" width="${window.innerWidth + 20}" height="${window.innerHeight + 20}" fill="#fff"/>${occ.map((o) => `<rect x="${o.r.left}" y="${o.r.top}" width="${o.r.width}" height="${o.r.height}" rx="10" fill="#000"/>`).join('')}</mask>`;
+        mask = ` mask="url(#${id})"`;
+      }
       const a = s.r, b = rectOf(w.win);
       const ax = (a.left + a.right) / 2, ay = (a.top + a.bottom) / 2;
       // punto di arrivo: il lato della finestra rivolto verso la sorgente
@@ -6325,7 +6338,7 @@ const ArrayView = (() => {
       const k = Math.max(40, Math.min(160, Math.hypot(ex - sx, ey - sy) / 2.5));
       const c1x = sx - dx * k, c1y = sy - dy * k, c2x = ex + dx * k, c2y = ey + dy * k;
       const cls = 'wlink' + (w instanceof ObjWin ? ' obj' : ' arr') + (s.out ? ' out' : '') + ((+w.win.style.zIndex || 0) === top ? ' on' : '');
-      html += `<g class="${cls}">`;
+      html += `<g class="${cls}"${mask}>`;
       if (!s.out) html += `<rect class="wl-src" x="${a.left - 2}" y="${a.top - 2}" width="${a.right - a.left + 4}" height="${a.bottom - a.top + 4}" rx="4"/>`;
       const d = `M${sx} ${sy}C${c1x} ${c1y} ${c2x} ${c2y} ${ex} ${ey}`;
       html += `<path class="wl-halo" d="${d}"/><path class="wl-line" d="${d}"/><circle class="wl-dot" cx="${sx}" cy="${sy}" r="3.5"/><circle class="wl-end" cx="${ex}" cy="${ey}" r="4.5"/></g>`;
