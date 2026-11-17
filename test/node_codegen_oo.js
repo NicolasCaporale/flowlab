@@ -11,10 +11,10 @@ const X = require('./exc_progs.js');
 Object.assign(progs, { exc_fun: X.excfun(), exc_oo: X.excoo() });
 // anche gli esempi a oggetti dell'applicazione
 global.ExprLib = require('../src/expr.js'); global.ModelLib = M;
-const Examples = eval(fs.readFileSync(path.join(__dirname, '../src/examples.js'), 'utf8') + ';Examples');
+const Examples = require('./examples_node.js');
 for (const ex of Examples.list) { const p = ex.make(); if (M.hasClasses(p)) progs['es_' + ex.id] = p; }
 // moduli della libreria: classi generiche scritte nel codice (mod_) e, importate, classi native del linguaggio (nat_)
-const { MODULES } = require('../tools/moduli.js');
+const { MODULES } = require('../tools/modules.js');
 for (const m of MODULES) {
   progs['mod_' + m.id] = m.make();
   const p = m.make();

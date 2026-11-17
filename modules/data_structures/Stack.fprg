@@ -1,0 +1,102 @@
+<?xml version="1.0"?>
+<flowgorithm fileversion="4.2">
+    <attributes>
+        <attribute name="name" value="Stack"/>
+        <attribute name="authors" value="FlowLab"/>
+        <attribute name="about" value="Stack (LIFO) of items of type T, like java.util.Stack: the last item inserted with push is the first removed with pop. It uses an array that grows when it is full."/>
+        <attribute name="saved" value="2026-11-17 08:00:00 AM"/>
+        <attribute name="created" value="Zmxvd2xhYjttb2R1bGVzOzIwMjYtMTEtMTcgMDg6MDA6MDAgQU07MQ=="/>
+        <attribute name="edited" value="Zmxvd2xhYjttb2R1bGVzOzIwMjYtMTEtMTcgMDg6MDA6MDAgQU07MQ=="/>
+    </attributes>
+    <flowlab-classes>
+        <class name="StackTest" parent="" x="40" y="360"/>
+        <class name="Stack" parent="" tparams="T" x="40" y="40">
+            <attribute name="items" type="T" array="True" size="10" visibility="private" static="False" init=""/>
+            <attribute name="count" type="Integer" array="False" size="" visibility="private" static="False" init="0"/>
+        </class>
+    </flowlab-classes>
+    <function name="Main" type="None" variable="" flowlab-class="StackTest" flowlab-visibility="public" flowlab-static="True">
+        <parameters/>
+        <body>
+            <comment text="Test of the module: this Main is not imported"/>
+            <declare name="tower" type="Stack&lt;String&gt;" array="False" size=""/>
+            <assign variable="tower" expression="new Stack&lt;String&gt;()"/>
+            <call expression="tower.push(&quot;first&quot;)"/>
+            <call expression="tower.push(&quot;second&quot;)"/>
+            <call expression="tower.push(&quot;third&quot;)"/>
+            <output expression="&quot;On top: &quot; &amp; tower.peek()" newline="True"/>
+            <while expression="not tower.isEmpty()">
+                <output expression="tower.pop()" newline="True"/>
+            </while>
+        </body>
+    </function>
+    <function name="Stack" type="None" variable="" flowlab-class="Stack" flowlab-visibility="public" flowlab-static="False" flowlab-ctor="True">
+        <parameters/>
+        <body>
+            <comment text="Empty stack, like new Stack&lt;&gt;() in Java"/>
+        </body>
+    </function>
+    <function name="push" type="None" variable="" flowlab-class="Stack" flowlab-visibility="public" flowlab-static="False">
+        <parameters>
+            <parameter name="x" type="T" array="False"/>
+        </parameters>
+        <body>
+            <if expression="count = Size(items)">
+                <then>
+                    <call expression="grow()"/>
+                </then>
+                <else/>
+            </if>
+            <assign variable="items[count]" expression="x"/>
+            <assign variable="count" expression="count + 1"/>
+        </body>
+    </function>
+    <function name="pop" type="T" variable="top" flowlab-class="Stack" flowlab-visibility="public" flowlab-static="False">
+        <parameters/>
+        <body>
+            <declare name="top" type="T" array="False" size=""/>
+            <assign variable="count" expression="count - 1"/>
+            <assign variable="top" expression="items[count]"/>
+        </body>
+    </function>
+    <function name="peek" type="T" variable="top" flowlab-class="Stack" flowlab-visibility="public" flowlab-static="False">
+        <parameters/>
+        <body>
+            <declare name="top" type="T" array="False" size=""/>
+            <assign variable="top" expression="items[count - 1]"/>
+        </body>
+    </function>
+    <function name="size" type="Integer" variable="n" flowlab-class="Stack" flowlab-visibility="public" flowlab-static="False">
+        <parameters/>
+        <body>
+            <declare name="n" type="Integer" array="False" size=""/>
+            <assign variable="n" expression="count"/>
+        </body>
+    </function>
+    <function name="isEmpty" type="Boolean" variable="empty" flowlab-class="Stack" flowlab-visibility="public" flowlab-static="False">
+        <parameters/>
+        <body>
+            <declare name="empty" type="Boolean" array="False" size=""/>
+            <assign variable="empty" expression="count = 0"/>
+        </body>
+    </function>
+    <function name="grow" type="None" variable="" flowlab-class="Stack" flowlab-visibility="private" flowlab-static="False">
+        <parameters/>
+        <body>
+            <comment text="Full array: a bigger one is created (one and a half times, like the Java ArrayList) and the items are copied"/>
+            <declare name="newCapacity, k" type="Integer" array="False" size=""/>
+            <assign variable="newCapacity" expression="Size(items) + Int(Size(items) / 2)"/>
+            <if expression="newCapacity &lt; Size(items) + 1">
+                <then>
+                    <assign variable="newCapacity" expression="Size(items) + 1"/>
+                </then>
+                <else/>
+            </if>
+            <declare name="bigger" type="T" array="True" size="newCapacity"/>
+            <for variable="k" start="0" end="count - 1" direction="inc" step="1">
+                <assign variable="bigger[k]" expression="items[k]"/>
+            </for>
+            <assign variable="items" expression="bigger"/>
+        </body>
+    </function>
+</flowgorithm>

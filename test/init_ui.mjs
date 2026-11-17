@@ -1,7 +1,7 @@
 // Dichiarazione con valore iniziale dal dialogo
 import { chromium } from '/opt/npm-tools/node_modules/playwright/index.mjs';
 const browser = await chromium.launch();
-const page = await browser.newPage({ viewport: { width: 1366, height: 820 } });
+const page = await browser.newPage({ locale: 'it-IT', viewport: { width: 1366, height: 820 } });
 const errs = []; page.on('pageerror', (e) => errs.push(e.message));
 await page.goto('file://' + process.cwd() + '/dist/FlowLab.html'); await page.waitForTimeout(300);
 const wait = (ms = 120) => page.waitForTimeout(ms);

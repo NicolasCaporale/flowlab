@@ -1,8 +1,8 @@
 import { chromium } from '/opt/npm-tools/node_modules/playwright/index.mjs';
-const browser = await chromium.launch(); const page = await browser.newPage({ viewport: { width: 1366, height: 860 } });
+const browser = await chromium.launch(); const page = await browser.newPage({ locale: 'it-IT', viewport: { width: 1366, height: 860 } });
 const errs=[]; page.on('pageerror', e => errs.push(e.message));
 await page.goto('file://' + process.cwd() + '/dist/FlowLab.html'); await page.waitForTimeout(300);
-await page.evaluate(() => { localStorage.clear(); FlowLab.loadExample('media'); });
+await page.evaluate(() => { localStorage.clear(); FlowLab.loadExample('grade_average'); });
 const info = async () => page.evaluate(() => {
   const p = document.querySelector('#chart .trail-path'); const c = document.querySelector('#chart .trail-cursor');
   const t = FlowLab.run.trail;
@@ -31,7 +31,7 @@ const ifx = await page.$eval('#chart .shape[data-kind=if]', g => { const b = g.g
 const maxX = Math.max(...[...xs.matchAll(/[ML]([\d.]+) /g)].map(m => +m[1]));
 console.log('Se con rami vuoti, x>3 vero: il percorso va a destra?', maxX > ifx + 30, '(', Math.round(maxX), '>', Math.round(ifx), ')');
 // istantanea: niente cursore
-await page.evaluate(() => { const s=document.querySelector('#speed'); s.value=0; s.dispatchEvent(new Event('input')); FlowLab.loadExample('mcd'); });
+await page.evaluate(() => { const s=document.querySelector('#speed'); s.value=0; s.dispatchEvent(new Event('input')); FlowLab.loadExample('gcd'); });
 await page.click('#runBtn'); await page.waitForSelector('#conInput:not([disabled])'); await page.fill('#conInput','12'); await page.press('#conInput','Enter');
 await page.waitForSelector('#conInput:not([disabled])'); await page.fill('#conInput','8'); await page.press('#conInput','Enter'); await page.waitForTimeout(300);
 console.log('istantanea: trail vuoto =', await page.evaluate(() => !document.querySelector('#chart .trail-path')));

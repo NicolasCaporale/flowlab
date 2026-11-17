@@ -2,7 +2,7 @@
 import { chromium } from '/opt/npm-tools/node_modules/playwright/index.mjs';
 import fs from 'fs';
 const browser = await chromium.launch();
-const page = await browser.newPage({ acceptDownloads: true });
+const page = await browser.newPage({ locale: 'it-IT', acceptDownloads: true });
 const errs = []; page.on('pageerror', (e) => errs.push(e.message));
 await page.goto('file://' + process.cwd() + '/dist/FlowLab.html'); await page.waitForTimeout(300);
 fs.mkdirSync('test/out', { recursive: true });

@@ -1,11 +1,11 @@
 // Moduli nel diagramma delle classi: condensati ed espansi (pulsante, tasto sul riquadro, doppio clic, Maiusc+M)
 import { chromium } from '/opt/npm-tools/node_modules/playwright/index.mjs';
-const browser = await chromium.launch(); const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+const browser = await chromium.launch(); const page = await browser.newPage({ locale: 'it-IT', viewport: { width: 1440, height: 900 } });
 const errs = []; page.on('pageerror', (e) => errs.push(e.message));
 await page.goto('file://' + process.cwd() + '/dist/FlowLab.html'); await page.waitForTimeout(300);
 const wait = (ms = 150) => page.waitForTimeout(ms);
 const ok = (n, c) => console.log(`${c ? 'ok  ' : 'FAIL'} ${n}`);
-await page.evaluate(() => { localStorage.clear(); FlowLab.loadExample('forme'); });
+await page.evaluate(() => { localStorage.clear(); FlowLab.loadExample('shapes'); });
 for (const id of ['ArrayList', 'Queue']) {
   await page.keyboard.press('Control+i'); await wait(150);
   if (!(await page.locator('details.modsrc').first().getAttribute('open') !== null)) { await page.locator('.modsrc > summary').first().click(); await wait(100); }

@@ -1,4 +1,5 @@
 // array a più dimensioni: interprete e codice generato
+process.env.FLOWLAB_LANG = process.env.FLOWLAB_LANG || 'it'; // expected messages in Italian
 global.ModelLib = require('../src/model.js'); global.ExprLib = require('../src/expr.js');
 const { Interpreter } = require('../src/interp.js'); const C = require('../src/codegen.js'); const fs = require('fs');
 const M = ModelLib, S = M.makeStmt;

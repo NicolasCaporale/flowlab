@@ -2,7 +2,7 @@
 import { chromium } from '/opt/npm-tools/node_modules/playwright/index.mjs';
 import fs from 'fs';
 const browser = await chromium.launch();
-const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+const page = await browser.newPage({ locale: 'it-IT', viewport: { width: 1440, height: 900 } });
 const errs = []; page.on('pageerror', (e) => errs.push(e.message));
 await page.goto('file://' + process.cwd() + '/dist/FlowLab.html'); await page.waitForTimeout(300);
 await page.evaluate(() => { localStorage.clear(); const s = document.querySelector('#speed'); s.value = 0; s.dispatchEvent(new Event('input')); });
@@ -11,7 +11,7 @@ const ok = (name, cond) => console.log(`${cond ? 'ok  ' : 'FAIL'} ${name}`);
 const out = async () => (await page.innerText('#conOut')).split('\n').filter((l) => l && !/^(▶|■)/.test(l)).join(' | ');
 
 // 1. classe Scatola<T> con i dialoghi: il Tipo Generico nasce dall'attributo
-await page.evaluate(() => FlowLab.loadExample('tabellina')); await wait(150);
+await page.evaluate(() => FlowLab.loadExample('times_table')); await wait(150);
 await page.click('#viewOo'); await wait(150);
 await page.keyboard.press('n'); await wait(120);
 ok('nessun campo per i tipi nel dialogo della classe', (await page.locator('#f_ctp').count()) === 0);

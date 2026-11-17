@@ -1,0 +1,211 @@
+<?xml version="1.0"?>
+<flowgorithm fileversion="4.2">
+    <attributes>
+        <attribute name="name" value="ArrayList"/>
+        <attribute name="authors" value="FlowLab"/>
+        <attribute name="about" value="List of items of type T that grows by itself, like java.util.ArrayList. Internally it uses an array: when it is full it creates one one and a half times bigger and copies the items."/>
+        <attribute name="saved" value="2026-11-17 08:00:00 AM"/>
+        <attribute name="created" value="Zmxvd2xhYjttb2R1bGVzOzIwMjYtMTEtMTcgMDg6MDA6MDAgQU07MQ=="/>
+        <attribute name="edited" value="Zmxvd2xhYjttb2R1bGVzOzIwMjYtMTEtMTcgMDg6MDA6MDAgQU07MQ=="/>
+    </attributes>
+    <flowlab-classes>
+        <class name="ArrayListTest" parent="" x="40" y="360"/>
+        <class name="ArrayList" parent="" tparams="T" x="40" y="40">
+            <attribute name="items" type="T" array="True" size="10" visibility="private" static="False" init=""/>
+            <attribute name="count" type="Integer" array="False" size="" visibility="private" static="False" init="0"/>
+        </class>
+    </flowlab-classes>
+    <function name="Main" type="None" variable="" flowlab-class="ArrayListTest" flowlab-visibility="public" flowlab-static="True">
+        <parameters/>
+        <body>
+            <comment text="Test of the module: this Main is not imported"/>
+            <declare name="squares" type="ArrayList&lt;Integer&gt;" array="False" size=""/>
+            <declare name="i" type="Integer" array="False" size=""/>
+            <assign variable="squares" expression="new ArrayList&lt;Integer&gt;()"/>
+            <for variable="i" start="1" end="15" direction="inc" step="1">
+                <call expression="squares.add(i * i)"/>
+            </for>
+            <output expression="&quot;Items: &quot; &amp; squares.size() &amp; &quot;, the third is &quot; &amp; squares.get(2)" newline="True"/>
+            <call expression="squares.remove(0)"/>
+            <call expression="squares.add(0, 100)"/>
+            <output expression="&quot;Now the first is &quot; &amp; squares.get(0) &amp; &quot;, the second &quot; &amp; squares.get(1)" newline="True"/>
+            <output expression="&quot;Contains 49? &quot; &amp; squares.contains(49) &amp; &quot; at position &quot; &amp; squares.indexOf(49)" newline="True"/>
+            <declare name="names" type="ArrayList&lt;String&gt;" array="False" size=""/>
+            <assign variable="names" expression="new ArrayList&lt;String&gt;(0)"/>
+            <call expression="names.add(&quot;Ada&quot;)"/>
+            <call expression="names.add(&quot;Alan&quot;)"/>
+            <output expression="&quot;Names: &quot; &amp; names.get(0) &amp; &quot; and &quot; &amp; names.get(1)" newline="True"/>
+            <declare name="copyList" type="ArrayList&lt;Integer&gt;" array="False" size=""/>
+            <assign variable="copyList" expression="new ArrayList&lt;Integer&gt;(squares)"/>
+            <call expression="copyList.set(0, -1)"/>
+            <output expression="&quot;Copy: &quot; &amp; copyList.get(0) &amp; &quot; &quot; &amp; copyList.get(1) &amp; &quot;, original: &quot; &amp; squares.get(0) &amp; &quot;, items &quot; &amp; copyList.size()" newline="True"/>
+        </body>
+    </function>
+    <function name="ArrayList" type="None" variable="" flowlab-class="ArrayList" flowlab-visibility="public" flowlab-static="False" flowlab-ctor="True">
+        <parameters/>
+        <body>
+            <comment text="Empty list with initial capacity 10, like new ArrayList&lt;&gt;() in Java"/>
+        </body>
+    </function>
+    <function name="ArrayList" type="None" variable="" flowlab-class="ArrayList" flowlab-visibility="public" flowlab-static="False" flowlab-ctor="True">
+        <parameters>
+            <parameter name="initialCapacity" type="Integer" array="False"/>
+        </parameters>
+        <body>
+            <comment text="Empty list with an internal array of initialCapacity places, like new ArrayList&lt;&gt;(n) in Java"/>
+            <declare name="bigger" type="T" array="True" size="initialCapacity"/>
+            <assign variable="items" expression="bigger"/>
+        </body>
+    </function>
+    <function name="ArrayList" type="None" variable="" flowlab-class="ArrayList" flowlab-visibility="public" flowlab-static="False" flowlab-ctor="True">
+        <parameters>
+            <parameter name="other" type="ArrayList&lt;T&gt;" array="False"/>
+        </parameters>
+        <body>
+            <comment text="Copy of the items of another list, like new ArrayList&lt;&gt;(other) in Java"/>
+            <declare name="k" type="Integer" array="False" size=""/>
+            <declare name="bigger" type="T" array="True" size="other.count"/>
+            <for variable="k" start="0" end="other.count - 1" direction="inc" step="1">
+                <assign variable="bigger[k]" expression="other.items[k]"/>
+            </for>
+            <assign variable="items" expression="bigger"/>
+            <assign variable="count" expression="other.count"/>
+        </body>
+    </function>
+    <function name="add" type="None" variable="" flowlab-class="ArrayList" flowlab-visibility="public" flowlab-static="False">
+        <parameters>
+            <parameter name="x" type="T" array="False"/>
+        </parameters>
+        <body>
+            <if expression="count = Size(items)">
+                <then>
+                    <call expression="grow()"/>
+                </then>
+                <else/>
+            </if>
+            <assign variable="items[count]" expression="x"/>
+            <assign variable="count" expression="count + 1"/>
+        </body>
+    </function>
+    <function name="add" type="None" variable="" flowlab-class="ArrayList" flowlab-visibility="public" flowlab-static="False">
+        <parameters>
+            <parameter name="i" type="Integer" array="False"/>
+            <parameter name="x" type="T" array="False"/>
+        </parameters>
+        <body>
+            <comment text="Inserts x at position i: the items from i on move one place forward"/>
+            <declare name="k" type="Integer" array="False" size=""/>
+            <if expression="count = Size(items)">
+                <then>
+                    <call expression="grow()"/>
+                </then>
+                <else/>
+            </if>
+            <for variable="k" start="count - 1" end="i" direction="dec" step="1">
+                <assign variable="items[k + 1]" expression="items[k]"/>
+            </for>
+            <assign variable="items[i]" expression="x"/>
+            <assign variable="count" expression="count + 1"/>
+        </body>
+    </function>
+    <function name="get" type="T" variable="item" flowlab-class="ArrayList" flowlab-visibility="public" flowlab-static="False">
+        <parameters>
+            <parameter name="i" type="Integer" array="False"/>
+        </parameters>
+        <body>
+            <declare name="item" type="T" array="False" size=""/>
+            <assign variable="item" expression="items[i]"/>
+        </body>
+    </function>
+    <function name="set" type="None" variable="" flowlab-class="ArrayList" flowlab-visibility="public" flowlab-static="False">
+        <parameters>
+            <parameter name="i" type="Integer" array="False"/>
+            <parameter name="x" type="T" array="False"/>
+        </parameters>
+        <body>
+            <assign variable="items[i]" expression="x"/>
+        </body>
+    </function>
+    <function name="remove" type="T" variable="removed" flowlab-class="ArrayList" flowlab-visibility="public" flowlab-static="False">
+        <parameters>
+            <parameter name="i" type="Integer" array="False"/>
+        </parameters>
+        <body>
+            <comment text="Removes the item at position i: the following ones move one place back"/>
+            <declare name="removed" type="T" array="False" size=""/>
+            <declare name="k" type="Integer" array="False" size=""/>
+            <assign variable="removed" expression="items[i]"/>
+            <for variable="k" start="i" end="count - 2" direction="inc" step="1">
+                <assign variable="items[k]" expression="items[k + 1]"/>
+            </for>
+            <assign variable="count" expression="count - 1"/>
+        </body>
+    </function>
+    <function name="size" type="Integer" variable="n" flowlab-class="ArrayList" flowlab-visibility="public" flowlab-static="False">
+        <parameters/>
+        <body>
+            <declare name="n" type="Integer" array="False" size=""/>
+            <assign variable="n" expression="count"/>
+        </body>
+    </function>
+    <function name="isEmpty" type="Boolean" variable="empty" flowlab-class="ArrayList" flowlab-visibility="public" flowlab-static="False">
+        <parameters/>
+        <body>
+            <declare name="empty" type="Boolean" array="False" size=""/>
+            <assign variable="empty" expression="count = 0"/>
+        </body>
+    </function>
+    <function name="indexOf" type="Integer" variable="position" flowlab-class="ArrayList" flowlab-visibility="public" flowlab-static="False">
+        <parameters>
+            <parameter name="x" type="T" array="False"/>
+        </parameters>
+        <body>
+            <declare name="position, k" type="Integer" array="False" size=""/>
+            <assign variable="position" expression="-1"/>
+            <assign variable="k" expression="0"/>
+            <while expression="position = -1 and k &lt; count">
+                <if expression="items[k] = x">
+                    <then>
+                        <assign variable="position" expression="k"/>
+                    </then>
+                    <else/>
+                </if>
+                <assign variable="k" expression="k + 1"/>
+            </while>
+        </body>
+    </function>
+    <function name="contains" type="Boolean" variable="found" flowlab-class="ArrayList" flowlab-visibility="public" flowlab-static="False">
+        <parameters>
+            <parameter name="x" type="T" array="False"/>
+        </parameters>
+        <body>
+            <declare name="found" type="Boolean" array="False" size=""/>
+            <assign variable="found" expression="indexOf(x) &gt;= 0"/>
+        </body>
+    </function>
+    <function name="clear" type="None" variable="" flowlab-class="ArrayList" flowlab-visibility="public" flowlab-static="False">
+        <parameters/>
+        <body>
+            <assign variable="count" expression="0"/>
+        </body>
+    </function>
+    <function name="grow" type="None" variable="" flowlab-class="ArrayList" flowlab-visibility="private" flowlab-static="False">
+        <parameters/>
+        <body>
+            <comment text="Full array: a bigger one is created (one and a half times, like the Java ArrayList) and the items are copied"/>
+            <declare name="newCapacity, k" type="Integer" array="False" size=""/>
+            <assign variable="newCapacity" expression="Size(items) + Int(Size(items) / 2)"/>
+            <if expression="newCapacity &lt; Size(items) + 1">
+                <then>
+                    <assign variable="newCapacity" expression="Size(items) + 1"/>
+                </then>
+                <else/>
+            </if>
+            <declare name="bigger" type="T" array="True" size="newCapacity"/>
+            <for variable="k" start="0" end="count - 1" direction="inc" step="1">
+                <assign variable="bigger[k]" expression="items[k]"/>
+            </for>
+            <assign variable="items" expression="bigger"/>
+        </body>
+    </function>
+</flowgorithm>

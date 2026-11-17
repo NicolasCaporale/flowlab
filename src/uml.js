@@ -1,11 +1,12 @@
 /* ==========================================================================
-   FlowLab — diagramma delle classi (UML)
-   Ogni classe è un riquadro con tre sezioni: nome, attributi, metodi.
-   Ereditarietà: freccia con triangolo vuoto verso la classe madre.
-   Associazione: freccia aperta verso la classe usata come tipo di un
-   attributo, con il nome dell'attributo e la molteplicità (0..1 oppure *).
+   FlowLab — class diagram (UML)
+   Each class is a box with three sections: name, attributes, methods.
+   Inheritance: arrow with an empty triangle towards the parent class.
+   Association: open arrow towards the class used as the type of an
+   attribute, with the name of the attribute and the multiplicity (0..1 or *).
    ========================================================================== */
 'use strict';
+if (typeof L === 'undefined' && typeof require !== 'undefined') require('./i18n.js'); // testi tradotti (in Node: italiano)
 
 const UmlLib = (() => {
   const FN = '700 14px "Atkinson Hyperlegible", system-ui, sans-serif';
@@ -20,7 +21,7 @@ const UmlLib = (() => {
   function attrText(a) {
     return `${V(a.visibility)} ${a.name}: ${T(a.type)}${a.array ? `[${a.size}]` : ''}${!a.array && String(a.init || '').trim() ? ' = ' + a.init : ''}`;
   }
-  /* eccezione del programma (eredita, anche da lontano, da Eccezione) */
+  /* exception of the program (it inherits, even from afar, from Exception) */
   const isExc = (prog, c) => !c.builtin && ModelLib.isExcClass(prog, c);
   function methodText(prog, f) {
     const ps = f.params.map((p) => `${p.name}: ${T(p.type)}${p.array ? `[${','.repeat((p.dims || 1) - 1)}]` : ''}`).join(', ');
@@ -28,7 +29,7 @@ const UmlLib = (() => {
     return `${V(f.visibility)} ${f.name}${(f.tparams || []).length ? `<${f.tparams.join(', ')}>` : ''}(${ps})${rl.length ? ': ' + rl.map((r) => T(r.type) + (r.array ? `[${','.repeat((r.dims || 1) - 1)}]` : '')).join(', ') : ''}`;
   }
 
-  /* misure di ogni riquadro */
+  /* measures of each box */
   function layout(prog) {
     const main = ModelLib.mainClass(prog);
     const boxes = new Map();
@@ -37,11 +38,11 @@ const UmlLib = (() => {
       const methods = [...members.filter((f) => f.ctor), ...members.filter((f) => !f.ctor)];
       const attrs = c.attributes.map((a, i) => ({ text: attrText(a), i, st: !!a.static }));
       const meths = methods.map((f) => ({ text: methodText(prog, f), f, st: !!f.static, ctor: !!f.ctor, abs: !!f.abstract, main: f === prog.functions[0] }));
-      // classe concreta che non definisce metodi astratti ereditati
+      // concrete class that does not define inherited abstract methods
       const missing = c.abstract ? [] : ModelLib.missingAbstract(prog, c);
       let w = Math.max(MINW, tw(ModelLib.classTitle(c), FN) + PADX * 2 + 24, ...attrs.map((r) => tw(r.text, FM) + PADX * 2), ...meths.map((r) => tw(r.text, FM) + PADX * 2));
       w = Math.ceil(Math.min(MAXW, w));
-      // eccezione del programma: sopra il nome «eccezione»
+      // exception of the program: «exception» above the name
       const head = HEAD + (c === main || c.abstract || isExc(prog, c) ? STEREO : 0);
       const ah = Math.max(1, attrs.length) * ROW + CPAD * 2 - (attrs.length ? 0 : ROW - 10);
       const mh = Math.max(1, meths.length) * ROW + CPAD * 2 - (meths.length ? 0 : ROW - 10);
@@ -49,26 +50,26 @@ const UmlLib = (() => {
     }
     return boxes;
   }
-  /* eccezioni predefinite da cui il programma eredita (anche da lontano): riquadri in sola lettura.
-     La prima volta che compaiono si mettono nel posto migliore, di solito sopra le sottoclassi; poi
-     restano lì (pos: Map nome → { x, y }, che si sposta trascinando) e non seguono le sottoclassi */
+  /* predefined exceptions the program inherits from (even from afar): read-only boxes.
+     The first time they appear they are put in the best place, usually above the subclasses; then
+     they stay there (pos: Map name → { x, y }, moved by dragging) and do not follow the subclasses */
   function builtinBoxes(prog, boxes, pos) {
     const used = [];
     for (const c of prog.classes) if (!c.builtin) for (const k of ModelLib.chainOf(prog, c)) if (k.builtin && !used.includes(k)) used.push(k);
     if (!used.length) return;
     const depth = (k) => ModelLib.chainOf(prog, k).length;
-    used.sort((a, b) => depth(b) - depth(a)); // prima le più vicine alle classi del programma
+    used.sort((a, b) => depth(b) - depth(a)); // first the ones closest to the classes of the program
     const all = () => [...boxes.values()];
     const hits = (x, y, w, h) => all().some((b) => x < b.x + b.w + 30 && x + w + 30 > b.x && y < b.y + b.h + 30 && y + h + 30 > b.y);
     for (const k of used) {
-      const attrs = [{ text: `+ messaggio: ${T('String')}`, i: 0, st: false, tip: 'il messaggio dell\'eccezione, in sola lettura' }];
-      const meths = [{ text: `+ ${k.name}()`, ctor: true, tip: 'costruttore: messaggio vuoto' }, { text: `+ ${k.name}(messaggio: ${T('String')})`, ctor: true, tip: 'costruttore: in una sottoclasse si richiama con super(messaggio)' }];
-      const w = Math.ceil(Math.max(MINW, tw(k.name, FN) + PADX * 2 + 24, tw('«eccezione predefinita»', FS) + PADX * 2, ...[...attrs, ...meths].map((r) => tw(r.text, FM) + PADX * 2)));
+      const attrs = [{ text: L('uml.message', { value: T('String') }), i: 0, st: false, tip: L('uml.theMessageOfTheExceptionRead') }];
+      const meths = [{ text: `+ ${k.name}()`, ctor: true, tip: L('uml.constructorEmptyMessage') }, { text: `+ ${k.name}(message: ${T('String')})`, ctor: true, tip: L('uml.constructorInASubclassItIs') }];
+      const w = Math.ceil(Math.max(MINW, tw(k.name, FN) + PADX * 2 + 24, tw(L('uml.predefinedException'), FS) + PADX * 2, ...[...attrs, ...meths].map((r) => tw(r.text, FM) + PADX * 2)));
       const head = HEAD + STEREO, ah = ROW + CPAD * 2, mh = 2 * ROW + CPAD * 2, h = head + ah + mh;
       const kids = all().filter((b) => b.c.parent && b.c.parent.toLowerCase() === k.name.toLowerCase());
       const cx = kids.reduce((t, b) => t + b.x + b.w / 2, 0) / kids.length;
       const top = Math.min(...kids.map((b) => b.y)), left = Math.min(...kids.map((b) => b.x)), right = Math.max(...kids.map((b) => b.x + b.w));
-      // posti possibili: sopra (centrato e poi spostato a destra e a sinistra), a sinistra, a destra
+      // possible places: above (centred and then shifted right and left), left, right
       const cands = [];
       const above = top - h - 60;
       if (above >= 10) for (let d = 0; d <= 600; d += 40) { cands.push([cx - w / 2 + d, above]); if (d) cands.push([cx - w / 2 - d, above]); }
@@ -84,7 +85,7 @@ const UmlLib = (() => {
     }
   }
 
-  /* punto in cui la retta dal centro verso (tx, ty) esce dal riquadro */
+  /* point where the line from the centre towards (tx, ty) leaves the box */
   function clip(b, tx, ty, ox, oy) {
     const cx = b.x + b.w / 2 + (ox || 0), cy = b.y + b.h / 2 + (oy || 0);
     const dx = tx - cx, dy = ty - cy;
@@ -93,19 +94,19 @@ const UmlLib = (() => {
     return [cx + dx * t, cy + dy * t];
   }
 
-  /* pulsantino per condensare (−) o espandere (+) un modulo */
-  const modTog = (cx, cy, name, open) => `<g class="umodtog" data-module="${esc(name)}" role="button" aria-label="${open ? 'Condensa' : 'Espandi'} il modulo ${esc(name)}"><title>${open ? 'Condensa il modulo: mostra solo i nomi delle classi' : 'Espandi il modulo: mostra attributi e metodi'}</title><circle cx="${cx}" cy="${cy}" r="8"/><path d="M${cx - 3.5} ${cy}H${cx + 3.5}${open ? '' : `M${cx} ${cy - 3.5}V${cy + 3.5}`}"/></g>`;
-  /* opts.collapsed: nomi dei moduli condensati (un solo riquadro con i nomi delle classi) */
+  /* small button to collapse (−) or expand (+) a module */
+  const modTog = (cx, cy, name, open) => `<g class="umodtog" data-module="${esc(name)}" role="button" aria-label="${open ? L('uml.collapseTheModule', { name: esc(name) }) : L('uml.expandTheModule', { name: esc(name) })}"><title>${open ? L('uml.collapseTheModuleShowOnlyThe') : L('uml.expandTheModuleShowAttributesAnd')}</title><circle cx="${cx}" cy="${cy}" r="8"/><path d="M${cx - 3.5} ${cy}H${cx + 3.5}${open ? '' : `M${cx} ${cy - 3.5}V${cy + 3.5}`}"/></g>`;
+  /* opts.collapsed: names of the collapsed modules (a single box with the class names) */
   function render(prog, sel, opts) {
     const boxes = layout(prog);
     builtinBoxes(prog, boxes, opts && opts.excPos);
     const collapsed = (opts && opts.collapsed) || new Set();
     const mods = ModelLib.modulesOf(prog).filter((x) => x.classes.length);
-    // moduli condensati: tutte le loro classi puntano allo stesso riquadro compatto
+    // collapsed modules: all their classes point to the same compact box
     for (const m of mods.filter((x) => collapsed.has(x.name))) {
       const bs = m.classes.map((c) => boxes.get(c.id));
       const rows = m.classes.map((c) => ModelLib.classTitle(c));
-      const label = 'modulo ' + m.name;
+      const label = L('uml.module') + m.name;
       const w = Math.ceil(Math.max(170, tw(label, FS) + 60, ...rows.map((r) => tw(r, FN) + 36)));
       const cb = { compact: true, m, rows, label, x: Math.min(...bs.map((b) => b.x)), y: Math.min(...bs.map((b) => b.y)), w, h: 40 + rows.length * 22 + 8 };
       for (const c of m.classes) boxes.set(c.id, cb);
@@ -113,17 +114,17 @@ const UmlLib = (() => {
     let W = 640, H = 420;
     for (const b of boxes.values()) { W = Math.max(W, b.x + b.w + 120); H = Math.max(H, b.y + b.h + 120); }
     const lines = [], labels = [], shapes = [], frames = [];
-    // moduli importati: un riquadro tratteggiato intorno alle loro classi
+    // imported modules: a dashed box around their classes
     for (const m of mods.filter((x) => !collapsed.has(x.name))) {
       const bs = m.classes.map((c) => boxes.get(c.id));
       const x1 = Math.min(...bs.map((b) => b.x)) - 16, y1 = Math.min(...bs.map((b) => b.y)) - 34;
       const x2 = Math.max(...bs.map((b) => b.x + b.w)) + 16, y2 = Math.max(...bs.map((b) => b.y + b.h)) + 16;
-      const label = 'modulo ' + m.name;
+      const label = L('uml.module') + m.name;
       const tabW = tw(label, FS) + 46;
-      frames.push(`<g class="umod" data-module="${esc(m.name)}"><title>Modulo ${esc(m.name)} (sola lettura): clic destro per aggiornarlo o rimuoverlo</title><rect class="umodbg" x="${x1}" y="${y1}" width="${x2 - x1}" height="${y2 - y1}" rx="10"/><rect class="umodtab" x="${x1}" y="${y1}" width="${tabW}" height="22" rx="10"/><text class="umodlab" x="${x1 + 13}" y="${y1 + 15}">${esc(label)}</text>${modTog(x1 + tabW - 14, y1 + 11, m.name, true)}</g>`);
+      frames.push(`<g class="umod" data-module="${esc(m.name)}"><title>${L('uml.moduleReadOnlyRightClickTo', { name: esc(m.name) })}</title><rect class="umodbg" x="${x1}" y="${y1}" width="${x2 - x1}" height="${y2 - y1}" rx="10"/><rect class="umodtab" x="${x1}" y="${y1}" width="${tabW}" height="22" rx="10"/><text class="umodlab" x="${x1 + 13}" y="${y1 + 15}">${esc(label)}</text>${modTog(x1 + tabW - 14, y1 + 11, m.name, true)}</g>`);
       W = Math.max(W, x2 + 40); H = Math.max(H, y2 + 40);
     }
-    // relazioni: una sola linea per coppia ordinata e tipo; le coppie con più relazioni si scostano
+    // relations: a single line per ordered pair and kind; pairs with several relations are spread apart
     const rels = [];
     for (const c of [...prog.classes, ...[...boxes.values()].filter((b) => b.builtin).map((b) => b.c)]) {
       const par = ModelLib.classByName(prog, c.parent);
@@ -139,9 +140,9 @@ const UmlLib = (() => {
     const selfIdx = new Map();
     for (const r of rels) {
       const A = boxes.get(r.from.id), B = boxes.get(r.to.id);
-      if (A.compact && A === B) continue; // dentro un modulo condensato
+      if (A.compact && A === B) continue; // inside a collapsed module
       if (r.from === r.to) {
-        // associazione verso la propria classe: anello sul lato destro
+        // association towards its own class: loop on the right side
         const k = selfIdx.get(A.c.id) || 0; selfIdx.set(A.c.id, k + 1);
         const x = A.x + A.w, y1 = A.y + 14 + k * 12, y2 = A.y + A.head + 6 + k * 12, d = 34 + k * 16;
         lines.push(`<path class="urel assoc" d="M${x} ${y1}H${x + d}V${y2}H${x + 1}" marker-end="url(#uml-open)"/>`);
@@ -150,7 +151,7 @@ const UmlLib = (() => {
       }
       const key = [r.from.id, r.to.id].sort().join('|');
       const n = pairCount.get(key), i = pairIdx.get(key) || 0; pairIdx.set(key, i + 1);
-      // scostamento perpendicolare per le relazioni parallele
+      // perpendicular offset for parallel relations
       const ax = A.x + A.w / 2, ay = A.y + A.h / 2, bx = B.x + B.w / 2, by = B.y + B.h / 2;
       const len = Math.hypot(bx - ax, by - ay) || 1;
       const sign = r.from.id < r.to.id ? 1 : -1;
@@ -161,57 +162,57 @@ const UmlLib = (() => {
         lines.push(`<path class="urel inh" d="M${p1[0]} ${p1[1]}L${p2[0]} ${p2[1]}" marker-end="url(#uml-inh)"/>`);
       } else {
         lines.push(`<path class="urel assoc" d="M${p1[0]} ${p1[1]}L${p2[0]} ${p2[1]}" marker-end="url(#uml-open)"/>`);
-        // etichetta vicino alla classe di arrivo
+        // label near the arrival class
         const lx = p2[0] + (p1[0] - p2[0]) * 0.22, ly = p2[1] + (p1[1] - p2[1]) * 0.22;
         const nx = -(p2[1] - p1[1]) / len, ny = (p2[0] - p1[0]) / len;
         const anchor = nx >= 0 ? 'start' : 'end';
         labels.push(`<text class="ulab" x="${lx + nx * 14}" y="${ly + ny * 14 + 4}" text-anchor="${anchor}">${r.st ? '<tspan text-decoration="underline">' : ''}${esc(r.name)}${r.st ? '</tspan>' : ''} ${r.mult}</text>`);
       }
     }
-    // moduli condensati
+    // collapsed modules
     for (const b of new Set([...boxes.values()].filter((x) => x.compact))) {
       const { x, y, w, h } = b;
-      let g = `<g class="umod umodc" data-module="${esc(b.m.name)}"><title>Modulo ${esc(b.m.name)} (sola lettura, condensato): doppio clic per espanderlo, clic destro per aggiornarlo o rimuoverlo</title>`;
+      let g = `<g class="umod umodc" data-module="${esc(b.m.name)}"><title>${L('uml.moduleReadOnlyCollapsedDoubleClick', { name: esc(b.m.name) })}</title>`;
       g += `<rect class="umodbg" x="${x}" y="${y}" width="${w}" height="${h}" rx="10"/><rect class="umodtab" x="${x}" y="${y}" width="${w}" height="26" rx="10"/><text class="umodlab" x="${x + 13}" y="${y + 17}">${esc(b.label)}</text>`;
       g += modTog(x + w - 15, y + 13, b.m.name, false);
       b.rows.forEach((r, k) => { g += `<text class="umodcls" x="${x + 16}" y="${y + 46 + k * 22}">${esc(r)}</text>`; });
       shapes.push(g + '</g>');
     }
-    // riquadri
+    // boxes
     for (const b of boxes.values()) {
       if (b.compact) continue;
       if (b.builtin) { shapes.push(builtinBox(b)); continue; }
       const { c, x, y, w } = b;
       const isSel = sel && sel.cls === c.id;
-      const warn = b.missing.length ? `${c.name} non definisce ${b.missing.map((m) => m.f.name + '()').join(', ')} (${b.missing.length === 1 ? 'astratto' : 'astratti'} in ${[...new Set(b.missing.map((m) => m.owner.name))].join(', ')}): aggiungi ${b.missing.length === 1 ? 'il metodo' : 'i metodi'} oppure rendi astratta la classe` : '';
+      const warn = b.missing.length ? L('uml.doesNotDefineInAddOr', { name: c.name, list: b.missing.map((m) => m.f.name + '()').join(', '), text: b.missing.length === 1 ? L('uml.abstract') : L('uml.abstract2'), list2: [...new Set(b.missing.map((m) => m.owner.name))].join(', '), text2: b.missing.length === 1 ? L('chart.theMethod') : L('uml.theMethods') }) : '';
       let g = `<g class="ubox${isSel && sel.kind === 'class' ? ' sel' : ''}${isSel ? ' cur' : ''}${b.main ? ' main' : ''}${b.exc ? ' exc' : ''}${c.abstract ? ' abstract' : ''}${warn ? ' warn' : ''}${c.module ? ' mod' : ''}" data-cls="${c.id}">`;
-      g += c.module ? `<title>${esc(ModelLib.classTitle(c))} — dal modulo ${esc(c.module.name)}, in sola lettura: doppio clic su un metodo per vederne il diagramma di flusso</title>`
-        : `<title>${c.abstract ? 'Classe astratta ' : ''}${esc(ModelLib.classTitle(c))}${c.parent ? ' — eredita da ' + esc(c.parent) : ''}${warn ? ' — ⚠ ' + esc(warn) : ''}: doppio clic sul nome per modificarla, clic destro per aggiungere membri</title>`;
+      g += c.module ? `<title>${L('uml.fromTheModuleReadOnlyDouble', { c: esc(ModelLib.classTitle(c)), name: esc(c.module.name) })}</title>`
+        : `<title>${c.abstract ? L('uml.abstractClass') : ''}${esc(ModelLib.classTitle(c))}${c.parent ? L('uml.inheritsFrom') + esc(c.parent) : ''}${warn ? ' — ⚠ ' + esc(warn) : ''}${L('uml.doubleClickTheNameToEdit')}</title>`;
       g += `<rect class="ubg" x="${x}" y="${y}" width="${w}" height="${b.h}" rx="6"/>`;
       g += `<path class="uheadbg" d="M${x} ${y + b.head}V${y + 6}Q${x} ${y} ${x + 6} ${y}H${x + w - 6}Q${x + w} ${y} ${x + w} ${y + 6}V${y + b.head}Z"/>`;
       g += `<rect class="uhit head" data-part="head" x="${x}" y="${y}" width="${w}" height="${b.head}"/>`;
-      if (b.main || c.abstract || b.exc) g += `<text class="ustereo" x="${x + w / 2}" y="${y + 15}">${b.main ? '«principale»' : c.abstract ? '«abstract»' : '«eccezione»'}</text>`;
+      if (b.main || c.abstract || b.exc) g += `<text class="ustereo" x="${x + w / 2}" y="${y + 15}">${b.main ? L('uml.main') : c.abstract ? L('uml.abstract3') : L('uml.exception')}</text>`;
       g += `<text class="uname" x="${x + w / 2}" y="${y + b.head - 13}">${esc(ModelLib.classTitle(c))}</text>`;
       if (warn) g += `<g class="uwarn"><circle cx="${x + 15}" cy="${y + b.head / 2}" r="8"/><text x="${x + 15}" y="${y + b.head / 2 + 4}">!</text></g>`;
-      // attributi
+      // attributes
       let yy = y + b.head;
       g += `<path class="usep" d="M${x} ${yy}H${x + w}"/>`;
       b.attrs.forEach((r, k) => {
         const ry = yy + CPAD + k * ROW;
         const on = isSel && sel.kind === 'attr' && sel.i === r.i;
-        g += `<g class="urow${on ? ' sel' : ''}" data-kind="attr" data-i="${r.i}"><rect class="uhit" x="${x + 2}" y="${ry}" width="${w - 4}" height="${ROW}" rx="3"/><text class="umem" x="${x + PADX}" y="${ry + ROW / 2 + 4.5}"${r.st ? ' text-decoration="underline"' : ''}>${esc(RenderLib.fitText(r.text, w - PADX * 2, FM))}</text><title>${esc(r.text)}${r.st ? ' (statico)' : ''} — doppio clic per modificarlo</title></g>`;
+        g += `<g class="urow${on ? ' sel' : ''}" data-kind="attr" data-i="${r.i}"><rect class="uhit" x="${x + 2}" y="${ry}" width="${w - 4}" height="${ROW}" rx="3"/><text class="umem" x="${x + PADX}" y="${ry + ROW / 2 + 4.5}"${r.st ? ' text-decoration="underline"' : ''}>${esc(RenderLib.fitText(r.text, w - PADX * 2, FM))}</text><title>${esc(r.text)}${r.st ? L('uml.static') : ''}${L('uml.doubleClickToEditIt')}</title></g>`;
       });
-      if (!c.module) g += addBtn(x + w - 13, yy, 'attr', 'Aggiungi un attributo');
-      // metodi
+      if (!c.module) g += addBtn(x + w - 13, yy, 'attr', L('uml.addAnAttribute'));
+      // methods
       yy += b.ah;
       g += `<path class="usep" d="M${x} ${yy}H${x + w}"/>`;
       b.meths.forEach((r, k) => {
         const ry = yy + CPAD + k * ROW;
         const on = isSel && sel.kind === 'method' && sel.fid === r.f.id;
-        const tip = r.ctor ? 'costruttore' : r.main ? 'punto di partenza del programma' : r.st ? 'metodo statico' : r.abs ? 'metodo astratto, senza corpo: lo definiscono le sottoclassi' : 'metodo';
-        g += `<g class="urow method${on ? ' sel' : ''}${r.ctor ? ' ctor' : ''}${r.abs ? ' abs' : ''}${r.main ? ' mainm' : ''}" data-kind="method" data-fid="${r.f.id}"><rect class="uhit" x="${x + 2}" y="${ry}" width="${w - 4}" height="${ROW}" rx="3"/><text class="umem" x="${x + PADX}" y="${ry + ROW / 2 + 4.5}"${r.st ? ' text-decoration="underline"' : ''}>${esc(RenderLib.fitText(r.text, w - PADX * 2, FM))}</text><title>${esc(r.text)} (${tip})${r.abs ? '' : ' — doppio clic per aprire il diagramma di flusso'}</title></g>`;
+        const tip = r.ctor ? L('uml.constructor') : r.main ? L('uml.startingPointOfTheProgram') : r.st ? L('uml.staticMethod') : r.abs ? L('uml.abstractMethodWithoutABodyThe') : L('uml.method');
+        g += `<g class="urow method${on ? ' sel' : ''}${r.ctor ? ' ctor' : ''}${r.abs ? ' abs' : ''}${r.main ? ' mainm' : ''}" data-kind="method" data-fid="${r.f.id}"><rect class="uhit" x="${x + 2}" y="${ry}" width="${w - 4}" height="${ROW}" rx="3"/><text class="umem" x="${x + PADX}" y="${ry + ROW / 2 + 4.5}"${r.st ? ' text-decoration="underline"' : ''}>${esc(RenderLib.fitText(r.text, w - PADX * 2, FM))}</text><title>${esc(r.text)} (${tip})${r.abs ? '' : L('uml.doubleClickToOpenTheFlowchart')}</title></g>`;
       });
-      if (!c.module) g += addBtn(x + w - 13, yy, 'method', 'Aggiungi un metodo o un costruttore');
+      if (!c.module) g += addBtn(x + w - 13, yy, 'method', L('uml.addAMethodOrAConstructor'));
       g += '</g>';
       shapes.push(g);
     }
@@ -221,10 +222,10 @@ const UmlLib = (() => {
       + `<g class="umods">${frames.join('')}</g><g class="urels">${lines.join('')}</g><g class="uboxes">${shapes.join('')}</g><g class="ulabels">${labels.join('')}</g></svg>`;
     return { svg, W, H, boxes };
   }
-  /* eccezione predefinita: messaggio e i due costruttori, in sola lettura */
+  /* eccezione predefinita: message e i due costruttori, in sola lettura */
   function builtinBox(b) {
     const { c, x, y, w } = b;
-    let g = `<g class="ubox exc builtin" data-cls="${c.id}"><title>${esc(c.name)} — eccezione predefinita${c.parent ? ', eredita da ' + esc(c.parent) : ''} (${esc(c.doc)}), in sola lettura: trascinala per spostarla</title>`;
+    let g = `<g class="ubox exc builtin" data-cls="${c.id}"><title>${esc(c.name)}${L('uml.predefinedException2')}${c.parent ? L('uml.inheritsFrom2') + esc(c.parent) : ''} (${esc(c.doc)})${L('uml.readOnlyDragItToMove')}</title>`;
     g += `<rect class="ubg" x="${x}" y="${y}" width="${w}" height="${b.h}" rx="6"/>`;
     g += `<path class="uheadbg" d="M${x} ${y + b.head}V${y + 6}Q${x} ${y} ${x + 6} ${y}H${x + w - 6}Q${x + w} ${y} ${x + w} ${y + 6}V${y + b.head}Z"/>`;
     g += `<text class="ustereo" x="${x + w / 2}" y="${y + 15}">«eccezione predefinita»</text><text class="uname" x="${x + w / 2}" y="${y + b.head - 13}">${esc(c.name)}</text>`;
@@ -238,7 +239,7 @@ const UmlLib = (() => {
   function addBtn(cx, y, what, title) {
     return `<g class="uadd" data-add="${what}" role="button" aria-label="${title}"><title>${title}</title><circle cx="${cx}" cy="${y}" r="8"/><path d="M${cx - 3.5} ${y}H${cx + 3.5}M${cx} ${y - 3.5}V${y + 3.5}"/></g>`;
   }
-  /* posizione libera per una nuova classe */
+  /* free position for a new class */
   function freeSpot(prog, near) {
     const boxes = layout(prog);
     const hit = (x, y) => [...boxes.values()].some((b) => x < b.x + b.w + 40 && x + 220 > b.x - 40 && y < b.y + b.h + 40 && y + 140 > b.y - 40);

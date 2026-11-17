@@ -1,0 +1,27 @@
+<?xml version="1.0"?>
+<flowgorithm fileversion="4.2">
+    <attributes>
+        <attribute name="name" value="Even or odd"/>
+        <attribute name="authors" value="FlowLab examples"/>
+        <attribute name="about" value="Uses the remainder of the division by 2."/>
+        <attribute name="saved" value="2026-11-17 08:00:00 PM"/>
+        <attribute name="created" value="Zmxvd2xhYjtleGFtcGxlczsyMDI2LTExLTE3IDA4OjAwOjAwIFBNOzE="/>
+        <attribute name="edited" value="Zmxvd2xhYjtleGFtcGxlczsyMDI2LTExLTE3IDA4OjAwOjAwIFBNOzE="/>
+    </attributes>
+    <function name="Main" type="None" variable="">
+        <parameters/>
+        <body>
+            <declare name="number" type="Integer" array="False" size=""/>
+            <output expression="&quot;Enter an integer&quot;" newline="True"/>
+            <input variable="number"/>
+            <if expression="number mod 2 = 0">
+                <then>
+                    <output expression="number &amp; &quot; is even&quot;" newline="True"/>
+                </then>
+                <else>
+                    <output expression="number &amp; &quot; is odd&quot;" newline="True"/>
+                </else>
+            </if>
+        </body>
+    </function>
+</flowgorithm>

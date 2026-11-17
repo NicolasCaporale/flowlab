@@ -1,11 +1,11 @@
 /* ==========================================================================
-   FlowLab — visualizzatore di array per il debug
-   Finestre mobili che mostrano un array come striscia (1D), scacchiera (2D),
-   libro da sfogliare (3D: la prima dimensione è la pagina) e, oltre, selettori
-   di indice per le dimensioni iniziali + libro per le ultime tre.
-   La griglia disegna solo le celle visibili; ai bordi oltre i quali ci sono
-   altre celle si applica una sfumatura verso la trasparenza (mask-image).
-   Quando un valore cambia la vista si porta nell'intorno della cella.
+   FlowLab — array viewer for debugging
+   Floating windows that show an array as a strip (1D), chessboard (2D),
+   book to leaf through (3D: the first dimension is the page) and, beyond, index
+   selectors for the first dimensions + book for the last three.
+   The grid draws only the visible cells; at the edges beyond which there are
+   other cells a fade to transparency is applied (mask-image).
+   When a value changes the view moves around the cell.
    ========================================================================== */
 'use strict';
 
@@ -23,9 +23,9 @@ const ArrayView = (() => {
     for (const c of kids.flat()) if (c != null && c !== false) el.append(c.nodeType ? c : document.createTextNode(String(c)));
     return el;
   };
-  const CH = 30;            // altezza cella
-  const HEAD_W = 46;        // colonna degli indici di riga
-  const FADE = 46;          // ampiezza della sfumatura
+  const CH = 30;            // cell height
+  const HEAD_W = 46;        // column of the row indices
+  const FADE = 46;          // width of the fade
   const reduceMotion = () => window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
   const viewers = new Map();
   let opts = { host: () => document.body, nextZ: () => 40 };
@@ -33,38 +33,38 @@ const ArrayView = (() => {
   function configure(o) { opts = Object.assign(opts, o); }
 
   const lit = (v) => (v === undefined ? null : E.literalOf(v));
-  const objWins = new Map(); // finestre di ispezione degli oggetti
+  const objWins = new Map(); // object inspection windows
   const allCount = () => viewers.size + objWins.size;
   const ICON_X = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>';
-  /* ---------------------------- connettori ----------------------------
-     Ogni finestra può avere una sorgente (src): una funzione che restituisce il
-     rettangolo dell'elemento cliccato, { r, out } con out = fuori vista. Un livello
-     SVG sopra le finestre disegna una curva dalla sorgente al bordo della finestra. */
+  /* ---------------------------- connectors ----------------------------
+     Each window can have a source (src): a function that returns the
+     rectangle of the clicked element, { r, out } with out = out of view. An SVG
+     layer above the windows draws a curve from the source to the edge of the window. */
   const NS = 'http://www.w3.org/2000/svg';
   let linkSvg = null, linkRaf = 0;
   const rectOf = (el) => { const r = el.getBoundingClientRect(); return { left: r.left, top: r.top, right: r.right, bottom: r.bottom, width: r.width, height: r.height }; };
   const visible = (el) => !!el && el.isConnected && el.getClientRects().length > 0 && !el.closest('[hidden]');
-  /* limita il rettangolo all'area visibile del contenitore che scorre */
+  /* limits the rectangle to the visible area of the scrolling container */
   function clipTo(r, box) {
     const out = r.bottom < box.top || r.top > box.bottom || r.right < box.left || r.left > box.right;
     if (!out) return { r, out: false };
     const cx = Math.max(box.left + 4, Math.min(box.right - 4, (r.left + r.right) / 2)), cy = Math.max(box.top + 4, Math.min(box.bottom - 4, (r.top + r.bottom) / 2));
     return { r: { left: cx - 3, right: cx + 3, top: cy - 3, bottom: cy + 3, width: 6, height: 6 }, out: true };
   }
-  /* sorgente: un elemento della pagina trovato con un selettore (la scheda Variabili si ridisegna a ogni passo) */
+  /* source: an element of the page found with a selector (the Variables tab is redrawn at every step) */
   function domSrc(selector) {
     const f = () => {
       const el = document.querySelector(selector);
       if (!visible(el)) return null;
       const sc = el.closest('#varsBody, .ov-body, .fwin-body, .pane');
-      // in una tabella si evidenzia tutta la riga: la linea parte dal suo bordo senza attraversare il testo
+      // in a table the whole row is highlighted: the line starts from its edge without crossing the text
       const r = rectOf(el.closest('tr') || el);
       return Object.assign(sc ? clipTo(r, rectOf(sc)) : { r, out: false }, { win: el.closest('.fwin') });
     };
     f.sel = selector;
     return f;
   }
-  /* sorgente: una cella del visualizzatore di array (le celle fuori vista non esistono: si calcola la posizione) */
+  /* source: a cell of the array viewer (cells out of view do not exist: the position is computed) */
   function cellSrc(v, off) {
     return () => {
       if (!v.win.isConnected) return null;
@@ -83,8 +83,8 @@ const ArrayView = (() => {
     if (!linkSvg || !linkSvg.isConnected) { linkSvg = document.createElementNS(NS, 'svg'); linkSvg.setAttribute('class', 'wlinks'); linkSvg.setAttribute('aria-hidden', 'true'); opts.host().append(linkSvg); }
     let html = '';
     const top = Math.max(...wins.map((w) => +w.win.style.zIndex || 0));
-    // le finestre in primo piano coprono i connettori che stanno sotto di loro (anche quelli
-    // della scheda Variabili, che sta sotto tutte le finestre)
+    // the windows in front cover the connectors below them (also those
+    // of the Variables tab, which is below all the windows)
     const zOf = (el) => (el ? +getComputedStyle(el).zIndex || 0 : 0);
     const fws = [...opts.host().querySelectorAll('.fwin')].filter((x) => x.getClientRects().length).map((x) => ({ el: x, z: zOf(x), r: rectOf(x) }));
     let mi = 0;
@@ -100,15 +100,15 @@ const ArrayView = (() => {
       }
       const a = s.r, b = rectOf(w.win);
       const ax = (a.left + a.right) / 2, ay = (a.top + a.bottom) / 2;
-      // punto di arrivo: il lato della finestra rivolto verso la sorgente
-      // lato di uscita: la direzione in cui la finestra è più lontana
+      // arrival point: the side of the window facing the source
+      // exit side: the direction in which the window is farthest
       const gx = ax < b.left ? b.left - a.right : ax > b.right ? a.left - b.right : -1;
       const gy = ay < b.top ? b.top - a.bottom : ay > b.bottom ? a.top - b.bottom : -1;
-      if (gx < 0 && gy < 0) continue; // la sorgente è sotto la finestra
+      if (gx < 0 && gy < 0) continue; // the source is under the window
       let ex, ey, dx = 0, dy = 0;
       if (gx >= gy) { dx = ax < b.left ? -1 : 1; ex = dx < 0 ? b.left : b.right; ey = Math.max(b.top + 18, Math.min(b.bottom - 18, ay)); }
       else { dy = ay < b.top ? -1 : 1; ey = dy < 0 ? b.top : b.bottom; ex = Math.max(b.left + 18, Math.min(b.right - 18, ax)); }
-      // partenza: il lato della sorgente rivolto verso la finestra
+      // start: the side of the source facing the window
       const sx = dx ? (dx < 0 ? a.right : a.left) : ax, sy = dy ? (dy < 0 ? a.bottom : a.top) : ay;
       const k = Math.max(40, Math.min(160, Math.hypot(ex - sx, ey - sy) / 2.5));
       const c1x = sx - dx * k, c1y = sy - dy * k, c2x = ex + dx * k, c2y = ey + dy * k;
@@ -123,8 +123,8 @@ const ArrayView = (() => {
   }
   const startLinks = () => { if (!linkRaf) linkRaf = requestAnimationFrame(drawLinks); };
 
-  /* finestra mobile: posizione iniziale sull'area del diagramma, trascinamento dalla barra, primo piano */
-  /* near: rettangolo dell'elemento cliccato; la finestra si apre accanto, dal lato dove c'è posto */
+  /* floating window: initial position over the diagram area, dragging from the bar, bring to front */
+  /* near: rectangle of the clicked element; the window opens beside it, on the side where there is room */
   function floatWin(win, head, W, H, near) {
     opts.host().append(win);
     const n = allCount();
@@ -166,18 +166,18 @@ const ArrayView = (() => {
   class Viewer {
     constructor(key, funcName, cell, o) {
       this.key = key; this.funcName = funcName; this.name = (o && o.label) || cell.name;
-      this.fixed = !!(o && o.fixed); // array dentro un oggetto: la cella resta sempre la stessa
+      this.fixed = !!(o && o.fixed); // array inside an object: the cell always stays the same
       this.src = (o && o.src) || null;
       this.cell = null; this.live = true;
-      this.lead = []; this.page = 0;               // indici scelti per le dimensioni iniziali e pagina del libro
+      this.lead = []; this.page = 0;               // indices chosen for the first dimensions and page of the book
       this.snapshot = null; this.changed = new Set(); this.focus = null;
       this.build();
       this.bind(cell);
     }
 
-    /* ---- finestra ---- */
+    /* ---- window ---- */
     build() {
-      const close = h('button', { class: 'iconbtn', type: 'button', title: 'Chiudi', 'aria-label': 'Chiudi la finestra dell\'array', html: ICON_X, onclick: () => this.close() });
+      const close = h('button', { class: 'iconbtn', type: 'button', title: L('win.close'), 'aria-label': L('win.closeTheArrayWindow'), html: ICON_X, onclick: () => this.close() });
       this.titleEl = h('span', { class: 'fwin-title' });
       this.stateEl = h('span', { class: 'av-state' });
       this.head = h('div', { class: 'fwin-head' }, this.titleEl, this.stateEl, h('span', { class: 'grow' }), close);
@@ -187,17 +187,17 @@ const ArrayView = (() => {
       this.corner = h('div', { class: 'av-corner' });
       this.spacer = h('div', { class: 'av-spacer' });
       this.cells = h('div', { class: 'av-cells' });
-      this.body = h('div', { class: 'av-body', tabindex: '0', 'aria-label': 'Celle dell\'array' }, this.spacer, this.cells);
+      this.body = h('div', { class: 'av-body', tabindex: '0', 'aria-label': L('win.arrayCells') }, this.spacer, this.cells);
       this.grid = h('div', { class: 'av-grid' }, this.corner, this.colHead, this.rowHead, this.body);
       this.pageEl = h('div', { class: 'av-page' }, this.grid);
       this.stage = h('div', { class: 'av-stage' }, this.pageEl);
       this.foot = h('div', { class: 'av-foot' }, ' ');
       this.win = h('div', { class: 'fwin avwin', role: 'dialog' }, this.head, h('div', { class: 'av-main' }, this.bar, this.stage, this.foot));
-      // si apre sull'area del diagramma, accanto al pannello, senza coprire la scheda Variabili
+      // it opens over the diagram area, next to the panel, without covering the Variables tab
       const fw = floatWin(this.win, this.head, Math.min(520, window.innerWidth - 40), Math.min(380, window.innerHeight - 120), this.src && this.src());
       this.raise = fw.raise; this.clamp = fw.clamp;
       this.body.addEventListener('scroll', () => this.schedule());
-      // clic su una cella che contiene un oggetto: si apre la finestra dell'oggetto
+      // click on a cell that contains an object: the window of the object opens
       this.body.addEventListener('click', (e) => {
         const t = e.target.closest('.av-c.obj'); if (!t) return;
         const v = this.cell.items[+t.dataset.off];
@@ -215,7 +215,7 @@ const ArrayView = (() => {
     }
     close() { this.win.remove(); viewers.delete(this.key); }
 
-    /* ---- dati ---- */
+    /* ---- data ---- */
     bind(cell) {
       if (cell === this.cell) return;
       this.cell = cell;
@@ -226,7 +226,7 @@ const ArrayView = (() => {
       this.snapshot = null; this.changed = new Set();
       this.measure();
       this.titleEl.textContent = `${this.name} · ${E.typeName(cell.type)}[${this.dims.join(' × ')}]`;
-      this.win.setAttribute('aria-label', `Array ${this.name}`);
+      this.win.setAttribute('aria-label', L('win.array', { name: this.name }));
       const firstBind = !this.win.dataset.mode;
       this.win.dataset.mode = N === 1 ? 'strip' : N === 2 ? 'board' : 'book';
       if (firstBind && N === 1) this.win.style.height = '190px';
@@ -237,7 +237,7 @@ const ArrayView = (() => {
       if (cell.lastWrite != null) { this.changed = new Set([cell.lastWrite]); this.goTo(cell.lastWrite); }
     }
     measure() {
-      // larghezza delle celle in base ai valori (campione)
+      // width of the cells based on the values (sample)
       const it = this.cell.items; const step = Math.max(1, Math.floor(it.length / 2000));
       let longest = 3;
       for (let i = 0; i < it.length; i += step) { const s = lit(it[i]); if (s && s.length > longest) longest = s.length; }
@@ -246,7 +246,7 @@ const ArrayView = (() => {
     }
     get rows() { const N = this.dims.length; return N === 1 ? 1 : this.dims[N - 2]; }
     get cols() { return this.dims[this.dims.length - 1]; }
-    /* offset piatto della cella (r, c) nella vista corrente */
+    /* flat offset of the cell (r, c) in the current view */
     offset(r, c) {
       const D = this.dims, N = D.length;
       if (N === 1) return c;
@@ -256,14 +256,14 @@ const ArrayView = (() => {
       off = off * D[N - 3] + this.page;
       return (off * D[N - 2] + r) * D[N - 1] + c;
     }
-    /* indici completi di un offset */
+    /* full indices of an offset */
     indices(off) {
       const D = this.dims, out = new Array(D.length);
       for (let k = D.length - 1; k >= 0; k--) { out[k] = off % D[k]; off = Math.floor(off / D[k]); }
       return out;
     }
 
-    /* ---- barra: selettori delle dimensioni iniziali e pagine del libro ---- */
+    /* ---- bar: selectors of the first dimensions and pages of the book ---- */
     buildBar() {
       this.bar.innerHTML = '';
       const D = this.dims, N = D.length;
@@ -274,26 +274,26 @@ const ArrayView = (() => {
         const refresh = () => { out.textContent = String(get()); };
         const wrap = h('div', { class: 'av-step ' + (cls || '') },
           h('span', { class: 'av-lbl' }, label),
-          h('button', { type: 'button', class: 'iconbtn', 'aria-label': label + ': precedente', onclick: () => { set(Math.max(0, get() - 1)); } }, '‹'),
+          h('button', { type: 'button', class: 'iconbtn', 'aria-label': label + L('win.previous'), onclick: () => { set(Math.max(0, get() - 1)); } }, '‹'),
           out,
-          h('button', { type: 'button', class: 'iconbtn', 'aria-label': label + ': successivo', onclick: () => { set(Math.min(max - 1, get() + 1)); } }, '›'),
+          h('button', { type: 'button', class: 'iconbtn', 'aria-label': label + L('win.next'), onclick: () => { set(Math.min(max - 1, get() + 1)); } }, '›'),
           h('span', { class: 'av-max' }, `/ ${max - 1}`));
         wrap._refresh = refresh; refresh();
         return wrap;
       };
       this.steppers = [];
       if (N > 3) {
-        const lst = h('div', { class: 'av-lead', role: 'group', 'aria-label': 'Indici delle prime dimensioni' });
+        const lst = h('div', { class: 'av-lead', role: 'group', 'aria-label': L('win.indicesOfTheFirstDimensions') });
         for (let k = 0; k < N - 3; k++) {
-          const s = stepper(`dim ${k + 1}`, () => this.lead[k], (v) => { this.lead[k] = v; this.afterNav(); }, D[k]);
+          const s = stepper(L('win.dim', { value: k + 1 }), () => this.lead[k], (v) => { this.lead[k] = v; this.afterNav(); }, D[k]);
           this.steppers.push(s); lst.append(s);
         }
         this.bar.append(lst);
       }
-      // il cubo delle ultime tre dimensioni, aperto a libro: si sfoglia la prima
+      // the cube of the last three dimensions, opened like a book: the first one is leafed through
       const pages = D[N - 3];
-      this.pageStep = stepper('pagina', () => this.page, (v) => this.setPage(v), pages, 'av-pagestep');
-      this.range = h('input', { type: 'range', min: 0, max: Math.max(0, pages - 1), value: 0, 'aria-label': 'Pagina del libro', oninput: (e) => this.setPage(+e.target.value) });
+      this.pageStep = stepper(L('win.page'), () => this.page, (v) => this.setPage(v), pages, 'av-pagestep');
+      this.range = h('input', { type: 'range', min: 0, max: Math.max(0, pages - 1), value: 0, 'aria-label': L('win.bookPage'), oninput: (e) => this.setPage(+e.target.value) });
       this.cube = h('span', { class: 'av-cube', 'aria-hidden': 'true' });
       this.bar.append(h('div', { class: 'av-bookbar' }, this.cube, this.pageStep, this.range));
       this.drawCube();
@@ -302,7 +302,7 @@ const ArrayView = (() => {
       if (!this.cube) return;
       const pages = this.dims[this.dims.length - 3];
       const f = pages > 1 ? this.page / (pages - 1) : 0;
-      // cubo assonometrico: la fetta evidenziata è la pagina aperta
+      // axonometric cube: the highlighted slice is the open page
       const x = 6 + f * 14, y = 4 + f * 0;
       this.cube.innerHTML = `<svg viewBox="0 0 40 34"><path class="cb" d="M6 10L20 4L34 10V26L20 32L6 26Z"/><path class="cb" d="M6 10L20 16L34 10M20 16V32"/><path class="sl2" d="M${6 + f * 14} ${10 + f * 6}L${20 + f * 14} ${4 + f * 6}L${20 + f * 14} ${20 + f * 6}L${6 + f * 14} ${26 + f * 6}Z"/></svg>`;
     }
@@ -329,7 +329,7 @@ const ArrayView = (() => {
       this.render();
     }
     stackShadow() {
-      // spessore del libro: pagine prima (a sinistra) e dopo (a destra)
+      // thickness of the book: pages before (left) and after (right)
       if (this.dims.length < 3) { this.pageEl.style.boxShadow = ''; return; }
       const pages = this.dims[this.dims.length - 3];
       const before = Math.min(5, this.page), after = Math.min(5, pages - 1 - this.page);
@@ -339,7 +339,7 @@ const ArrayView = (() => {
       this.pageEl.style.boxShadow = sh.join(', ');
     }
 
-    /* ---- aggiornamento dal programma ---- */
+    /* ---- update from the program ---- */
     update(first) {
       const it = this.cell.items;
       const big = it.length > 200000;
@@ -349,9 +349,9 @@ const ArrayView = (() => {
       if (this.snapshot && big && this.cell.lastWrite != null) changed.add(this.cell.lastWrite);
       this.snapshot = cur;
       this.changed = changed;
-      this.stateEl.textContent = this.live ? '' : 'non in esecuzione';
+      this.stateEl.textContent = this.live ? '' : L('win.notRunning');
       if (changed.size) {
-        // la cella da inquadrare: l'ultima scritta, se è tra quelle cambiate
+        // the cell to frame: the last one written, if it is among those changed
         const target = changed.has(this.cell.lastWrite) ? this.cell.lastWrite : [...changed].pop();
         this.goTo(target);
       } else if (first) {
@@ -374,7 +374,7 @@ const ArrayView = (() => {
       this.schedule();
     }
 
-    /* ---- disegno della griglia (solo le celle visibili) ---- */
+    /* ---- drawing of the grid (only the visible cells) ---- */
     schedule() { if (this.raf) return; this.raf = requestAnimationFrame(() => { this.raf = 0; this.render(); }); }
     render() {
       const R = this.rows, C = this.cols, cw = this.cw, N = this.dims.length;
@@ -399,7 +399,7 @@ const ArrayView = (() => {
         }
       }
       this.cells.innerHTML = html;
-      // intestazioni
+      // headers
       let ch = '';
       for (let c = c0; c <= c1; c++) ch += `<span style="left:${c * cw - sl}px;width:${cw}px">${c}</span>`;
       this.colHead.innerHTML = ch;
@@ -407,7 +407,7 @@ const ArrayView = (() => {
       if (!strip) for (let r = r0; r <= r1; r++) rh += `<span style="top:${r * CH - st}px">${r}</span>`;
       this.rowHead.innerHTML = rh;
       this.corner.textContent = strip ? '' : (N === 2 ? 'r \\ c' : '');
-      // sfumature ai bordi oltre i quali ci sono altre celle
+      // fades at the edges beyond which there are other cells
       const fl = sl > 1 ? FADE : 0, fr = sl + vw < C * cw - 1 ? FADE : 0;
       const ft = st > 1 ? FADE : 0, fb = st + vh < R * CH - 1 ? FADE : 0;
       for (const [el, l, r2, t, bt] of [[b, fl, fr, ft, fb], [this.colHead, fl, fr, 0, 0], [this.rowHead, 0, 0, ft, fb]]) {
@@ -419,17 +419,17 @@ const ArrayView = (() => {
       const t = e.target.closest('.av-c');
       if (!t) return;
       const off = +t.dataset.off; const v = this.cell.items[off];
-      this.foot.textContent = `${this.name}[${this.indices(off).join(', ')}] = ${v === undefined ? 'nessun valore' : E.literalOf(v)}${v && v.t === 'Object' && v.v ? ' · clic per aprire l\'oggetto' : ''}`;
+      this.foot.textContent = `${this.name}[${this.indices(off).join(', ')}] = ${v === undefined ? L('win.noValue') : E.literalOf(v)}${v && v.t === 'Object' && v.v ? L('win.clickToOpenTheObject') : ''}`;
     }
   }
 
   /* ------------------------------------------------------------------ */
-  /* Ispettore di un oggetto: i suoi attributi, raggruppati per la classe che li dichiara.
-     Gli oggetti contenuti si aprono a loro volta, gli array nel visualizzatore. */
+  /* Inspector of an object: its attributes, grouped by the class that declares them.
+     The contained objects open in turn, the arrays in the viewer. */
   class ObjWin {
     constructor(obj, src) {
       this.obj = obj; this.key = 'obj:' + obj.uid; this.snap = null; this.stale = false; this.src = src || null;
-      const close = h('button', { class: 'iconbtn', type: 'button', title: 'Chiudi', 'aria-label': 'Chiudi la finestra dell\'oggetto', html: ICON_X, onclick: () => this.close() });
+      const close = h('button', { class: 'iconbtn', type: 'button', title: L('win.close'), 'aria-label': L('win.closeTheObjectWindow'), html: ICON_X, onclick: () => this.close() });
       this.titleEl = h('span', { class: 'fwin-title' });
       this.stateEl = h('span', { class: 'av-state' });
       this.head = h('div', { class: 'fwin-head' }, this.titleEl, this.stateEl, h('span', { class: 'grow' }), close);
@@ -443,8 +443,8 @@ const ArrayView = (() => {
     update() {
       const o = this.obj;
       this.titleEl.textContent = `${o.cls.name}#${o.id}`;
-      this.win.setAttribute('aria-label', `Oggetto ${o.cls.name}#${o.id}`);
-      this.stateEl.textContent = this.stale ? 'esecuzione precedente' : (o.cls.parent ? `${o.cls.name} eredita da ${o.cls.parent}` : '');
+      this.win.setAttribute('aria-label', L('win.object', { name: o.cls.name, id: o.id }));
+      this.stateEl.textContent = this.stale ? L('win.previousRun') : (o.cls.parent ? L('win.inheritsFrom', { name: o.cls.name, parent: o.cls.parent }) : '');
       const cur = new Map();
       const tb = h('tbody');
       const owners = new Set([...o.fields.values()].map((c) => c.owner));
@@ -452,7 +452,7 @@ const ArrayView = (() => {
       for (const [k, c] of o.fields) {
         if (owners.size > 1 && c.owner !== lastOwner) {
           lastOwner = c.owner;
-          tb.append(h('tr', { class: 'ov-group' }, h('td', { colspan: 3 }, c.owner === o.cls ? `di ${c.owner.name}` : `ereditati da ${c.owner.name}`)));
+          tb.append(h('tr', { class: 'ov-group' }, h('td', { colspan: 3 }, c.owner === o.cls ? `di ${c.owner.name}` : L('win.inheritedFrom', { name: c.owner.name }))));
         }
         const sv = c.array ? String(c.writes || 0) : (c.value === undefined ? '∅' : E.literalOf(c.value));
         cur.set(k, sv);
@@ -460,23 +460,23 @@ const ArrayView = (() => {
         let val;
         if (c.array) {
           const label = `${o.cls.name}#${o.id}.${c.name}`;
-          val = h('button', { type: 'button', class: 'ov-link', 'data-src': k, title: 'Apri i valori dell\'array', onclick: () => open('@' + this.key, c, { label, fixed: true, src: domSrc(`.ovwin[data-key="${this.key}"] [data-src="${k}"]`) }) }, `${E.typeName(c.type)}[${(c.dims || [c.items.length]).join(' × ')}]`);
+          val = h('button', { type: 'button', class: 'ov-link', 'data-src': k, title: L('win.openTheValuesOfTheArray'), onclick: () => open('@' + this.key, c, { label, fixed: true, src: domSrc(`.ovwin[data-key="${this.key}"] [data-src="${k}"]`) }) }, `${E.typeName(c.type)}[${(c.dims || [c.items.length]).join(' × ')}]`);
         } else if (c.value && c.value.t === 'Object' && c.value.v) {
           const target = c.value.v;
-          val = h('button', { type: 'button', class: 'ov-link obj', 'data-src': k, 'data-uid': target.uid, title: 'Apri l\'oggetto', onclick: () => openObject(target, domSrc(`.ovwin[data-key="${this.key}"] [data-src="${k}"]`)) }, E.literalOf(c.value));
-        } else val = c.value === undefined ? h('span', { class: 'undef' }, 'nessun valore') : h('span', { class: 'v-' + c.value.t }, E.literalOf(c.value));
+          val = h('button', { type: 'button', class: 'ov-link obj', 'data-src': k, 'data-uid': target.uid, title: L('win.openTheObject'), onclick: () => openObject(target, domSrc(`.ovwin[data-key="${this.key}"] [data-src="${k}"]`)) }, E.literalOf(c.value));
+        } else val = c.value === undefined ? h('span', { class: 'undef' }, L('win.noValue')) : h('span', { class: 'v-' + c.value.t }, E.literalOf(c.value));
         const vis = { public: '+', private: '-', protected: '#' }[c.visibility || 'public'];
         tb.append(h('tr', { class: chg ? 'changed' : '' },
-          h('td', null, h('span', { class: 'ov-vis', title: { '+': 'pubblico', '-': 'privato', '#': 'protetto' }[vis] }, vis), c.name),
+          h('td', null, h('span', { class: 'ov-vis', title: { '+': L('model.public'), '-': L('model.private'), '#': L('model.protected') }[vis] }, vis), c.name),
           h('td', null, E.typeName(c.type)), h('td', null, val)));
       }
-      if (!o.fields.size) tb.append(h('tr', null, h('td', { colspan: 3, class: 'muted' }, 'Questo oggetto non ha attributi.')));
+      if (!o.fields.size) tb.append(h('tr', null, h('td', { colspan: 3, class: 'muted' }, L('win.thisObjectHasNoAttributes'))));
       this.snap = cur;
       this.body.innerHTML = '';
-      this.body.append(h('table', { class: 'vars ov-table' }, h('thead', null, h('tr', null, h('th', null, 'Attributo'), h('th', null, 'Tipo'), h('th', null, 'Valore'))), tb));
+      this.body.append(h('table', { class: 'vars ov-table' }, h('thead', null, h('tr', null, h('th', null, L('win.attribute')), h('th', null, L('win.type')), h('th', null, L('win.value')))), tb));
     }
   }
-  /* src: da dove è stato aperto (per il connettore); l'ultima apertura vince */
+  /* src: where it was opened from (for the connector); the last opening wins */
   function openObject(obj, src) {
     const key = 'obj:' + obj.uid;
     let w = objWins.get(key);
@@ -485,20 +485,20 @@ const ArrayView = (() => {
     if (src) { w.src = src; startLinks(); }
     return w;
   }
-  /* un riferimento cambia: se la finestra di un oggetto era collegata a una riga (variabile o attributo)
-     e ora quella riga punta a un altro oggetto, si apre anche quello, collegato alla riga; la finestra
-     di prima resta aperta e si collega, se c'è, a un'altra riga che punta ancora al suo oggetto
-     (testa → Nodo#2 e Nodo#2.prossimo → Nodo#1) */
+  /* a reference changes: if the window of an object was linked to a row (variable or attribute)
+     and now that row points to another object, that one opens too, linked to the row; the previous
+     window stays open and links, if there is one, to another row that still points to its object
+     (head → Node#2 and Node#2.next → Node#1) */
   const selOf = (e) => { const ow = e.closest('.ovwin'); return ow ? `.ovwin[data-key="${ow.dataset.key}"] [data-src="${e.dataset.src}"]` : `#varsBody [data-src="${CSS.escape(e.dataset.src)}"]`; };
   function findSrc(obj) {
     const els = [...document.querySelectorAll(`.ovwin .ov-link.obj[data-uid="${obj.uid}"][data-src], #varsBody .ov-link.obj[data-uid="${obj.uid}"][data-src]`)]
       .filter((e) => !e.closest(`.ovwin[data-key="obj:${obj.uid}"]`));
-    // prima gli attributi degli oggetti aperti, poi le variabili
+    // first the attributes of the open objects, then the variables
     const e = els.find((x) => x.closest('.ovwin')) || els[0];
     return e ? domSrc(selOf(e)) : null;
   }
   const overlap = (a, b) => a.offsetLeft < b.offsetLeft + b.offsetWidth && b.offsetLeft < a.offsetLeft + a.offsetWidth && a.offsetTop < b.offsetTop + b.offsetHeight && b.offsetTop < a.offsetTop + a.offsetHeight;
-  /* sposta la finestra w sotto la finestra by, e così le altre che finisce per coprire */
+  /* moves window w below window by, and so the others it ends up covering */
   function pushBelow(w, by, done) {
     done.add(w);
     const host = opts.host();
@@ -512,8 +512,8 @@ const ArrayView = (() => {
       const el = document.querySelector(w.src.sel);
       if (!el || el.dataset.uid === String(w.obj.uid)) continue;
       any = true;
-      // il nuovo oggetto si apre al posto di quello di prima, che scende sotto (con quelli che tocca);
-      // poi la finestra di prima cerca un'altra riga che punta al suo oggetto
+      // the new object opens in place of the previous one, which moves down (with those it touches);
+      // then the previous window looks for another row that points to its object
       const nk = 'obj:' + el.dataset.uid, fresh = !objWins.has(nk);
       if (el.dataset.uid && el.tagName === 'BUTTON') el.click();
       const nw = objWins.get(nk);
@@ -522,7 +522,7 @@ const ArrayView = (() => {
     }
     if (any) startLinks();
   }
-  /* un nuovo avvio: le finestre degli oggetti e degli array contenuti si riferiscono all'esecuzione precedente */
+  /* a new run: the windows of the objects and of the contained arrays refer to the previous execution */
   function markStale() {
     for (const w of objWins.values()) { w.stale = true; w.update(); }
     for (const v of viewers.values()) if (v.fixed) { v.live = false; v.update(); }
@@ -538,7 +538,7 @@ const ArrayView = (() => {
     if (o && o.src) { v.src = o.src; startLinks(); }
     return v;
   }
-  /* resolve(funcName, varName) → cella attuale o null */
+  /* resolve(funcName, varName) → current cell or null */
   function refresh(resolve) {
     for (const w of objWins.values()) w.update();
     for (const v of viewers.values()) {

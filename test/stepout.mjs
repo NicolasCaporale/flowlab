@@ -1,13 +1,13 @@
 // Esci dalla funzione (Maiusc+F8): esegue il resto della funzione e si ferma dopo la chiamata
 import { chromium } from '/opt/npm-tools/node_modules/playwright/index.mjs';
 const browser = await chromium.launch();
-const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+const page = await browser.newPage({ locale: 'it-IT', viewport: { width: 1440, height: 900 } });
 const errs = []; page.on('pageerror', (e) => errs.push(e.message));
 await page.goto('file://' + process.cwd() + '/dist/FlowLab.html'); await page.waitForTimeout(300);
 const wait = (ms = 80) => page.waitForTimeout(ms);
 const ok = (n, c) => console.log(`${c ? 'ok  ' : 'FAIL'} ${n}`);
 const where = () => page.evaluate(() => { const r = FlowLab.run; const f = r.curFrame; return `${f ? f.func.name : '-'}#${r.curId && document.querySelector(`#chart .shape[data-id="${r.curId}"] text`)?.textContent}`; });
-await page.evaluate(() => { localStorage.clear(); FlowLab.loadExample('bolle'); }); await wait(200);
+await page.evaluate(() => { localStorage.clear(); FlowLab.loadExample('bubble_sort'); }); await wait(200);
 ok('pulsante accanto a Passo sopra', await page.evaluate(() => document.querySelector('#overBtn').nextElementSibling.id === 'outBtn'));
 // passo passo fino a entrare in Ordina
 for (let i = 0; i < 80 && !(await where()).startsWith('Ordina#'); i++) { await page.click('#stepBtn'); await wait(15); }

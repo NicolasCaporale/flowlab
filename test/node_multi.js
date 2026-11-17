@@ -1,10 +1,11 @@
 // esegue e genera codice per l'esempio "minmax" in Node (DOM non necessario)
+process.env.FLOWLAB_LANG = process.env.FLOWLAB_LANG || 'it'; // expected messages in Italian
 global.ModelLib = require('../src/model.js'); global.ExprLib = require('../src/expr.js');
 const fs = require('fs'), vm = require('vm');
-vm.runInThisContext(fs.readFileSync(__dirname + '/../src/examples.js', 'utf8').replace("'use strict';", '') + '\nglobalThis.Examples = Examples;');
+const Examples = require('./examples_node.js');
 const { Interpreter } = require('../src/interp.js'); const C = require('../src/codegen.js');
 const M = ModelLib, E = ExprLib;
-const p = Examples.get('minmax').make();
+const p = Examples.get('min_max').make();
 let out = ''; const env = { output: (t, nl) => { out += t + (nl ? '\n' : ''); }, eof: () => true, fileOpen() {}, fileClose() {}, fileRead() {}, fileWrite() {} };
 const run = (prog) => { out = ''; const g = new Interpreter(prog, env).run(); try { for (let r = g.next(); !r.done; r = g.next()); } catch (e) { out += 'ERRORE: ' + e.message + '\n'; } return out; };
 Math.random = (() => { let s = 7; return () => (s = (s * 9301 + 49297) % 233280) / 233280; })();

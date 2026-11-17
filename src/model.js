@@ -1,15 +1,16 @@
 /* ==========================================================================
-   FlowLab — modello del programma e formato file .fprg (XML)
+   FlowLab — program model and .fprg file format (XML)
    ========================================================================== */
 'use strict';
+if (typeof L === 'undefined' && typeof require !== 'undefined') require('./i18n.js'); // testi tradotti (in Node: italiano)
 
-/* elemento radice del formato .fprg (fa parte del formato: va scritto così) */
+/* root element of the .fprg format (it is part of the format: it must be written like this) */
 const FPRG_ROOT = 'flowgorithm';
 
 let __id = 1;
 const newId = () => 's' + (__id++);
 
-/* Definizione dei tipi di blocco: campi salvati nel file e valori di default */
+/* Definition of the block kinds: fields saved in the file and default values */
 const KINDS = {
   declare:    { fields: { name: '', type: 'Integer', array: false, size: '', init: '' } },
   const:      { fields: { name: '', type: 'Integer', expression: '' } },
@@ -27,28 +28,28 @@ const KINDS = {
   close:      { fields: { mode: 'read' } },
   read:       { fields: { variable: '' } },
   write:      { fields: { expression: '' } },
-  // eccezioni: Try con il corpo, uno o più Catch (catches: [{ id, type, variable, body }]) e Finally facoltativo
+  // exceptions: Try with the body, one or more Catches (catches: [{ id, type, variable, body }]) and optional Finally
   try:        { fields: { hasFinally: false }, blocks: ['body', 'finally'], catches: true },
   throw:      { fields: { expression: '' } },
 };
-const makeCatch = (props) => Object.assign({ id: newId(), type: 'Eccezione', variable: 'e', body: [] }, props || {});
+const makeCatch = (props) => Object.assign({ id: newId(), type: 'Exception', variable: 'e', body: [] }, props || {});
 
-/* Eccezioni predefinite: si usano come classi (anche nella vista Funzioni) e si possono estendere.
-   Gli errori dell'interprete diventano eccezioni di questi tipi. */
+/* Predefined exceptions: they are used as classes (also in the Functions view) and can be extended.
+   The errors of the interpreter become exceptions of these types. */
 const EXCEPTIONS = [
-  ['Eccezione', '', 'qualsiasi eccezione'],
-  ['DivisionePerZero', 'Eccezione', 'divisione o mod per zero'],
-  ['IndiceNonValido', 'Eccezione', 'indice fuori dall\'array'],
-  ['ConversioneNonValida', 'Eccezione', 'testo che non è un numero (ToInteger, ToReal)'],
-  ['OggettoNullo', 'Eccezione', 'uso di un oggetto che vale null'],
-  ['ErroreFile', 'Eccezione', 'errore nei file'],
+  ['Exception', '', L('model.anyException')],
+  ['DivisionByZero', 'Exception', L('model.divisionOrModByZero')],
+  ['IndexOutOfRange', 'Exception', L('model.indexOutsideTheArray')],
+  ['InvalidConversion', 'Exception', L('model.textThatIsNotANumber')],
+  ['NullReference', 'Exception', L('model.useOfAnObjectThatIs')],
+  ['FileError', 'Exception', L('model.fileError')],
 ];
 const EXC_CLASSES = EXCEPTIONS.map(([name, parent, doc]) => ({
   id: 'exc:' + name, name, parent, doc, abstract: false, tparams: [], module: null, builtin: true, x: 0, y: 0,
-  attributes: [{ name: 'messaggio', type: 'String', array: false, size: '', visibility: 'public', static: false, init: '', readonly: true }],
+  attributes: [{ name: 'message', type: 'String', array: false, size: '', visibility: 'public', static: false, init: '', readonly: true }],
 }));
 const excClass = (name) => EXC_CLASSES.find((c) => c.name.toLowerCase() === String(name || '').toLowerCase()) || null;
-/* blocchi figli di un blocco (per il Try: corpo, rami Catch, Finally) */
+/* child blocks of a block (for the Try: body, Catch branches, Finally) */
 function childArrays(s) {
   const out = (KINDS[s.kind].blocks || []).map((b) => s[b]);
   if (s.kind === 'try') out.splice(1, 0, ...(s.catches || []).map((c) => c.body));
@@ -69,8 +70,8 @@ function makeFunction(name, props) {
   return Object.assign({ id: newId(), name, type: 'None', variable: '', params: [], body: [] }, props || {});
 }
 
-/* Valori restituiti da una funzione: [{name, type, array?, dims?}] (vuoto = procedura).
-   type/variable restano allineati al primo valore, come nel formato .fprg. */
+/* Values returned by a function: [{name, type, array?, dims?}] (empty = procedure).
+   type/variable stay aligned with the first value, as in the .fprg format. */
 function rets(f) {
   if (Array.isArray(f.returns) && f.returns.length) return f.returns;
   return f.type && f.type !== 'None' ? [{ name: f.variable || '', type: f.type }] : [];
@@ -81,25 +82,25 @@ function setRets(f, list) {
   f.variable = list.length ? list[0].name : '';
 }
 
-/* ------------------------- Classi (vista Oggetti) ------------------------
+/* ------------------------- Classes (Objects view) ------------------------
    prog.classes = [{ id, name, parent, attributes: [...], x, y }]
-   attributo: { name, type, array, size, visibility, static, init }
-   I metodi restano in prog.functions (così editor e interprete li trattano
-   come funzioni) con: cls = id della classe, visibility, static, ctor.
-   Main resta prog.functions[0]: è il metodo statico della classe principale. */
+   attribute: { name, type, array, size, visibility, static, init }
+   The methods stay in prog.functions (so editor and interpreter treat them
+   as functions) with: cls = id of the class, visibility, static, ctor.
+   Main stays prog.functions[0]: it is the static method of the main class. */
 const VISIBILITY = { public: '+', private: '-', protected: '#' };
-const VIS_IT = { public: 'pubblico', private: 'privato', protected: 'protetto' };
+const VIS_IT = { public: L('model.public'), private: L('model.private'), protected: L('model.protected') };
 
-/* tparams: parametri di tipo di una classe generica (es. ["T"]);
-   module: { name, src } se la classe viene da un modulo importato (sola lettura) */
+/* tparams: type parameters of a generic class (e.g. ["T"]);
+   module: { name, src } if the class comes from an imported module (read-only) */
 function makeClass(name, props) {
   return Object.assign({ id: newId(), name, parent: '', abstract: false, tparams: [], module: null, attributes: [], x: 40, y: 40 }, props || {});
 }
-/* "T" è un parametro di tipo della classe c? */
+/* is "T" a type parameter of class c? */
 const isTypeParam = (c, t) => !!c && (c.tparams || []).some((p) => p.toLowerCase() === String(t).toLowerCase());
-/* nome della classe con i parametri di tipo: ArrayList<T> */
+/* name of the class with the type parameters: ArrayList<T> */
 const classTitle = (c) => (c.tparams && c.tparams.length ? `${c.name}<${c.tparams.join(', ')}>` : c.name);
-/* moduli importati: { name, src, classes: [...], funcs: [...] } (un modulo di sole funzioni ha solo funcs) */
+/* imported modules: { name, src, classes: [...], funcs: [...] } (a module with only functions has only funcs) */
 function modulesOf(prog) {
   const out = new Map();
   const get = (m) => { if (!out.has(m.name)) out.set(m.name, { name: m.name, src: m.src, classes: [], funcs: [] }); return out.get(m.name); };
@@ -107,7 +108,7 @@ function modulesOf(prog) {
   for (const f of prog.functions) if (f.module) get(f.module).funcs.push(f);
   return [...out.values()];
 }
-/* modulo da cui viene una funzione o un metodo (null se è del programma) */
+/* module a function or method comes from (null if it belongs to the program) */
 const moduleOfFunc = (prog, f) => { if (!f) return null; if (f.module) return f.module; const c = classOf(prog, f); return c && c.module ? c.module : null; };
 const isModuleFunc = (prog, f) => !!moduleOfFunc(prog, f);
 function makeAttribute(props) {
@@ -118,36 +119,36 @@ function classById(prog, id) { return hasClasses(prog) ? prog.classes.find((c) =
 function classByName(prog, name) {
   if (!name) return null;
   const l = String(name).toLowerCase();
-  // le eccezioni predefinite sono classi sempre disponibili
+  // the predefined exceptions are classes always available
   return (hasClasses(prog) && prog.classes.find((c) => c.name.toLowerCase() === l)) || excClass(l);
 }
-/* la classe (o il nome) è un'eccezione? */
-const isExcClass = (prog, c) => { const k = typeof c === 'string' ? classByName(prog, c) : c; return !!k && chainOf(prog, k).some((x) => x.builtin && x.name === 'Eccezione'); };
+/* is the class (or the name) an exception? */
+const isExcClass = (prog, c) => { const k = typeof c === 'string' ? classByName(prog, c) : c; return !!k && chainOf(prog, k).some((x) => x.builtin && x.name === 'Exception'); };
 const classOf = (prog, f) => classById(prog, f.cls);
 const mainClass = (prog) => classOf(prog, prog.functions[0]);
 const membersOf = (prog, c) => prog.functions.filter((f) => f.cls === c.id);
-/* catena di ereditarietà: la classe, poi il padre, il nonno... (si ferma sui cicli) */
+/* inheritance chain: the class, then the parent, the grandparent... (stops on cycles) */
 function chainOf(prog, c) {
   const out = [];
   while (c && !out.includes(c)) { out.push(c); c = classByName(prog, c.parent); }
   return out;
 }
 const isSubclass = (prog, c, of) => chainOf(prog, c).includes(of);
-/* nome di classe ricavato dal nome del programma: "Media dei voti" -> "MediaDeiVoti" */
+/* class name derived from the program name: "Grade average" -> "GradeAverage" */
 function defaultClassName(prog) {
   const words = String(prog.attrs.name || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').split(/[^A-Za-z0-9_]+/).filter(Boolean);
   let n = words.map((w) => w[0].toUpperCase() + w.slice(1)).join('');
   if (!/^[A-Za-z_]/.test(n)) n = '';
-  return n || 'Programma';
+  return n || L('model.program');
 }
-/* vista Oggetti: tutte le funzioni diventano metodi statici di un'unica classe */
+/* Objects view: all the functions become static methods of a single class */
 function wrapInClass(prog) {
   const c = makeClass(defaultClassName(prog));
   prog.classes = [c];
   for (const f of prog.functions) Object.assign(f, { cls: c.id, visibility: 'public', static: true, ctor: false });
   return c;
 }
-/* una sola classe con soli metodi statici pubblici: equivale al programma a funzioni */
+/* a single class with only public static methods: equivalent to the program with functions */
 function isTrivialOO(prog) {
   if (!hasClasses(prog)) return true;
   if (prog.classes.length !== 1) return false;
@@ -155,11 +156,11 @@ function isTrivialOO(prog) {
   if (c.parent || c.abstract || c.attributes.length || (c.tparams || []).length || c.module) return false;
   return prog.functions.every((f) => f.cls === c.id && f.static && !f.ctor && (f.visibility || 'public') === 'public');
 }
-/* come sopra e con il nome predefinito: si salva nel formato standard senza perdere nulla */
-/* metodi astratti ereditati e non ancora definiti: [{ f, owner }] (per una classe concreta devono essere zero) */
+/* as above and with the default name: it is saved in the standard format without losing anything */
+/* inherited abstract methods not defined yet: [{ f, owner }] (for a concrete class they must be zero) */
 function missingAbstract(prog, c) {
   const sig = (f) => f.name.toLowerCase() + '(' + f.params.map((p) => p.type.toLowerCase() + (p.array ? '[' + (p.dims || 1) : '')).join(',') + ')';
-  const best = new Map(); // firma -> versione più derivata
+  const best = new Map(); // signature -> most derived version
   for (const k of chainOf(prog, c)) for (const f of membersOf(prog, k)) if (!f.ctor && !f.static && !best.has(sig(f))) best.set(sig(f), { f, owner: k });
   return [...best.values()].filter((x) => x.f.abstract);
 }
@@ -168,7 +169,7 @@ function unwrapClasses(prog) {
   delete prog.classes;
   for (const f of prog.functions) { delete f.cls; delete f.visibility; delete f.static; delete f.ctor; }
 }
-/* tipi utilizzabili: i quattro di base e, nella vista Oggetti, le classi */
+/* usable types: the four base ones and, in the Objects view, the classes */
 const typeList = (prog) => ['Integer', 'Real', 'String', 'Boolean', ...(hasClasses(prog) ? prog.classes.map((c) => c.name) : [])];
 
 function newProgram() {
@@ -178,7 +179,7 @@ function newProgram() {
   };
 }
 
-/* Copia profonda con nuovi id (per copia/incolla) */
+/* Deep copy with new ids (for copy/paste) */
 function cloneStmt(s, keepIds) {
   const c = JSON.parse(JSON.stringify(s));
   if (!keepIds) reId(c);
@@ -190,7 +191,7 @@ function reId(s) {
   for (const arr of childArrays(s)) arr.forEach(reId);
 }
 
-/* Visita ricorsiva di tutti i blocchi */
+/* Recursive visit of all the blocks */
 function walk(stmts, fn, parent) {
   for (let i = 0; i < stmts.length; i++) {
     const s = stmts[i];
@@ -213,13 +214,13 @@ const boolAttr = (v, d) => (v == null ? d : String(v).toLowerCase() === 'true');
 function parseFprg(text) {
   const doc = new DOMParser().parseFromString(text, 'application/xml');
   const err = doc.querySelector('parsererror');
-  if (err) throw new Error('Il file non è un XML valido.');
+  if (err) throw new Error(L('model.theFileIsNotValidXml'));
   const root = doc.documentElement;
-  if (root.nodeName.toLowerCase() !== FPRG_ROOT) throw new Error('Il file non è un programma .fprg valido (elemento principale mancante).');
+  if (root.nodeName.toLowerCase() !== FPRG_ROOT) throw new Error(L('model.theFileIsNotAValid'));
   _skipped = [];
   _classNames = new Map(); _typeParams = new Set();
   const prog = { attrs: { name: '', authors: '', about: '', created: '', edited: '' }, functions: [], fileversion: root.getAttribute('fileversion') || '' };
-  // estensione FlowLab: classi (lette per prime, perché i tipi le possono nominare)
+  // FlowLab extension: classes (read first, because the types can name them)
   const clsEl = [...root.children].find((el) => el.nodeName.toLowerCase() === 'flowlab-classes');
   if (clsEl) {
     prog.classes = [];
@@ -240,7 +241,7 @@ function parseFprg(text) {
         static: boolAttr(a.getAttribute('static'), false), init: a.getAttribute('init') || '',
       }));
       delete cl._attrEls;
-      // la classe madre può essere anche un'eccezione predefinita
+      // the parent class can also be a predefined exception
       const par = _classNames.get(cl.parent.toLowerCase()) || (excClass(cl.parent) || {}).name; cl.parent = par && par.toLowerCase() !== cl.name.toLowerCase() ? par : '';
     }
     if (!prog.classes.length) delete prog.classes;
@@ -257,10 +258,10 @@ function parseFprg(text) {
         type: normType(el.getAttribute('type'), true),
         variable: el.getAttribute('variable') || '',
       });
-      // funzione importata da un modulo di sole funzioni
+      // function imported from a module with only functions
       const fm = (el.getAttribute('flowlab-module') || '').trim();
       if (fm) f.module = { name: fm, src: el.getAttribute('flowlab-module-src') || '' };
-      // funzione generica: parametri di tipo, validi nei suoi parametri e nel suo corpo
+      // generic function: type parameters, valid in its parameters and in its body
       const ftp = (el.getAttribute('flowlab-tparams') || '').split(',').map((x) => x.trim()).filter((x) => /^[A-Za-z_]\w*$/.test(x));
       const savedTP = _typeParams;
       if (ftp.length) { f.tparams = ftp;  _typeParams = new Set([..._typeParams, ...ftp.map((t) => t.toLowerCase())]); f.type = normType(el.getAttribute('type'), true); }
@@ -273,10 +274,10 @@ function parseFprg(text) {
         f.ctor = boolAttr(el.getAttribute('flowlab-ctor'), false);
         f.abstract = !f.ctor && !f.static && boolAttr(el.getAttribute('flowlab-abstract'), false);
       }
-      // estensione FlowLab: più valori restituiti, "nome:Tipo;nome:Tipo"
+      // FlowLab extension: several return values, "name:Type;name:Type"
       const multi = el.getAttribute('flowlab-returns');
       if (multi) {
-        // un valore restituito può essere un array: "v:Integer[]", "m:Real[,]"
+        // a return value can be an array: "v:Integer[]", "m:Real[,]"
         const list = multi.split(';').map((x) => x.trim()).filter(Boolean).map((x) => {
           const k = x.indexOf(':'); const n = k < 0 ? x : x.slice(0, k); let t = k < 0 ? '' : x.slice(k + 1).trim();
           const am = /\[(,*)\]$/.exec(t); if (am) t = t.slice(0, am.index);
@@ -305,7 +306,7 @@ function parseFprg(text) {
   if (mi > 0) prog.functions.unshift(prog.functions.splice(mi, 1)[0]);
   if (mi < 0) prog.functions.unshift(makeFunction('Main'));
   if (prog.classes) {
-    // metodi senza classe: vanno nella classe del Main (o nella prima)
+    // methods without a class: they go in the class of the Main (or in the first one)
     const home = classOf(prog, prog.functions[0]) || prog.classes[0];
     for (const f of prog.functions) if (!classById(prog, f.cls)) Object.assign(f, { cls: home.id, static: f.static || f === prog.functions[0], ctor: false });
     Object.assign(prog.functions[0], { static: true, ctor: false, visibility: 'public' });
@@ -316,9 +317,9 @@ function parseFprg(text) {
 }
 
 let _classNames = new Map();
-let _typeParams = new Set(); // parametri di tipo delle classi generiche del file
+let _typeParams = new Set(); // type parameters of the generic classes of the file
 function normType(t, allowNone) {
-  // tipo generico: ArrayList<Integer>, Coppia<T, String>
+  // generic type: ArrayList<Integer>, Pair<T, String>
   const g = _MX.splitType(t);
   if (g.args.length) return _MX.joinType(normType(g.base), g.args.map((a) => normType(a)));
   const l = String(t || '').trim().toLowerCase();
@@ -337,7 +338,7 @@ function parseBlock(el) {
   const kids = [...el.children];
   for (let i = 0; i < kids.length; i++) {
     const c = kids[i];
-    // estensione FlowLab: costante = <declare flowlab-const="True"/> seguita dall'assegnamento del valore
+    // FlowLab extension: constant = <declare flowlab-const="True"/> followed by the assignment of the value
     if (c.nodeName.toLowerCase() === 'declare' && String(c.getAttribute('flowlab-const')).toLowerCase() === 'true') {
       const name = (c.getAttribute('name') || '').trim();
       const nx = kids[i + 1];
@@ -346,8 +347,8 @@ function parseBlock(el) {
       out.push(makeStmt('const', { name, type: normType(c.getAttribute('type')), expression }));
       continue;
     }
-    // estensione FlowLab: dichiarazione con valore iniziale = <declare flowlab-init="True"/> seguita
-    // da un'assegnazione per ogni nome, tutte con la stessa espressione
+    // FlowLab extension: declaration with initial value = <declare flowlab-init="True"/> followed
+    // by an assignment for each name, all with the same expression
     if (c.nodeName.toLowerCase() === 'declare' && String(c.getAttribute('flowlab-init')).toLowerCase() === 'true' && !boolAttr(c.getAttribute('array'), false)) {
       const names = (c.getAttribute('name') || '').split(',').map((x) => x.trim()).filter(Boolean);
       const as = kids.slice(i + 1, i + 1 + names.length);
@@ -395,26 +396,26 @@ function parseStmt(el) {
     case 'close': return makeStmt('close', { mode: (A('mode') || 'read').toLowerCase() === 'write' ? 'write' : 'read' });
     case 'read': return makeStmt('read', { variable: S('variable') });
     case 'write': return makeStmt('write', { expression: S('expression') });
-    // estensione FlowLab: eccezioni
+    // FlowLab extension: exceptions
     case 'throw': return makeStmt('throw', { expression: S('expression') });
     case 'try': {
       const s = makeStmt('try', { catches: [] });
       for (const c of el.children) {
         const t = c.nodeName.toLowerCase();
         if (t === 'body') s.body = parseBlock(c);
-        else if (t === 'catch') s.catches.push(makeCatch({ type: (c.getAttribute('type') || 'Eccezione').trim(), variable: (c.getAttribute('variable') || 'e').trim(), body: parseBlock(c) }));
+        else if (t === 'catch') s.catches.push(makeCatch({ type: (c.getAttribute('type') || 'Exception').trim(), variable: (c.getAttribute('variable') || 'e').trim(), body: parseBlock(c) }));
         else if (t === 'finally') { s.hasFinally = true; s.finally = parseBlock(c); }
       }
       if (!s.catches.length && !s.hasFinally) s.catches.push(makeCatch());
       return s;
     }
   }
-  return null; // elemento sconosciuto: ignorato
+  return null; // unknown element: ignored
 }
 
-/* Serializzazione */
+/* Serialization */
 const _MX = (typeof module !== 'undefined') ? require('./expr.js') : ExprLib;
-/* il formato .fprg prevede solo stringhe tra virgolette doppie: 'testo' diventa "testo" */
+/* the .fprg format only allows strings between double quotes: 'text' becomes "text" */
 function fgExpr(src) {
   const s = String(src ?? '');
   if (!s.includes("'")) return s;
@@ -453,7 +454,7 @@ function serializeFprg(prog) {
   L.push(`        <attribute name="created" value="${xmlEsc(created)}"/>`);
   L.push(`        <attribute name="edited" value="${xmlEsc(edited)}"/>`);
   L.push('    </attributes>');
-  // una classe che contiene solo funzioni statiche si salva nel formato standard
+  // a class that contains only static functions is saved in the standard format
   const oo = !isPlainOO(prog);
   if (oo) {
     L.push('    <flowlab-classes>');
@@ -474,7 +475,7 @@ function serializeFprg(prog) {
     if ((f.tparams || []).length) extra += ` flowlab-tparams="${xmlEsc(f.tparams.join(','))}"`;
     if (f.module) extra += ` flowlab-module="${xmlEsc(f.module.name)}" flowlab-module-src="${xmlEsc(f.module.src || '')}"`;
     if (oo) { const c = classOf(prog, f); extra += ` flowlab-class="${xmlEsc(c ? c.name : '')}" flowlab-visibility="${f.visibility || 'public'}" flowlab-static="${TF(!!f.static)}"${f.ctor ? ' flowlab-ctor="True"' : ''}${f.abstract ? ' flowlab-abstract="True"' : ''}`; }
-    // per le procedure si conserva il nome eventualmente lasciato in "variable" da altri editor
+    // for procedures the name possibly left in "variable" by other editors is kept
     L.push(`    <function name="${xmlEsc(f.name)}" type="${xmlEsc(rs.length ? rs[0].type : 'None')}" variable="${xmlEsc(rs.length ? rs[0].name : (f.variable || ''))}"${extra}>`);
     if (f.params.length) {
       L.push('        <parameters>');
@@ -506,14 +507,14 @@ function writeBlock(stmts, L, depth) {
     switch (s.kind) {
       case 'declare':
         if (!s.array && String(s.init || '').trim()) {
-          // gli altri editor vedono la dichiarazione e un'assegnazione per ogni variabile
+          // the other editors see the declaration and an assignment for each variable
           open('declare', [['name', s.name], ['type', s.type], ['array', 'False'], ['size', ''], ['flowlab-init', 'True']]);
           for (const n of s.name.split(',').map((x) => x.trim()).filter(Boolean)) open('assign', [['variable', n], ['expression', s.init]]);
         } else open('declare', [['name', s.name], ['type', s.type], ['array', TF(s.array)], ['size', s.array ? s.size : '']]);
         break;
       case 'assign': open('assign', [['variable', s.variable], ['expression', s.expression]]); break;
       case 'const':
-        // gli altri editor vedono una variabile dichiarata e assegnata: il programma resta eseguibile
+        // the other editors see a declared and assigned variable: the program stays runnable
         open('declare', [['name', s.name], ['type', s.type], ['array', 'False'], ['size', ''], ['flowlab-const', 'True']]);
         open('assign', [['variable', s.name], ['expression', s.expression]]);
         break;
@@ -555,32 +556,32 @@ function writeBlock(stmts, L, depth) {
   }
 }
 
-/* Funzionalità del formato .fprg esteso usate dal programma */
+/* Features of the extended .fprg format used by the program */
 function extendedFeatures(prog) {
   const out = new Set();
-  if (!isPlainOO(prog)) out.add('classi e oggetti');
-  if ((prog.classes || []).some((c) => (c.tparams || []).length)) out.add('classi con Tipi Generici');
-  if (prog.functions.some((f) => (f.tparams || []).length)) out.add('funzioni con Tipi Generici');
-  if ((prog.classes || []).some((c) => c.module) || prog.functions.some((f) => f.module)) out.add('moduli importati');
+  if (!isPlainOO(prog)) out.add(L('model.classesAndObjects'));
+  if ((prog.classes || []).some((c) => (c.tparams || []).length)) out.add(L('model.classesWithGenericTypes'));
+  if (prog.functions.some((f) => (f.tparams || []).length)) out.add(L('model.functionsWithGenericTypes'));
+  if ((prog.classes || []).some((c) => c.module) || prog.functions.some((f) => f.module)) out.add(L('model.importedModules'));
   for (const f of prog.functions) {
-    if (rets(f).length > 1) out.add('funzioni con più valori restituiti');
-    if (rets(f).some((r) => r.array)) out.add('funzioni che restituiscono array');
-    walk(f.body, (s) => { if (s.kind === 'try' || s.kind === 'throw') out.add('eccezioni (Try, Catch, Finally, Throw)'); });
-    if (f.params.some((p) => p.array && (p.dims || 1) > 1)) out.add('array a più dimensioni');
+    if (rets(f).length > 1) out.add(L('model.functionsWithSeveralReturnValues'));
+    if (rets(f).some((r) => r.array)) out.add(L('model.functionsReturningArrays'));
+    walk(f.body, (s) => { if (s.kind === 'try' || s.kind === 'throw') out.add(L('model.exceptionsTryCatchFinallyThrow')); });
+    if (f.params.some((p) => p.array && (p.dims || 1) > 1)) out.add(L('model.multiDimensionalArrays'));
     walk(f.body, (s) => {
-      if (s.kind === 'const') out.add('costanti');
-      if (s.kind === 'declare' && !s.array && String(s.init || '').trim()) out.add('dichiarazioni con valore iniziale');
-      if (s.kind === 'declare' && s.array && _MX.splitTop(s.size).length > 1) out.add('array a più dimensioni');
+      if (s.kind === 'const') out.add(L('model.constants'));
+      if (s.kind === 'declare' && !s.array && String(s.init || '').trim()) out.add(L('model.declarationsWithAnInitialValue'));
+      if (s.kind === 'declare' && s.array && _MX.splitTop(s.size).length > 1) out.add(L('model.multiDimensionalArrays'));
       for (const k of ['variable', 'expression', 'start', 'end', 'step']) {
         if (typeof s[k] !== 'string' || !s[k].includes('[')) continue;
-        try { const visit = (n) => { if (!n || typeof n !== 'object') return; if (n.k === 'var' && n.indices && n.indices.length > 1) out.add('array a più dimensioni'); Object.values(n).forEach(visit); }; (k === 'variable' ? _MX.parseLValueList(s[k]) : [_MX.parseExpr(s[k])]).forEach(visit); } catch (e) { /* espressione incompleta */ }
+        try { const visit = (n) => { if (!n || typeof n !== 'object') return; if (n.k === 'var' && n.indices && n.indices.length > 1) out.add(L('model.multiDimensionalArrays')); Object.values(n).forEach(visit); }; (k === 'variable' ? _MX.parseLValueList(s[k]) : [_MX.parseExpr(s[k])]).forEach(visit); } catch (e) { /* incomplete expression */ }
       }
     });
   }
   return [...out];
 }
 
-/* Completezza di un blocco (campi obbligatori compilati) */
+/* Completeness of a block (required fields filled in) */
 function isIncomplete(s) {
   switch (s.kind) {
     case 'declare': return !s.name.trim() || (s.array && !String(s.size).trim());

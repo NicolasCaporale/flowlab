@@ -1,7 +1,7 @@
 import { chromium } from '/opt/npm-tools/node_modules/playwright/index.mjs';
 const url = 'file://' + process.cwd() + '/dist/FlowLab.html';
 const browser = await chromium.launch();
-const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+const page = await browser.newPage({ locale: 'it-IT', viewport: { width: 1440, height: 900 } });
 const errs = [];
 page.on('console', m => { if (m.type() === 'error') errs.push(m.text()); });
 page.on('pageerror', e => errs.push('PAGEERR ' + e.message));
@@ -9,7 +9,7 @@ await page.goto(url);
 await page.waitForTimeout(800);
 await page.screenshot({ path: 'test/shot1.png' });
 // run media example with inputs
-await page.evaluate(() => { localStorage.clear(); FlowLab.loadExample('media'); });
+await page.evaluate(() => { localStorage.clear(); FlowLab.loadExample('grade_average'); });
 await page.selectOption('#speed', { index: 0 }).catch(()=>{});
 await page.evaluate(() => { const s=document.querySelector('#speed'); s.value=0; s.dispatchEvent(new Event('input')); });
 await page.click('#runBtn');
@@ -30,13 +30,13 @@ const res = await page.evaluate(async () => {
   return out;
 });
 console.log(res.join('\n'));
-await page.evaluate(() => FlowLab.loadExample('bolle'));
+await page.evaluate(() => FlowLab.loadExample('bubble_sort'));
 await page.click('#runBtn'); await page.waitForTimeout(500);
 console.log('BOLLE:\n' + await page.innerText('#conOut'));
-await page.evaluate(() => FlowLab.loadExample('file'));
+await page.evaluate(() => FlowLab.loadExample('files'));
 await page.click('#runBtn'); await page.waitForTimeout(500);
 console.log('FILE:\n' + await page.innerText('#conOut'));
-await page.evaluate(() => FlowLab.loadExample('fattoriale'));
+await page.evaluate(() => FlowLab.loadExample('factorial'));
 await page.click('#runBtn'); await page.waitForSelector('#conInput:not([disabled])'); await page.fill('#conInput','10'); await page.press('#conInput','Enter'); await page.waitForTimeout(300);
 console.log('FATT:\n' + await page.innerText('#conOut'));
 await page.click('#tabs [data-tab=code]'); await page.waitForTimeout(300);

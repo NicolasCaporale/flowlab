@@ -1,7 +1,7 @@
 // Array come valori restituiti: dialogo della funzione, dichiarazione automatica, esecuzione, file, attributo array restituito
 import { chromium } from '/opt/npm-tools/node_modules/playwright/index.mjs';
 const browser = await chromium.launch();
-const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+const page = await browser.newPage({ locale: 'it-IT', viewport: { width: 1440, height: 900 } });
 const errs = []; page.on('pageerror', (e) => errs.push(e.message));
 await page.goto('file://' + process.cwd() + '/dist/FlowLab.html'); await page.waitForTimeout(300);
 await page.evaluate(() => { localStorage.clear(); const s = document.querySelector('#speed'); s.value = 0; s.dispatchEvent(new Event('input')); });
@@ -9,7 +9,7 @@ const wait = (ms = 150) => page.waitForTimeout(ms);
 const ok = (name, cond) => console.log(`${cond ? 'ok  ' : 'FAIL'} ${name}`);
 const out = async () => (await page.innerText('#conOut')).split('\n').filter((l) => l && !/^(Programma|▶|■|Esecuzione)/.test(l)).join(' | ');
 
-await page.evaluate(() => FlowLab.loadExample('tabellina')); await wait(200);
+await page.evaluate(() => FlowLab.loadExample('times_table')); await wait(200);
 await page.click('#funcAdd'); await wait(200);
 await page.fill('#f_fname', 'quadrati');
 await page.click('.modal button:has-text("+ Aggiungi parametro")'); await wait(80);

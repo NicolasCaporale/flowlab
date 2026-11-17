@@ -1,5 +1,5 @@
 /* ==========================================================================
-   FlowLab — applicazione (interfaccia, editor, esecuzione)
+   FlowLab — application (interface, editor, execution)
    ========================================================================== */
 'use strict';
 
@@ -13,40 +13,41 @@
       if (k === 'class') el.className = v;
       else if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
       else if (k === 'html') el.innerHTML = v;
-      else el.setAttribute(k, v === true ? '' : v);
+      else el.setAttribute(k, v === true ? '' : k === 'title' || k === 'aria-label' ? I18n.keys(v) : v); // names of the keys in the chosen language
     }
-    for (const c of kids.flat()) if (c != null && c !== false) el.append(c.nodeType ? c : document.createTextNode(String(c)));
+    const isKey = tag === 'kbd' || /\bikey\b/.test((attrs && attrs.class) || '');
+    for (const c of kids.flat()) if (c != null && c !== false) el.append(c.nodeType ? c : document.createTextNode(isKey ? I18n.keys(String(c)) : String(c)));
     return el;
   };
   const store = {
     get(k, d) { try { const v = localStorage.getItem('flowlab:' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
-    set(k, v) { try { localStorage.setItem('flowlab:' + k, JSON.stringify(v)); } catch (e) { /* archiviazione non disponibile */ } },
+    set(k, v) { try { localStorage.setItem('flowlab:' + k, JSON.stringify(v)); } catch (e) { /* storage not available */ } },
   };
   const E = ExprLib, M = ModelLib;
   const TYPE_IT = E.TYPE_IT;
 
-  /* ------------------------------ Stato --------------------------------- */
+  /* ------------------------------ State --------------------------------- */
   const st = {
     prog: null, fi: 0, sel: null, clip: null, undo: [], redo: [], dirty: false,
-    zoom: store.get('zoom', 1), speed: store.get('speed', 2), lang: store.get('lang', 'python'), tab: store.get('tab', 'console'),
+    zoom: store.get('zoom', 1), speed: store.get('speed', 2), lang: CodeGen.LANGS[store.get('lang', 'python')] ? store.get('lang', 'python') : 'python', tab: store.get('tab', 'console'),
     fileName: null, ins: [], expanded: new Set(), modCollapsed: new Set(store.get('modCollapsed', [])), varsOpen: new Set(), vfs: new Map(Object.entries(store.get('vfs', {}))),
-    // vista Funzioni o Oggetti; nella vista Oggetti il foglio mostra il diagramma delle classi (uml) o un metodo
+    // Functions or Objects view; in the Objects view the sheet shows the class diagram (uml) or a method
     view: store.get('view', 'functions') === 'objects' ? 'objects' : 'functions', uml: true, usel: null,
-    // posizioni delle eccezioni predefinite nel diagramma delle classi (solo in memoria, per il programma aperto)
+    // positions of the predefined exceptions in the class diagram (only in memory, for the open program)
     excPos: new Map(),
   };
-  const SPEEDS = [{ ms: 0, label: 'Istantanea' }, { ms: 40, label: 'Veloce' }, { ms: 280, label: 'Media' }, { ms: 750, label: 'Lenta' }];
+  const SPEEDS = [{ ms: 0, label: L('ui.instant') }, { ms: 40, label: L('ui.fast') }, { ms: 280, label: L('ui.medium') }, { ms: 750, label: L('ui.slow') }];
   const renderer = new RenderLib.Renderer();
-  /* ---- viste: il foglio principale (MAIN) e le viste ausiliarie, finestre mobili con un altro
-     diagramma o un'altra parte dello stesso. La vista attiva (V) ha il suo stato in st (diagramma,
-     selezione, zoom, punti di inserimento…); le altre lo tengono da parte in v.state */
+  /* ---- views: the main sheet (MAIN) and the auxiliary views, floating windows with another
+     diagram or another part of the same one. The active view (V) keeps its state in st (diagram,
+     selection, zoom, insertion points…); the others keep it aside in v.state */
   const VKEYS = ['fi', 'uml', 'sel', 'usel', 'zoom', 'ins', 'edges', 'compact', 'compactFid'];
-  const FOLLOW = ['fi', 'uml', 'compact', 'compactFid', 'zoom']; // una vista «Continua» copia questi dal foglio principale
+  const FOLLOW = ['fi', 'uml', 'compact', 'compactFid', 'zoom']; // a «Continue» view copies these from the main sheet
   const MAIN = { main: true, id: 0, state: {}, chart: null, wrap: null };
   const views = [MAIN];
   let V = MAIN;
 
-  /* ------------------------------ Utilità -------------------------------- */
+  /* ------------------------------ Utilities -------------------------------- */
   let toastTimer = null;
   function toast(msg, kind) {
     const t = $('#toast');
@@ -56,10 +57,10 @@
   const func = () => st.prog.functions[st.fi];
   const isOO = () => st.view === 'objects';
   const isUml = () => isOO() && st.uml;
-  /* nome mostrato: Inizio per Main, Classe.metodo e new Classe nella vista Oggetti */
+  /* name shown: Main for Main, Class.method and new Class in the Objects view */
   const fname = (f) => {
     if (!f) return '';
-    if (f.name.toLowerCase() === 'main' && !f.ctor) return 'Inizio';
+    if (f.name.toLowerCase() === 'main' && !f.ctor) return L('run.main');
     const c = f.cls && M.classOf(st.prog, f);
     if (!c) return f.name;
     return f.ctor ? 'new ' + c.name : c.name + '.' + f.name;
@@ -69,7 +70,7 @@
 
   function snapshot() { return JSON.stringify({ prog: st.prog, fi: st.fi }); }
   function mutate(fn) {
-    if (isRunning()) { toast('Ferma il programma per modificare il diagramma', 'warn'); return false; }
+    if (isRunning()) { toast(L('ui.stopTheProgramToEditThe'), 'warn'); return false; }
     st.undo.push(snapshot()); if (st.undo.length > 150) st.undo.shift();
     st.redo = [];
     fn();
@@ -92,9 +93,9 @@
     for (const p of f.params) out.push(p.name);
     M.walk(f.body, (s) => {
       if (s.kind === 'declare' || s.kind === 'const') s.name.split(',').map((x) => x.trim()).filter(Boolean).forEach((n) => out.push(n));
-      if (s.kind === 'try') for (const c of s.catches || []) if (c.variable && !out.includes(c.variable)) out.push(c.variable); // variabili dei Catch
+      if (s.kind === 'try') for (const c of s.catches || []) if (c.variable && !out.includes(c.variable)) out.push(c.variable); // variables of the Catches
     });
-    // nella vista Oggetti anche gli attributi della classe (e di quelle madri, se non privati)
+    // in the Objects view also the attributes of the class (and of its parents, if not private)
     const c = isOO() && M.classOf(st.prog, f);
     if (c) {
       M.chainOf(st.prog, c).forEach((k, i) => k.attributes.forEach((a) => { if ((i === 0 || a.visibility !== 'private') && (a.static || !f.static)) out.push(a.name); }));
@@ -102,21 +103,21 @@
     }
     return [...new Set(out)];
   }
-  /* scelta di un tipo: un menu con i tipi base, i Tipi Generici (T) e le classi; per una
-     classe con Tipi Generici (Nodo<S, T>) accanto compaiono i menu dei suoi tipi, anche annidati.
-     ctx: { gens: [T, S…], allowNew, taken() } oppure la classe in cui si usa il tipo;
-     con allowNew c'è la voce «Nuovo Tipo Generico», che assegna un nome libero (T, S, V…).
-     onChange(tipo) a ogni cambiamento */
+  /* choice of a type: a menu with the base types, the Generic Types (T) and the classes; for a
+     class with Generic Types (Node<S, T>) the menus of its types appear beside it, also nested.
+     ctx: { gens: [T, S…], allowNew, taken() } or the class in which the type is used;
+     with allowNew there is the item «New Generic Type», which assigns a free name (T, S, V…).
+     onChange(type) at every change */
   const NEW_GEN = '\u0000nuovo';
   function typePicker(value, ctx, onChange, aria) {
     const el = h('span', { class: 'tpick' });
-    const sel = h('select', { 'aria-label': aria || 'Tipo' });
+    const sel = h('select', { 'aria-label': aria || L('win.type') });
     const sub = h('span', { class: 'tpargs' });
     const cs = M.hasClasses(st.prog) ? st.prog.classes : [];
     const tps = ctx ? ctx.gens || ctx.tparams || [] : [];
-    const genOpt = (t) => h('option', { value: t, class: 'genopt' }, `${t} (Tipo Generico)`);
-    const opts = [...E.TYPES.map((t) => [t, TYPE_IT[t]]), ...tps.map((t) => [t, `${t} (Tipo Generico)`]), ...(ctx && ctx.allowNew ? [[NEW_GEN, 'Nuovo Tipo Generico']] : []), ...cs.map((c) => [c.name, `${M.classTitle(c)} (${c.module ? 'modulo' : 'classe'})`])];
-    // i menu dello stesso dialogo vedono subito i Tipi Generici appena creati
+    const genOpt = (t) => h('option', { value: t, class: 'genopt' }, L('ui.genericType', { t }));
+    const opts = [...E.TYPES.map((t) => [t, TYPE_IT[t]]), ...tps.map((t) => [t, L('ui.genericType', { t })]), ...(ctx && ctx.allowNew ? [[NEW_GEN, L('ui.newGenericType')]] : []), ...cs.map((c) => [c.name, `${M.classTitle(c)} (${c.module ? L('ui.module') : L('ui.class')})`])];
+    // the menus of the same dialog see at once the Generic Types just created
     if (ctx && typeof ctx === 'object' && !ctx.id) (ctx._sels = ctx._sels || new Set()).add(sel);
     const genOf = (b) => { const c = M.classByName(st.prog, b); return c && (c.tparams || []).length ? c : null; };
     let kids = [];
@@ -126,7 +127,7 @@
       sub.innerHTML = ''; kids = [];
       const c = genOf(sel.value); if (!c) return;
       c.tparams.forEach((p, i) => {
-        const k = typePicker(args[i] || 'Integer', ctx, fire, `${aria || 'Tipo'}: ${p} di ${c.name}`);
+        const k = typePicker(args[i] || 'Integer', ctx, fire, `${aria || L('win.type')}: ${p} di ${c.name}`);
         kids.push(k);
         sub.append(h('span', { class: 'tparg' }, h('span', { class: 'tpname' }, p + ':'), k.el));
       });
@@ -146,7 +147,7 @@
           if (![...x.options].some((o) => o.value === nm)) { const nw = [...x.options].find((o) => o.value === NEW_GEN); const o = genOpt(nm); if (nw) x.insertBefore(o, nw); else { const firstCls = [...x.options].find((o2) => /\((classe|modulo)\)$/.test(o2.textContent)); x.insertBefore(o, firstCls || null); } }
         }
         sel.value = nm;
-        toast(`Nuovo Tipo Generico: ${nm}`);
+        toast(L('ui.newGenericType2', { nm }));
       }
       drawArgs([]); fire();
     });
@@ -154,16 +155,16 @@
     set(value);
     return { el, sel, get, set, setDisabled(d) { el.querySelectorAll('select').forEach((x) => { x.disabled = d; }); } };
   }
-  /* ---- Tipi Generici: FlowLab dà i nomi (T, S, V…) e li ricava da dove si usano ----
-     in un attributo, in un costruttore o in un metodo non statico appartengono alla classe (Coppia<T>);
-     in una funzione o in un metodo statico alla funzione (massimo<T>) */
+  /* ---- Generic Types: FlowLab gives the names (T, S, V…) and derives them from where they are used ----
+     in an attribute, in a constructor or in a non-static method they belong to the class (Pair<T>);
+     in a function or in a static method to the function (maximum<T>) */
   const GEN_NAMES = ['T', 'S', 'V', 'U', 'W', 'K', 'E', 'R'];
   function nextGenName(taken) {
     const free = (n) => !taken.has(n.toLowerCase()) && !M.classByName(st.prog, n);
     for (const n of GEN_NAMES) if (free(n)) return n;
     let i = 1; while (!free('T' + i)) i++; return 'T' + i;
   }
-  /* nomi dei Tipi Generici che compaiono nei tipi (known: quelli già noti, anche con nomi lunghi) */
+  /* names of the Generic Types that appear in the types (known: those already known, also with long names) */
   function genNamesIn(types, known) {
     const kn = new Set((known || []).map((x) => x.toLowerCase()));
     const out = [];
@@ -176,52 +177,52 @@
     types.forEach(add);
     return out;
   }
-  /* l'ordine dei Tipi Generici già presenti resta (Coppia<K, V>): i nuovi vanno in fondo */
+  /* the order of the Generic Types already present stays (Pair<K, V>): the new ones go at the end */
   const orderGen = (old, used) => [...(old || []).filter((t) => used.some((u) => u.toLowerCase() === t.toLowerCase())), ...used.filter((u) => !(old || []).some((t) => t.toLowerCase() === u.toLowerCase()))];
-  /* tipi che rendono generica una classe: attributi d'istanza, costruttori, metodi non statici (tranne skip) */
+  /* types that make a class generic: instance attributes, constructors, non-static methods (except skip) */
   function classTypes(c, skip) {
     const out = [];
     for (const a of c.attributes) if (a !== skip && !a.static) out.push(a.type);
     for (const f of M.membersOf(st.prog, c)) if (f !== skip && (f.ctor || !f.static)) out.push(...f.params.map((p) => p.type), ...M.rets(f).map((r) => r.type));
     return out;
   }
-  /* Tipi Generici della classe se si aggiungono quei tipi (null se non cambiano); errore se il cambio non si può fare */
+  /* Generic Types of the class if those types are added (null if they do not change); error if the change cannot be made */
   function classGenChange(c, skip, extra) {
     const nu = orderGen(c.tparams, genNamesIn([...classTypes(c, skip), ...extra], c.tparams));
     if (nu.join(',') === (c.tparams || []).join(',')) return { nu: null };
     const added = nu.filter((t) => !(c.tparams || []).includes(t)), gone = (c.tparams || []).filter((t) => !nu.includes(t));
-    const what = [added.length ? `si aggiungerebbe il Tipo Generico ${added.join(', ')}` : '', gone.length ? `si toglierebbe il Tipo Generico ${gone.join(', ')}` : ''].filter(Boolean).join(' e ') || 'cambierebbe l\'ordine dei Tipi Generici';
-    if (nu.length && c === M.mainClass(st.prog)) return { err: `${c.name} è la classe principale: non può avere Tipi Generici. Usa un metodo statico (il Tipo Generico è suo) oppure un'altra classe` };
-    if (nu.length && c.parent) return { err: `${c.name} eredita da ${c.parent}: in FlowLab una classe con Tipi Generici non può ereditare da un'altra classe` };
-    if (nu.length && st.prog.classes.some((k) => (k.parent || '').toLowerCase() === c.name.toLowerCase())) return { err: `${c.name} ha delle sottoclassi: in FlowLab una classe con Tipi Generici non può essere una classe madre` };
-    if (classUsed(c)) return { err: `${c.name} è già usata nel programma: ${what} (${M.classTitle(c)} → ${nu.length ? `${c.name}<${nu.join(', ')}>` : c.name}). Togli prima le variabili e gli attributi di tipo ${c.name}` };
+    const what = [added.length ? L('ui.theGenericTypeWouldBeAdded', { list: added.join(', ') }) : '', gone.length ? L('ui.theGenericTypeWouldBeRemoved', { list: gone.join(', ') }) : ''].filter(Boolean).join(' e ') || L('ui.theOrderOfTheGenericTypes');
+    if (nu.length && c === M.mainClass(st.prog)) return { err: L('ui.isTheMainClassItCannot', { name: c.name }) };
+    if (nu.length && c.parent) return { err: L('ui.inheritsFromInFlowlabAClass', { name: c.name, parent: c.parent }) };
+    if (nu.length && st.prog.classes.some((k) => (k.parent || '').toLowerCase() === c.name.toLowerCase())) return { err: L('ui.hasSubclassesInFlowlabAClass', { name: c.name }) };
+    if (classUsed(c)) return { err: L('ui.isAlreadyUsedInTheProgram', { name: c.name, what, c: M.classTitle(c), text: nu.length ? `${c.name}<${nu.join(', ')}>` : c.name, name2: c.name }) };
     return { nu };
   }
-  /* Tipi Generici che si possono usare in una funzione: quelli della classe (metodi non statici, costruttori) o quelli suoi */
+  /* Generic Types that can be used in a function: those of the class (non-static methods, constructors) or its own */
   function typeCtx(f) {
     const c = f && M.hasClasses(st.prog) ? M.classOf(st.prog, f) : null;
     const gens = c && (f.ctor || !f.static) ? c.tparams || [] : (f && f.tparams) || [];
     return gens.length ? { gens } : c;
   }
-  /* ---- moduli: le loro classi sono in sola lettura ---- */
+  /* ---- modules: their classes are read-only ---- */
   function roGuard(c) {
     if (c === undefined) {
-      // funzione o metodo aperto: viene da un modulo?
+      // open function or method: does it come from a module?
       if (isUml()) return false;
       const f = func(), m = M.moduleOfFunc(st.prog, f);
-      if (m) { toast(`${f.module ? f.name + '()' : M.classOf(st.prog, f).name} fa parte del modulo ${m.name}: è in sola lettura`, 'warn'); return true; }
+      if (m) { toast(L('ui.isPartOfTheModuleIt', { text: f.module ? f.name + '()' : M.classOf(st.prog, f).name, name: m.name }), 'warn'); return true; }
       return false;
     }
-    if (c && c.module) { toast(`${c.name} fa parte del modulo ${c.module.name}: è in sola lettura`, 'warn'); return true; }
+    if (c && c.module) { toast(L('ui.isPartOfTheModuleIt', { text: c.name, name: c.module.name }), 'warn'); return true; }
     return false;
   }
-  /* funzione importata da un modulo di sole funzioni */
-  function roFunc(f) { if (f && f.module) { toast(`${f.name}() fa parte del modulo ${f.module.name}: è in sola lettura`, 'warn'); return true; } return false; }
-  /* tipo di una cella con i parametri di tipo sostituiti (T -> Intero per un ArrayList<Intero>) */
+  /* function imported from a module with only functions */
+  function roFunc(f) { if (f && f.module) { toast(L('ui.isPartOfTheModuleIt2', { name: f.name, name2: f.module.name }), 'warn'); return true; } return false; }
+  /* type of a cell with the type parameters replaced (T -> Integer for an ArrayList<Integer>) */
   function cellT(c) { return run.interp && run.interp.cellType ? run.interp.cellType(c) : c.type; }
 
-  /* ----------------------------- Viste ----------------------------------- */
-  /* il programma deve corrispondere alla vista: classe predefinita nella vista Oggetti */
+  /* ----------------------------- Views ----------------------------------- */
+  /* the program must match the view: default class in the Objects view */
   function ensureView() {
     if (isOO() && !M.hasClasses(st.prog)) M.wrapInClass(st.prog);
     if (!isOO() && M.hasClasses(st.prog)) {
@@ -229,23 +230,23 @@
       else { st.view = 'objects'; store.set('view', 'objects'); }
     }
   }
-  function infoBox(title, text) { openModal({ title, body: h('p', { class: 'confirm' }, text), okText: 'Ho capito', noCancel: true }); }
+  function infoBox(title, text) { openModal({ title, body: h('p', { class: 'confirm' }, text), okText: L('ui.gotIt'), noCancel: true }); }
   function setView(v) {
     if (v === st.view) { if (v === 'objects' && !st.uml) showUml(); return; }
-    if (isRunning()) { toast('Ferma il programma per cambiare vista', 'warn'); return; }
+    if (isRunning()) { toast(L('ui.stopTheProgramToChangeView'), 'warn'); return; }
     if (v === 'functions' && M.hasClasses(st.prog)) {
       const cs = st.prog.classes;
       if (cs.length > 1) {
-        infoBox('Vista funzioni non disponibile', `Non puoi aprire la vista funzioni perché c'è più di una classe (${cs.map((c) => c.name).join(', ')}). La vista funzioni è disponibile solo finché il programma ha una sola classe.`);
+        infoBox(L('ui.functionsViewNotAvailable'), L('ui.youCannotOpenTheFunctionsView', { list: cs.map((c) => c.name).join(', ') }));
         return;
       }
       if (!M.isTrivialOO(st.prog)) {
         const c = cs[0], ms = M.membersOf(st.prog, c), why = [];
-        if (c.attributes.length) why.push('attributi');
-        if (ms.some((f) => f.ctor)) why.push('costruttori');
-        if (ms.some((f) => !f.ctor && !f.static)) why.push('metodi non statici');
-        if (ms.some((f) => (f.visibility || 'public') !== 'public')) why.push('metodi privati o protetti');
-        infoBox('Vista funzioni non disponibile', `La classe ${c.name} ha ${why.join(', ')}: nella vista funzioni ci sono solo funzioni. Per tornare alla vista funzioni la classe deve contenere solo metodi statici e pubblici.`);
+        if (c.attributes.length) why.push(L('ui.attributes'));
+        if (ms.some((f) => f.ctor)) why.push(L('ui.constructors'));
+        if (ms.some((f) => !f.ctor && !f.static)) why.push(L('ui.nonStaticMethods'));
+        if (ms.some((f) => (f.visibility || 'public') !== 'public')) why.push(L('ui.privateOrProtectedMethods'));
+        infoBox(L('ui.functionsViewNotAvailable'), L('ui.theClassHasTheFunctionsView', { name: c.name, list: why.join(', ') }));
         return;
       }
       M.unwrapClasses(st.prog);
@@ -262,39 +263,39 @@
     $('#viewOo').setAttribute('aria-checked', String(isOO()));
     document.body.classList.toggle('oo', isOO());
     document.body.classList.toggle('umlmode', isUml());
-    $('.hint-add').textContent = isUml() ? 'Doppio clic su un metodo per disegnarlo · clic destro su una classe per aggiungere membri · trascina le classi per spostarle' : 'Clic su una freccia per aggiungere un blocco · doppio clic per modificarlo · trascina per spostarlo';
+    $('.hint-add').textContent = isUml() ? L('ui.doubleClickAMethodToDraw') : L('ui.clickAnArrowToAddA');
     const bar = $('#crumbBar');
     const fmod = !isUml() && func().module;
     bar.hidden = (!isOO() || st.uml) && !fmod;
     $('#backUml').hidden = !isOO();
     if (!bar.hidden) {
       const f = func(); const c = isOO() ? M.classOf(st.prog, f) : null; const m = M.moduleOfFunc(st.prog, f);
-      $('#crumbWhere').textContent = isOO() ? `${c ? M.classTitle(c) : ''} › ${f === st.prog.functions[0] ? 'Main (inizio del programma)' : f.ctor ? 'costruttore' : f.name + '()'}${m ? ` · modulo ${m.name}, sola lettura` : ''}` : `${f.name}() · modulo ${m.name}, sola lettura`;
+      $('#crumbWhere').textContent = isOO() ? `${c ? M.classTitle(c) : ''} › ${f === st.prog.functions[0] ? L('ui.mainStartOfTheProgram') : f.ctor ? L('uml.constructor') : f.name + '()'}${m ? L('ui.moduleReadOnly', { name: m.name }) : ''}` : L('ui.moduleReadOnly2', { name: f.name, name2: m.name });
     }
     document.body.classList.toggle('readonly', !bar.hidden && M.isModuleFunc(st.prog, func()));
     const mods = isUml() ? M.modulesOf(st.prog).filter((m) => m.classes.length) : [];
     $('#modBar').hidden = !mods.length;
     document.body.classList.toggle('hasmods', !!mods.length);
-    if (mods.length) { const anyOpen = mods.some((m) => !st.modCollapsed.has(m.name)); $('#modToggle').textContent = anyOpen ? '⊟ Condensa i moduli' : '⊞ Espandi i moduli'; $('#modToggle').title = (anyOpen ? 'Mostra i moduli importati come riquadri compatti, con i soli nomi delle classi' : 'Mostra attributi e metodi delle classi dei moduli importati') + ' (Maiusc+M)'; }
+    if (mods.length) { const anyOpen = mods.some((m) => !st.modCollapsed.has(m.name)); $('#modToggle').textContent = anyOpen ? L('ui.collapseModules') : L('ui.expandModules'); $('#modToggle').title = (anyOpen ? L('ui.showImportedModulesAsCompactBoxes') : L('ui.showAttributesAndMethodsOfThe')) + ' (Shift+M)'; }
   }
-  /* metodo astratto: niente diagramma di flusso, solo le versioni delle sottoclassi */
+  /* abstract method: no flowchart, only the versions of the subclasses */
   function abstractCard(f) {
     st.ins = []; st.edges = [];
     const c = M.classOf(st.prog, f);
     const sig = (g) => g.params.map((p) => p.type.toLowerCase() + (p.array ? '[' + (p.dims || 1) : '')).join(',');
     const impls = st.prog.functions.filter((g) => g !== f && !g.ctor && !g.abstract && g.name.toLowerCase() === f.name.toLowerCase() && sig(g) === sig(f) && M.isSubclass(st.prog, M.classOf(st.prog, g), c));
     const card = h('div', { class: 'abscard', role: 'note' },
-      h('div', { class: 'tag' }, 'metodo astratto'),
+      h('div', { class: 'tag' }, L('run.abstractMethod')),
       h('h3', null, UmlLib.methodText(st.prog, f)),
-      h('p', null, `In ${c.name} questo metodo non ha un corpo: ogni sottoclasse concreta lo deve definire. Quando il programma lo chiama, viene eseguita la versione della classe dell'oggetto.`),
-      impls.length ? h('p', { class: 'muted small' }, 'Definito in:') : h('p', { class: 'muted small' }, 'Nessuna sottoclasse lo definisce ancora: aggiungi il metodo con lo stesso nome e gli stessi parametri in una sottoclasse.'),
+      h('p', null, L('ui.inThisMethodHasNoBody', { name: c.name })),
+      impls.length ? h('p', { class: 'muted small' }, L('ui.definedIn')) : h('p', { class: 'muted small' }, L('ui.noSubclassDefinesItYetAdd')),
       h('div', { class: 'impls' },
         ...impls.map((g) => h('button', { class: 'btn small', type: 'button', onclick: () => showFunc(st.prog.functions.indexOf(g)) }, `${M.classOf(st.prog, g).name}.${g.name}()`)),
-        h('button', { class: 'btn small', type: 'button', onclick: () => { if (!isRunning()) editFunction(st.prog.functions.indexOf(f)); } }, 'Modifica il metodo…')));
+        h('button', { class: 'btn small', type: 'button', onclick: () => { if (!isRunning()) editFunction(st.prog.functions.indexOf(f)); } }, L('ui.editTheMethod'))));
     const holder = V.chart; holder.innerHTML = ''; holder.append(card);
   }
   function showUml() { if (V.sync) setSync(V, false); st.uml = true; st.sel = null; render(); V.wrap.scrollTo(0, 0); }
-  /* moduli condensati nel diagramma delle classi (si ricordano per nome) */
+  /* modules collapsed in the class diagram (remembered by name) */
   function toggleModule(name) {
     if (st.modCollapsed.has(name)) st.modCollapsed.delete(name); else st.modCollapsed.add(name);
     store.set('modCollapsed', [...st.modCollapsed]); render();
@@ -306,9 +307,9 @@
     store.set('modCollapsed', [...st.modCollapsed]); render();
   }
 
-  /* --------------------------- Disegno ----------------------------------- */
+  /* --------------------------- Drawing ----------------------------------- */
   let codeTimer = null;
-  /* disegna il diagramma della vista attiva */
+  /* draws the diagram of the active view */
   function renderChart() {
     const holder = V.chart;
     if (isUml()) {
@@ -321,7 +322,7 @@
     } else {
       const f = func();
       const c = isOO() ? M.classOf(st.prog, f) : null;
-      // un diagramma appena aperto è sempre esteso
+      // a newly opened diagram is always extended
       if (st.compactFid !== f.id) { st.compact = false; st.compactFid = f.id; }
       const out = renderer.func(f, st.expanded, Object.assign(isOO() ? { owner: c ? c.name : '', isMain: st.fi === 0 } : {}, { compact: !!st.compact }));
       st.ins = out.ins;
@@ -331,22 +332,22 @@
     }
     if (!V.main) renderViewHead(V);
   }
-  /* nelle viste ausiliarie i marcatori delle frecce hanno id propri */
+  /* in the auxiliary views the arrow markers have their own ids */
   const vsvg = (s) => (V.main ? s : s.replace(/id="(ah|uml-inh|uml-open)"/g, `id="$1-v${V.id}"`).replace(/url\(#(ah|uml-inh|uml-open)\)/g, `url(#$1-v${V.id})`));
   function render() {
     ensureView();
     renderChart();
-    // le parti dell'interfaccia fuori dal foglio (selettore, vista, Compatta) seguono sempre il foglio principale
+    // the parts of the interface outside the sheet (selector, view, Compact) always follow the main sheet
     withView(MAIN, () => { syncCompactBtn(); renderFuncSelect(); renderViewSwitch(); });
     for (const v of views) if (v !== V) withView(v, renderChart);
     decorate();
     $('#undoBtn').disabled = !st.undo.length;
     $('#redoBtn').disabled = !st.redo.length;
-    $('#progName').textContent = st.prog.attrs.name || 'Programma senza nome';
+    $('#progName').textContent = st.prog.attrs.name || L('ui.untitledProgram');
     clearTimeout(codeTimer); codeTimer = setTimeout(() => { renderCode(); autosave(); }, 120);
     scheduleSync();
   }
-  /* ---- cambio della vista attiva ---- */
+  /* ---- change of the active view ---- */
   function saveViewState(v) {
     for (const k of VKEYS) v.state[k] = st[k];
     const f = st.prog && st.prog.functions[st.fi]; v.state.fid = f && f.id;
@@ -358,7 +359,7 @@
       v.state.fid = MAIN.state.fid;
     }
     for (const k of VKEYS) st[k] = v.state[k];
-    // il programma può essere cambiato (funzioni aggiunte o tolte, Annulla): il diagramma si ritrova dal suo id
+    // the program may have changed (functions added or removed, Undo): the diagram is found again by its id
     const fs = st.prog.functions;
     let i = v.state.fid ? fs.findIndex((f) => f.id === v.state.fid) : -1;
     if (i < 0) i = Math.max(0, Math.min(st.fi || 0, fs.length - 1));
@@ -376,34 +377,34 @@
     activate(v);
     try { return fn(); } finally { if (views.includes(prev)) activate(prev); else activate(MAIN); }
   }
-  /* la vista su cui si lavora: clic, tastiera e comandi agiscono su di lei */
+  /* the view being worked on: clicks, keyboard and commands act on it */
   function focusView(v) {
     if (!v) return;
     activate(v);
     for (const x of views) if (!x.main) x.win.classList.toggle('vactive', x === V);
     document.body.classList.toggle('auxactive', !V.main);
   }
-  /* vista che contiene un elemento della pagina */
+  /* view that contains an element of the page */
   const viewOfEl = (el) => views.find((v) => v.chart && v.chart.contains(el)) || null;
-  /* stato di una vista anche quando non è attiva */
+  /* state of a view also when it is not active */
   const vget = (v, k) => (v === V ? st[k] : v.state[k]);
-  /* vista compatta: solo per i diagrammi di flusso; l'esportazione è sempre estesa */
+  /* compact view: only for flowcharts; export is always extended */
   function syncCompactBtn() {
     const b = $('#compactBtn'); if (!b) return;
     b.hidden = isUml() || (isOO() && func().abstract);
     const on = !!st.compact && !b.hidden;
     b.setAttribute('aria-pressed', String(on));
-    b.querySelector('.lbl').textContent = on ? 'Estendi' : 'Compatta';
-    b.title = on ? 'Vista estesa: frecce tra tutti i blocchi (Maiusc+K)' : 'Vista compatta: i blocchi in sequenza si toccano (Maiusc+K)';
+    b.querySelector('.lbl').textContent = on ? L('ui.expand') : L('ui.compact');
+    b.title = on ? L('ui.extendedViewArrowsBetweenAllBlocks') : L('ui.compactViewBlocksInSequenceTouch');
   }
   function toggleCompact() {
-    if (V.sync) { withView(MAIN, toggleCompact); return; } // una vista «Continua» segue il foglio principale
+    if (V.sync) { withView(MAIN, toggleCompact); return; } // a «Continue» view follows the main sheet
     if (isUml() || (isOO() && func().abstract)) return;
     st.compact = !st.compact; st.compactFid = func().id;
     render();
   }
   function decorate() {
-    // durante il tragitto del cursore resta acceso il blocco di partenza
+    // during the cursor's trip the starting block stays lit
     const litId = run.hold ? run.holdFrom : run.curId;
     const on = run.state !== 'idle' && run.state !== 'done';
     for (const v of views) {
@@ -412,7 +413,7 @@
       $$('.shape', v.chart).forEach((g) => {
         const id = g.dataset.id;
         g.classList.toggle('sel', id === sel);
-        // il blocco si illumina solo quando il cursore lo ha raggiunto
+        // the block lights up only when the cursor has reached it
         g.classList.toggle('exec', id === litId && on);
         g.classList.toggle('err', id === run.errId);
       });
@@ -426,7 +427,7 @@
     if (lab) lab.textContent = Math.round(st.zoom * 100) + '%';
   }
   function setZoom(z) {
-    if (V.sync) { withView(MAIN, () => setZoom(z)); return; } // una vista «Continua» segue lo zoom del foglio principale
+    if (V.sync) { withView(MAIN, () => setZoom(z)); return; } // a «Continue» view follows the zoom of the main sheet
     st.zoom = Math.max(0.3, Math.min(2.5, Math.round(z * 100) / 100));
     if (V.main) store.set('zoom', st.zoom); else saveViewsSoon();
     applyZoom();
@@ -440,51 +441,51 @@
     const z = Math.min((wrap.clientWidth - 24) / svg.dataset.w, (wrap.clientHeight - 24) / svg.dataset.h, 1.4);
     setZoom(Math.max(0.3, z));
   }
-  /* voci di un selettore dei diagrammi: funzioni, oppure diagramma delle classi e metodi */
+  /* items of a diagram selector: functions, or class diagram and methods */
   function fillFuncOptions(sel) {
     sel.innerHTML = '';
     if (isOO()) {
       sel.append(h('option', { value: 'uml', selected: st.uml }, '▦ Classi (UML)'));
       for (const c of st.prog.classes) {
-        const og = h('optgroup', { label: 'Classe ' + M.classTitle(c) + (c.module ? ` · modulo ${c.module.name}` : '') });
+        const og = h('optgroup', { label: L('ui.class2') + M.classTitle(c) + (c.module ? L('ui.module2', { name: c.module.name }) : '') });
         const ms = M.membersOf(st.prog, c);
         for (const f of [...ms.filter((x) => x.ctor), ...ms.filter((x) => !x.ctor)]) {
           const i = st.prog.functions.indexOf(f);
-          og.append(h('option', { value: i, selected: !st.uml && i === st.fi }, i === 0 ? 'Inizio (principale)' : f.ctor ? `new ${c.name}(${f.params.map((p) => p.name).join(', ')}) · costruttore` : `${f.name}${tplTxt(f)}(${f.params.map((p) => p.name).join(', ')})${f.abstract ? ' · astratto' : ''}${f.module ? ' · modulo ' + f.module.name : ''}`));
+          og.append(h('option', { value: i, selected: !st.uml && i === st.fi }, i === 0 ? L('ui.mainStart') : f.ctor ? L('ui.newConstructor', { name: c.name, list: f.params.map((p) => p.name).join(', ') }) : `${f.name}${tplTxt(f)}(${f.params.map((p) => p.name).join(', ')})${f.abstract ? L('ui.abstract') : ''}${f.module ? L('ui.module3') + f.module.name : ''}`));
         }
         sel.append(og);
       }
       return;
     }
-    st.prog.functions.forEach((f, i) => sel.append(h('option', { value: i, selected: i === st.fi }, i === 0 ? 'Inizio (principale)' : `${f.name}${tplTxt(f)}(${f.params.map((p) => p.name).join(', ')})${f.module ? ' · modulo ' + f.module.name : ''}`)));
+    st.prog.functions.forEach((f, i) => sel.append(h('option', { value: i, selected: i === st.fi }, i === 0 ? L('ui.mainStart') : `${f.name}${tplTxt(f)}(${f.params.map((p) => p.name).join(', ')})${f.module ? L('ui.module3') + f.module.name : ''}`)));
   }
   function renderFuncSelect() {
     const sel = $('#funcSel');
     fillFuncOptions(sel);
     const add = $('#funcAdd'), edit = $('#funcEdit'), del = $('#funcDel');
     if (isOO()) {
-      // diagramma delle classi e, per ogni classe, costruttori e metodi
-      $('#funcLbl').textContent = 'Diagramma';
+      // class diagram and, for each class, constructors and methods
+      $('#funcLbl').textContent = L('ui.diagram');
       const cur = !st.uml && M.classOf(st.prog, func());
-      add.title = (st.uml ? 'Nuova classe' : `Nuovo metodo nella classe ${cur ? cur.name : ''}`) + ' (N)';
-      edit.title = (st.uml ? 'Modifica l\'elemento selezionato nel diagramma' : 'Modifica il metodo') + ' (F2)';
-      del.title = st.uml ? 'Elimina l\'elemento selezionato nel diagramma (Canc)' : 'Elimina il metodo (Maiusc+Canc)';
+      add.title = (st.uml ? L('ui.newClass') : L('ui.newMethodInClass', { text: cur ? cur.name : '' })) + ' (N)';
+      edit.title = (st.uml ? L('ui.editTheSelectedItemInThe') : L('ui.editTheMethod2')) + ' (F2)';
+      del.title = st.uml ? L('ui.deleteTheSelectedItemInThe') : L('ui.deleteTheMethodShiftDel');
       del.disabled = st.uml ? !st.usel : st.fi === 0;
       edit.disabled = st.uml && !st.usel;
       return;
     }
-    $('#funcLbl').textContent = 'Funzione';
-    add.title = 'Nuova funzione (N)'; edit.title = 'Modifica funzione o proprietà del programma (F2)'; del.title = 'Elimina funzione (Maiusc+Canc)';
+    $('#funcLbl').textContent = L('ui.function');
+    add.title = L('ui.newFunctionN'); edit.title = L('ui.editFunctionOrProgramPropertiesF2'); del.title = L('ui.deleteFunctionShiftDel');
     edit.disabled = false;
     del.disabled = st.fi === 0;
   }
   function showFunc(i) { if (i === st.fi && !st.uml) return; if (V.sync) setSync(V, false); st.fi = i; st.uml = false; st.sel = null; render(); V.wrap.scrollTo(0, 0); }
 
   function autosave() {
-    try { store.set('autosave', { xml: M.serializeFprg(st.prog), fi: withView(MAIN, () => st.fi), fileName: st.fileName, views: viewsData() }); } catch (e) { /* ignora */ }
+    try { store.set('autosave', { xml: M.serializeFprg(st.prog), fi: withView(MAIN, () => st.fi), fileName: st.fileName, views: viewsData() }); } catch (e) { /* ignore */ }
   }
 
-  /* ------------------------ Mini icone delle forme ------------------------ */
+  /* ------------------------ Mini icons of the shapes ------------------------ */
   const ICON = {
     declare: '<rect x="3" y="5" width="26" height="16" rx="1.5"/><path class="inner" d="M7 5V21M3 9H29"/>',
     assign: '<rect x="3" y="5" width="26" height="16" rx="1.5"/>',
@@ -510,26 +511,23 @@
 
   const GROUPS = [
     ['Base', ['declare', 'const', 'assign', 'input', 'output', 'call']],
-    ['Controllo', ['if', 'while', 'for', 'do']],
-    ['Altro', ['comment', 'breakpoint']],
+    [L('ui.control'), ['if', 'while', 'for', 'do']],
+    [L('ui.other'), ['comment', 'breakpoint']],
     ['File', ['open', 'read', 'write', 'close']],
-    ['Eccezioni', ['try', 'throw']],
+    [L('ui.exceptions'), ['try', 'throw']],
   ];
 
-  /* tasti per aggiungere i blocchi: dopo il blocco selezionato, o in fondo al diagramma */
-  const KIND_KEY = {
-    declare: 'D', const: 'K', assign: 'A', input: 'I', output: 'O', call: 'C',
-    if: 'S', while: 'M', for: 'P', do: 'F', comment: '/', breakpoint: 'B',
-    open: 'Maiusc+A', read: 'Maiusc+L', write: 'Maiusc+S', close: 'Maiusc+C',
-    try: 'T', throw: 'Maiusc+T',
-  };
+  /* keys to add the blocks: after the selected block, or at the end of the diagram */
+  /* the letters come from the language file (shortcuts), e.g. declare: 'D', read: 'Shift+R' */
+  const KIND_KEY = Object.fromEntries(['declare', 'const', 'assign', 'input', 'output', 'call', 'if', 'while', 'for', 'do', 'comment', 'breakpoint', 'open', 'read', 'write', 'close', 'try', 'throw'].map((k) => [k, I18n.shortcut(k)]));
   const KEY_KIND = Object.fromEntries(Object.entries(KIND_KEY).map(([k, v]) => [v, k]));
-  /* il tasto premuto scritto come in KIND_KEY (lettera, con Maiusc+ davanti) */
+  const keysOf = (...kinds) => kinds.map((k) => KIND_KEY[k]).join('  ');
+  /* the pressed key written as in KIND_KEY (letter, with Shift+ in front) */
   function keyLabel(e) {
     if (e.ctrlKey || e.metaKey || e.altKey) return null;
     if (e.key === '/') return '/';
     if (!/^Key[A-Z]$/.test(e.code)) return null;
-    return (e.shiftKey ? 'Maiusc+' : '') + e.code.slice(3);
+    return (e.shiftKey ? 'Shift+' : '') + e.code.slice(3);
   }
 
   /* ------------------------------ Popover -------------------------------- */
@@ -546,8 +544,8 @@
   function insertMenu(insIdx, x, y) {
     const target = st.ins[insIdx];
     const box = h('div', { class: 'insmenu', role: 'menu' });
-    box._target = target; // per scegliere il blocco con la tastiera
-    box.append(h('div', { class: 'pophead' }, 'Aggiungi un blocco'));
+    box._target = target; // to choose the block with the keyboard
+    box.append(h('div', { class: 'pophead' }, L('ui.addABlock')));
     for (const [g, kinds] of GROUPS) {
       const row = h('div', { class: 'insgroup' }, h('div', { class: 'glabel' }, g));
       const grid = h('div', { class: 'insgrid' });
@@ -557,39 +555,39 @@
       }
       row.append(grid); box.append(row);
     }
-    if (st.clip) box.append(h('button', { class: 'pastebtn', type: 'button', onclick: () => { closePop(); paste(target); } }, `Incolla qui (${RenderLib.KIND_IT[st.clip.kind]})  ·  Ctrl+V`));
+    if (st.clip) box.append(h('button', { class: 'pastebtn', type: 'button', onclick: () => { closePop(); paste(target); } }, L('ui.pasteHereCtrlV', { value: RenderLib.KIND_IT[st.clip.kind] })));
     openPop(x, y, box);
   }
   function shapeMenu(id, x, y) {
     if (id.startsWith('start:') || id.startsWith('end:')) {
       const box = h('div', { class: 'ctxmenu' },
-        h('button', { type: 'button', onclick: () => { closePop(); st.fi === 0 ? editProgram() : editFunction(st.fi); } }, h('span', null, st.fi === 0 ? 'Proprietà del programma…' : isOO() ? 'Modifica il metodo…' : 'Modifica la funzione…'), h('kbd', null, 'F2')));
+        h('button', { type: 'button', onclick: () => { closePop(); st.fi === 0 ? editProgram() : editFunction(st.fi); } }, h('span', null, st.fi === 0 ? L('ui.programProperties') : isOO() ? L('ui.editTheMethod') : L('ui.editTheFunction')), h('kbd', null, 'F2')));
       openPop(x, y, box); return;
     }
     const box = h('div', { class: 'ctxmenu' },
-      h('button', { type: 'button', onclick: () => { closePop(); editStmt(id); } }, h('span', null, 'Modifica…'), h('kbd', null, 'Invio')),
-      h('button', { type: 'button', onclick: () => { closePop(); copySel(false); } }, h('span', null, 'Copia'), h('kbd', null, 'Ctrl+C')),
-      h('button', { type: 'button', onclick: () => { closePop(); copySel(true); } }, h('span', null, 'Taglia'), h('kbd', null, 'Ctrl+X')),
-      st.clip ? h('button', { type: 'button', onclick: () => { closePop(); paste(); } }, h('span', null, 'Incolla dopo'), h('kbd', null, 'Ctrl+V')) : null,
-      h('button', { type: 'button', onclick: () => { closePop(); duplicate(); } }, h('span', null, 'Duplica'), h('kbd', null, 'Ctrl+D')),
+      h('button', { type: 'button', onclick: () => { closePop(); editStmt(id); } }, h('span', null, L('ui.edit')), h('kbd', null, L('ui.enter'))),
+      h('button', { type: 'button', onclick: () => { closePop(); copySel(false); } }, h('span', null, L('ui.copy')), h('kbd', null, 'Ctrl+C')),
+      h('button', { type: 'button', onclick: () => { closePop(); copySel(true); } }, h('span', null, L('ui.cut')), h('kbd', null, 'Ctrl+X')),
+      st.clip ? h('button', { type: 'button', onclick: () => { closePop(); paste(); } }, h('span', null, L('ui.pasteAfter')), h('kbd', null, 'Ctrl+V')) : null,
+      h('button', { type: 'button', onclick: () => { closePop(); duplicate(); } }, h('span', null, L('ui.duplicate')), h('kbd', null, 'Ctrl+D')),
       h('hr'),
-      h('button', { type: 'button', onclick: () => { closePop(); shiftSel(-1); } }, h('span', null, 'Sposta su'), h('kbd', null, 'Alt+↑')),
-      h('button', { type: 'button', onclick: () => { closePop(); shiftSel(1); } }, h('span', null, 'Sposta giù'), h('kbd', null, 'Alt+↓')),
+      h('button', { type: 'button', onclick: () => { closePop(); shiftSel(-1); } }, h('span', null, L('ui.moveUp')), h('kbd', null, 'Alt+↑')),
+      h('button', { type: 'button', onclick: () => { closePop(); shiftSel(1); } }, h('span', null, L('ui.moveDown')), h('kbd', null, 'Alt+↓')),
       h('hr'),
-      h('button', { type: 'button', class: 'danger', onclick: () => { closePop(); deleteSel(); } }, h('span', null, 'Elimina'), h('kbd', null, 'Canc')));
+      h('button', { type: 'button', class: 'danger', onclick: () => { closePop(); deleteSel(); } }, h('span', null, L('ui.delete')), h('kbd', null, L('ui.del'))));
     openPop(x, y, box);
   }
 
-  /* ---------------------------- Modifiche -------------------------------- */
+  /* ---------------------------- Changes -------------------------------- */
   function addStmt(target, kind) {
     const s = M.makeStmt(kind);
-    if (isRunning()) { toast('Ferma il programma per modificare il diagramma', 'warn'); return; }
+    if (isRunning()) { toast(L('ui.stopTheProgramToEditThe'), 'warn'); return; }
     if (roGuard()) return;
     stmtDialog(s, true, (vals) => mutate(() => { Object.assign(s, vals); target.arr.splice(target.idx, 0, s); st.sel = s.id; }));
   }
   function editStmt(id) {
     const f = M.findStmt(st.prog, id); if (!f) return;
-    if (isRunning()) { toast('Ferma il programma per modificare il diagramma', 'warn'); return; }
+    if (isRunning()) { toast(L('ui.stopTheProgramToEditThe'), 'warn'); return; }
     if (roGuard()) return;
     stmtDialog(f.stmt, false, (vals) => mutate(() => Object.assign(f.stmt, vals)));
   }
@@ -604,7 +602,7 @@
     if (cut && roGuard()) return;
     st.clip = M.cloneStmt(f.stmt, true);
     if (cut) mutate(() => { f.arr.splice(f.index, 1); st.sel = null; });
-    else toast('Blocco copiato: fai clic su una freccia e scegli «Incolla qui»');
+    else toast(L('ui.blockCopiedClickAnArrowAnd'));
   }
   function paste(target) {
     if (!st.clip || (!target && (isUml() || func().abstract)) || roGuard()) return;
@@ -615,15 +613,15 @@
     }
     mutate(() => { target.arr.splice(target.idx, 0, c); st.sel = c.id; });
   }
-  /* sposta il blocco selezionato di un posto (dir -1 su, +1 giù) nella stessa sequenza */
+  /* moves the selected block by one place (dir -1 up, +1 down) in the same sequence */
   function shiftSel(dir) {
     if (!st.sel || roGuard()) return;
-    if (isRunning()) { toast('Ferma il programma per modificare il diagramma', 'warn'); return; }
+    if (isRunning()) { toast(L('ui.stopTheProgramToEditThe'), 'warn'); return; }
     const f = M.findStmt(st.prog, st.sel); if (!f) return;
     const j = f.index + dir; if (j < 0 || j >= f.arr.length) return;
     mutate(() => { f.arr.splice(f.index, 1); f.arr.splice(j, 0, f.stmt); });
   }
-  /* nuovo blocco dalla tastiera: dopo il blocco selezionato o in fondo al diagramma */
+  /* new block from the keyboard: after the selected block or at the end of the diagram */
   function addByKey(kind) {
     if (isUml() || func().abstract) return;
     const f = st.sel && M.findStmt(st.prog, st.sel);
@@ -635,7 +633,7 @@
     const c = M.cloneStmt(f.stmt);
     mutate(() => { f.arr.splice(f.index + 1, 0, c); st.sel = c.id; });
   }
-  /* intestazioni dei rami Catch e Finally: appartengono al blocco Try */
+  /* headers of the Catch and Finally branches: they belong to the Try block */
   const ownerOf = (id) => (/:(catch:|finally$)/.test(id) ? id.split(':')[0] : id);
   function containsArr(stmt, arr) {
     let found = false;
@@ -645,24 +643,24 @@
   }
   function moveStmt(id, target) {
     const f = M.findStmt(st.prog, id); if (!f || roGuard()) return;
-    if (containsArr(f.stmt, target.arr)) { toast('Non puoi spostare un blocco dentro se stesso', 'warn'); return; }
+    if (containsArr(f.stmt, target.arr)) { toast(L('ui.youCannotMoveABlockInside'), 'warn'); return; }
     let idx = target.idx;
     if (target.arr === f.arr && f.index < idx) idx--;
     if (target.arr === f.arr && idx === f.index) return;
     mutate(() => { f.arr.splice(f.index, 1); target.arr.splice(idx, 0, f.stmt); st.sel = id; });
   }
 
-  /* ------------------------------ Dialoghi ------------------------------- */
+  /* ------------------------------ Dialogs ------------------------------- */
   const modalStack = [];
   function openModal({ title, body, okText, onOk, wide, cancelText, danger, noCancel }) {
     const back = h('div', { class: 'modal-back' });
     const err = h('div', { class: 'formerr', role: 'alert' });
     const ok = h('button', { class: 'btn primary' + (danger ? ' danger' : ''), type: 'button' }, okText || 'OK');
     const form = h('form', { class: 'modal' + (wide ? ' wide' : ''), role: 'dialog', 'aria-modal': 'true', 'aria-label': title },
-      h('header', null, h('h2', null, title), h('button', { class: 'iconbtn', type: 'button', 'aria-label': 'Chiudi', onclick: () => close() }, '✕')),
+      h('header', null, h('h2', null, title), h('button', { class: 'iconbtn', type: 'button', 'aria-label': L('win.close'), onclick: () => close() }, '✕')),
       h('div', { class: 'modal-body' }, body),
       err,
-      h('footer', null, noCancel ? null : h('button', { class: 'btn', type: 'button', onclick: () => close() }, cancelText || 'Annulla'), ok));
+      h('footer', null, noCancel ? null : h('button', { class: 'btn', type: 'button', onclick: () => close() }, cancelText || L('ui.cancel')), ok));
     back.append(form);
     const submit = () => {
       if (!onOk) { close(); return; }
@@ -670,7 +668,7 @@
       if (typeof r === 'string') { err.textContent = r; return; }
       if (r !== false) close();
     };
-    // gestione diretta di clic e Invio: nelle pagine in sandbox l'evento submit non arriva
+    // direct handling of click and Enter: in sandboxed pages the submit event does not arrive
     form.addEventListener('submit', (e) => e.preventDefault());
     ok.addEventListener('click', submit);
     form.addEventListener('keydown', (e) => {
@@ -690,15 +688,15 @@
     openModal({ title, body: h('p', { class: 'confirm' }, text), okText, danger: true, onOk: () => { onOk(); } });
   }
 
-  /* Campi */
-  /* ---- autocompletamento dopo il punto: metodi e attributi dell'oggetto (o della classe) ---- */
-  /* testo prima del cursore -> { from, typed, items } oppure null */
+  /* Fields */
+  /* ---- autocompletion after the dot: methods and attributes of the object (or of the class) ---- */
+  /* text before the cursor -> { from, typed, items } or null */
   function memberSuggestions(before, lvalueOnly) {
     if (!M.hasClasses(st.prog) || isUml()) return null;
     const mm = /\.([\p{L}_][\p{L}\p{N}_]*)?$/u.exec(before);
     if (!mm) return null;
     const dot = mm.index, typed = mm[1] || '';
-    // espressione a sinistra del punto: nomi, punti e parentesi bilanciate (es. lista.get(0).nome)
+    // expression to the left of the dot: names, dots and balanced parentheses (e.g. list.get(0).name)
     let i = dot - 1, depth = 0;
     for (; i >= 0; i--) {
       const ch = before[i];
@@ -711,7 +709,7 @@
     let node; try { node = E.parseExpr(objText); } catch (e) { return null; }
     const f = func(), here = M.classOf(st.prog, f);
     let sc; try { sc = CodeGen.scopeFor(st.prog, f); } catch (e) { return null; }
-    // NomeClasse. -> membri statici; oggetto. -> membri d'istanza
+    // ClassName. -> static members; object. -> instance members
     let c = null, statics = false, map = null;
     if (node.k === 'var' && !node.indices && !sc.vars.has(node.name.toLowerCase()) && !(sc.implicitField && sc.implicitField(node.name)) && M.classByName(st.prog, node.name)) { c = M.classByName(st.prog, node.name); statics = true; }
     else {
@@ -734,7 +732,7 @@
       for (const m of M.membersOf(st.prog, k)) {
         if (m.ctor || m === st.prog.functions[0] || !!m.static !== statics || !canSee(m.visibility, k)) continue;
         const sig = m.name.toLowerCase() + '(' + m.params.map((p) => p.type.toLowerCase()).join(',');
-        if (seen.has(sig)) continue; // ridefinito in una sottoclasse
+        if (seen.has(sig)) continue; // overridden in a subclass
         seen.add(sig);
         const rl = M.rets(m);
         items.push({ kind: 'm', name: m.name, label: `${m.name}(${m.params.map((p) => `${p.name}: ${T(p.type)}${p.array ? '[]' : ''}`).join(', ')})${rl.length ? ': ' + rl.map((r) => T(r.type) + (r.array ? '[]' : '')).join(', ') : ''}`, insert: m.name + (m.params.length ? '(' : '()'), owner: k });
@@ -742,7 +740,7 @@
     }
     const lo = typed.toLowerCase();
     const list = items.filter((x) => x.name.toLowerCase().startsWith(lo)).sort((a, b) => (a.kind === b.kind ? 0 : a.kind === 'm' ? -1 : 1) || a.name.localeCompare(b.name));
-    // attributo già scritto per intero: niente elenco, così Invio conferma il dialogo
+    // attribute already written in full: no list, so Enter confirms the dialog
     if (list.length === 1 && list[0].kind === 'a' && list[0].name.toLowerCase() === lo) return null;
     return list.length ? { from: dot + 1, typed, items: list, cls: c, statics } : null;
   }
@@ -753,13 +751,13 @@
     const pop = acPop();
     acCur = { input, sug, sel: Math.min(acCur && acCur.input === input ? acCur.sel : 0, sug.items.length - 1) };
     pop.innerHTML = '';
-    pop.append(h('div', { class: 'achead' }, `${sug.statics ? 'Statici di' : 'Membri di'} ${M.classTitle(sug.cls)}${sug.cls.module ? ' · modulo ' + sug.cls.module.name : ''}`));
+    pop.append(h('div', { class: 'achead' }, `${sug.statics ? L('ui.staticsOf') : L('ui.membersOf')} ${M.classTitle(sug.cls)}${sug.cls.module ? L('ui.module3') + sug.cls.module.name : ''}`));
     sug.items.slice(0, 40).forEach((it, k) => pop.append(h('div', { class: 'acitem' + (k === acCur.sel ? ' sel' : ''), role: 'option', 'aria-selected': String(k === acCur.sel),
       onmousedown: (e) => { e.preventDefault(); acCur.sel = k; acApply(); } },
       h('span', { class: 'ackind ' + it.kind }, it.kind === 'm' ? 'm' : 'a'), h('span', { class: 'aclabel' }, it.label),
       it.owner !== sug.cls ? h('span', { class: 'acowner' }, 'da ' + it.owner.name) : null)));
-    pop.append(h('div', { class: 'acfoot' }, '↑ ↓ per scegliere · Invio o Tab per inserire · Esc per chiudere'));
-    // sotto il cursore nel campo
+    pop.append(h('div', { class: 'acfoot' }, L('ui.toChooseEnterOrTabTo')));
+    // under the cursor in the field
     const r = input.getBoundingClientRect(), cs = getComputedStyle(input);
     const cv = acPop._cv || (acPop._cv = document.createElement('canvas').getContext('2d'));
     cv.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
@@ -785,7 +783,7 @@
     acHide();
     input.dispatchEvent(new Event('input'));
   }
-  /* collega l'autocompletamento a un campo di testo */
+  /* attaches the autocompletion to a text field */
   function attachMemberAC(input, lvalueOnly) {
     input.addEventListener('input', () => acUpdate(input, lvalueOnly));
     input.addEventListener('click', () => acUpdate(input, lvalueOnly));
@@ -838,7 +836,7 @@
     wrap.append(msg);
     if (['expr', 'exprlist', 'lvalue', 'lvalues'].includes(spec.type)) attachMemberAC(input, spec.type === 'lvalue' || spec.type === 'lvalues');
     if (['expr', 'exprlist', 'lvalue', 'lvalues'].includes(spec.type) && vars && vars.length) {
-      const chips = h('div', { class: 'chips', 'aria-label': 'Variabili disponibili' });
+      const chips = h('div', { class: 'chips', 'aria-label': L('ui.availableVariables') });
       vars.slice(0, 24).forEach((v) => chips.append(h('button', { type: 'button', class: 'chip', tabindex: '-1', onclick: () => {
         const s = input.selectionStart ?? input.value.length, e = input.selectionEnd ?? s;
         input.value = input.value.slice(0, s) + v + input.value.slice(e);
@@ -853,19 +851,19 @@
       else if (String(v).trim()) {
         try {
           if (spec.type === 'expr') E.parseExpr(v);
-          if (spec.type === 'exprlist') E.splitTop(v).forEach((x, i) => { if (!x) throw new Error(`manca la dimensione ${i + 1}`); E.parseExpr(x); });
+          if (spec.type === 'exprlist') E.splitTop(v).forEach((x, i) => { if (!x) throw new Error(L('ui.dimensionIsMissing', { value: i + 1 })); E.parseExpr(x); });
           if (spec.type === 'lvalue') E.parseLValue(v);
           if (spec.type === 'lvalues') E.parseLValueList(v);
           if (spec.type === 'names') {
             for (const n of v.split(',').map((x) => x.trim())) {
-              if (!n) throw new Error('Nome vuoto tra due virgole');
-              if (!E.validIdent(n)) throw new Error(`"${n}" non è un nome valido: usa lettere, cifre e _ e inizia con una lettera`);
-              if (E.RESERVED.has(n.toLowerCase())) throw new Error(`"${n}" è una parola riservata`);
+              if (!n) throw new Error(L('ui.emptyNameBetweenTwoCommas'));
+              if (!E.validIdent(n)) throw new Error(L('ui.isNotAValidNameUse', { n }));
+              if (E.RESERVED.has(n.toLowerCase())) throw new Error(L('run.isAReservedWord', { n }));
             }
           }
           if (spec.type === 'ident') {
-            if (!E.validIdent(v.trim())) throw new Error('Usa lettere, cifre e _ e inizia con una lettera');
-            if (E.RESERVED.has(v.trim().toLowerCase())) throw new Error('È una parola riservata');
+            if (!E.validIdent(v.trim())) throw new Error(L('ui.useLettersDigitsAndAndStart'));
+            if (E.RESERVED.has(v.trim().toLowerCase())) throw new Error(L('ui.itIsAReservedWord'));
           }
         } catch (e) { err = e.message; }
       }
@@ -879,7 +877,7 @@
     wrap._check = () => {
       const e = check();
       if (e) return `${spec.label}: ${e}`;
-      if (spec.required && !String(input.value).trim()) return `Compila il campo «${spec.label}»`;
+      if (spec.required && !String(input.value).trim()) return L('ui.fillInTheField', { label: spec.label });
       return '';
     };
     wrap._input = input;
@@ -888,93 +886,93 @@
 
   const TYPE_OPTS = E.TYPES.map((t) => [t, TYPE_IT[t]]);
   const STMT_FORMS = {
-    declare: { title: 'Dichiarazione', help: 'Crea una o più variabili. Separa i nomi con una virgola.', fields: [
-      { key: 'name', label: 'Nomi delle variabili', type: 'names', required: true, placeholder: 'es. a, b, totale' },
-      { key: 'type', label: 'Tipo', type: 'seg', options: TYPE_OPTS },
-      { key: 'array', label: 'Array (elenco di valori con indice da 0)', type: 'check' },
-      { key: 'size', label: 'Numero di elementi', type: 'exprlist', placeholder: 'es. 10   oppure   3, 4 per una matrice', hint: 'Per un array a più dimensioni separa le dimensioni con la virgola: 3, 4 è una matrice 3 × 4', showIf: 'array' },
-      { key: 'init', label: 'Valore iniziale (facoltativo)', type: 'expr', placeholder: 'es. 0', hint: 'Con più nomi tutte le variabili partono da questo valore. Se resta vuoto, la variabile non ha un valore finché non le assegni qualcosa.', showIf: '!array' }] },
-    const: { title: 'Costante', help: 'Un valore con un nome che non cambia durante il programma. Per convenzione si scrive in maiuscolo.', fields: [
-      { key: 'name', label: 'Nome della costante', type: 'ident', required: true, placeholder: 'es. MAX' },
-      { key: 'type', label: 'Tipo', type: 'seg', options: TYPE_OPTS },
-      { key: 'expression', label: 'Valore', type: 'expr', required: true, placeholder: 'es. 100' }] },
-    assign: { title: 'Assegnamento', help: 'Calcola l\'espressione e mette il risultato nella variabile.', fields: [
-      { key: 'variable', label: 'Variabile', type: 'lvalues', required: true, placeholder: 'es. x  oppure  v[i]', hint: 'Per una funzione che restituisce più valori: più variabili separate da virgola, es. min, max ← MinMax(v)' },
-      { key: 'expression', label: 'Espressione', type: 'expr', required: true, placeholder: 'es. x + 1' }] },
-    input: { title: 'Input', help: 'Chiede un valore all\'utente durante l\'esecuzione.', fields: [
-      { key: 'variable', label: 'Variabile da leggere', type: 'lvalue', required: true }] },
-    output: { title: 'Output', help: 'Scrive un valore nella console. Unisci testi e numeri con &.', fields: [
-      { key: 'expression', label: 'Espressione da scrivere', type: 'expr', required: true, placeholder: 'es. "Totale: " & totale' },
-      { key: 'newline', label: 'Vai a capo dopo la scrittura', type: 'check' }] },
-    if: { title: 'Se', help: 'Sceglie il ramo Vero o Falso in base alla condizione.', fields: [
-      { key: 'expression', label: 'Condizione', type: 'expr', required: true, placeholder: 'es. eta >= 18' }] },
-    while: { title: 'Mentre', help: 'Ripete il corpo finché la condizione è vera (controllo all\'inizio).', fields: [
-      { key: 'expression', label: 'Condizione', type: 'expr', required: true, placeholder: 'es. i <= 10' }] },
-    do: { title: 'Fai-mentre', help: 'Esegue il corpo almeno una volta e lo ripete finché la condizione è vera.', fields: [
-      { key: 'expression', label: 'Condizione', type: 'expr', required: true, placeholder: 'es. risposta != 0' }] },
-    for: { title: 'Per (ciclo con contatore)', help: 'La variabile va dal valore iniziale al finale, estremi compresi.', fields: [
-      { key: 'variable', label: 'Variabile contatore', type: 'lvalue', required: true, placeholder: 'es. i' },
-      { key: 'start', label: 'Valore iniziale', type: 'expr', required: true, inline: true },
-      { key: 'end', label: 'Valore finale', type: 'expr', required: true, inline: true },
-      { key: 'direction', label: 'Direzione', type: 'seg', options: [['inc', 'Crescente'], ['dec', 'Decrescente']] },
-      { key: 'step', label: 'Passo', type: 'expr', required: true, inline: true }] },
-    call: { title: 'Chiamata', help: 'Esegue una funzione definita nel programma. Con gli oggetti: p.sposta(1, 2), oppure super(...) all\'inizio di un costruttore.', fields: [
-      { key: 'expression', label: 'Chiamata', type: 'expr', required: true, placeholder: 'es. Stampa(v)' }] },
-    comment: { title: 'Commento', help: 'Una nota per chi legge: non viene eseguita.', fields: [
-      { key: 'text', label: 'Testo', type: 'textarea' }] },
-    breakpoint: { title: 'Punto di interruzione', help: 'Mette in pausa il programma per osservare le variabili.', fields: [
-      { key: 'always', label: 'Fermati sempre', type: 'check' },
-      { key: 'expression', label: 'Fermati solo se', type: 'expr', placeholder: 'es. i = 5', showIf: '!always' }] },
-    open: { title: 'Apri file', help: 'I file stanno nella scheda File: puoi caricarli dal computer.', fields: [
-      { key: 'expression', label: 'Nome del file', type: 'expr', required: true, placeholder: 'es. "dati.txt"' },
-      { key: 'mode', label: 'Modalità', type: 'seg', options: [['read', 'Lettura'], ['write', 'Scrittura']] }] },
-    close: { title: 'Chiudi file', fields: [
-      { key: 'mode', label: 'File da chiudere', type: 'seg', options: [['read', 'In lettura'], ['write', 'In scrittura']] }] },
-    read: { title: 'Leggi da file', help: 'Legge la riga successiva del file aperto in lettura.', fields: [
-      { key: 'variable', label: 'Variabile', type: 'lvalue', required: true }] },
-    write: { title: 'Scrivi su file', help: 'Aggiunge una riga al file aperto in scrittura.', fields: [
-      { key: 'expression', label: 'Espressione', type: 'expr', required: true }] },
-    throw: { title: 'Throw (lancia un\'eccezione)', help: 'Interrompe il programma con un\'eccezione: la cattura il primo Try che ha un Catch del suo tipo, anche in una funzione che ha chiamato questa; se nessuno la cattura il programma si ferma.', fields: [
-      { key: 'expression', label: 'Eccezione', type: 'expr', required: true, placeholder: 'new Eccezione("messaggio")', hint: 'Si crea con new e il messaggio, es. new Eccezione("voto non valido"). In un Catch, Throw e rilancia l\'eccezione catturata.' }] },
+    declare: { title: L('ui.declaration'), help: L('ui.createsOneOrMoreVariablesSeparate'), fields: [
+      { key: 'name', label: L('ui.variableNames'), type: 'names', required: true, placeholder: L('ui.eGABTotal') },
+      { key: 'type', label: L('win.type'), type: 'seg', options: TYPE_OPTS },
+      { key: 'array', label: L('ui.arrayListOfValuesWithIndex'), type: 'check' },
+      { key: 'size', label: L('ui.numberOfElements'), type: 'exprlist', placeholder: L('ui.eG10Or34'), hint: L('ui.forAMultiDimensionalArraySeparate'), showIf: 'array' },
+      { key: 'init', label: L('ui.initialValueOptional'), type: 'expr', placeholder: 'es. 0', hint: L('ui.withSeveralNamesAllTheVariables'), showIf: '!array' }] },
+    const: { title: L('chart.constant'), help: L('ui.aNamedValueThatDoesNot'), fields: [
+      { key: 'name', label: L('ui.constantName'), type: 'ident', required: true, placeholder: L('ui.eGMax') },
+      { key: 'type', label: L('win.type'), type: 'seg', options: TYPE_OPTS },
+      { key: 'expression', label: L('win.value'), type: 'expr', required: true, placeholder: 'es. 100' }] },
+    assign: { title: L('ui.assignment'), help: L('ui.evaluatesTheExpressionAndPutsThe'), fields: [
+      { key: 'variable', label: L('ui.variable'), type: 'lvalues', required: true, placeholder: L('ui.eGXOrVI'), hint: L('ui.forAFunctionThatReturnsSeveral') },
+      { key: 'expression', label: L('ui.expression'), type: 'expr', required: true, placeholder: 'es. x + 1' }] },
+    input: { title: 'Input', help: L('ui.asksTheUserForAValue'), fields: [
+      { key: 'variable', label: L('ui.variableToRead'), type: 'lvalue', required: true }] },
+    output: { title: 'Output', help: L('ui.writesAValueToTheConsole'), fields: [
+      { key: 'expression', label: L('ui.expressionToWrite'), type: 'expr', required: true, placeholder: L('ui.eGTotalTotal') },
+      { key: 'newline', label: L('ui.newLineAfterWriting'), type: 'check' }] },
+    if: { title: L('chart.if'), help: L('ui.choosesTheTrueOrFalseBranch'), fields: [
+      { key: 'expression', label: L('ui.condition'), type: 'expr', required: true, placeholder: 'es. eta >= 18' }] },
+    while: { title: L('chart.while'), help: L('ui.repeatsTheBodyWhileTheCondition'), fields: [
+      { key: 'expression', label: L('ui.condition'), type: 'expr', required: true, placeholder: L('ui.eGI10') }] },
+    do: { title: L('chart.doWhile'), help: L('ui.runsTheBodyAtLeastOnce'), fields: [
+      { key: 'expression', label: L('ui.condition'), type: 'expr', required: true, placeholder: 'es. risposta != 0' }] },
+    for: { title: L('ui.forCountingLoop'), help: L('ui.theVariableGoesFromTheStart'), fields: [
+      { key: 'variable', label: L('ui.counterVariable'), type: 'lvalue', required: true, placeholder: L('ui.eGI') },
+      { key: 'start', label: L('ui.startValue'), type: 'expr', required: true, inline: true },
+      { key: 'end', label: L('ui.endValue'), type: 'expr', required: true, inline: true },
+      { key: 'direction', label: L('ui.direction'), type: 'seg', options: [['inc', L('ui.increasing')], ['dec', L('ui.decreasing')]] },
+      { key: 'step', label: L('ui.step'), type: 'expr', required: true, inline: true }] },
+    call: { title: L('ui.call'), help: L('ui.runsAFunctionDefinedInThe'), fields: [
+      { key: 'expression', label: L('ui.call'), type: 'expr', required: true, placeholder: L('ui.eGPrintV') }] },
+    comment: { title: L('chart.comment'), help: L('ui.aNoteForTheReaderIt'), fields: [
+      { key: 'text', label: L('ui.text'), type: 'textarea' }] },
+    breakpoint: { title: L('ui.breakpoint'), help: L('ui.pausesTheProgramToLookAt'), fields: [
+      { key: 'always', label: L('ui.alwaysStop'), type: 'check' },
+      { key: 'expression', label: L('ui.stopOnlyIf'), type: 'expr', placeholder: L('ui.eGI5'), showIf: '!always' }] },
+    open: { title: L('chart.openFile'), help: L('ui.filesAreInTheFilesTab'), fields: [
+      { key: 'expression', label: L('ui.fileName'), type: 'expr', required: true, placeholder: L('ui.eGDataTxt') },
+      { key: 'mode', label: L('ui.mode'), type: 'seg', options: [['read', L('ui.read')], ['write', L('ui.write')]] }] },
+    close: { title: L('chart.closeFile'), fields: [
+      { key: 'mode', label: L('ui.fileToClose'), type: 'seg', options: [['read', L('ui.reading')], ['write', L('ui.writing')]] }] },
+    read: { title: L('chart.readFromFile'), help: L('ui.readsTheNextLineOfThe'), fields: [
+      { key: 'variable', label: L('ui.variable'), type: 'lvalue', required: true }] },
+    write: { title: L('chart.writeToFile'), help: L('ui.addsALineToTheFile'), fields: [
+      { key: 'expression', label: L('ui.expression'), type: 'expr', required: true }] },
+    throw: { title: L('ui.throwThrowsAnException'), help: L('ui.interruptsTheProgramWithAnException'), fields: [
+      { key: 'expression', label: 'Exception', type: 'expr', required: true, placeholder: 'new Exception("message")', hint: L('ui.itIsCreatedWithNewAnd') }] },
   };
-  /* tipi di eccezione: i predefiniti e (vista Oggetti) le classi che ereditano da Eccezione */
+  /* exception types: the predefined ones and (Objects view) the classes that inherit from Exception */
   const excTypes = () => [...M.EXC_CLASSES.map((c) => c.name), ...(M.hasClasses(st.prog) ? st.prog.classes.filter((c) => M.isExcClass(st.prog, c)).map((c) => c.name) : [])];
-  const excDoc = (n) => { const b = M.excClass(n); return b ? b.doc : 'classe del programma'; };
-  /* Try: rami Catch (tipo e variabile), Finally facoltativo */
+  const excDoc = (n) => { const b = M.excClass(n); return b ? b.doc : L('ui.programClass'); };
+  /* Try: Catch branches (type and variable), optional Finally */
   function tryDialog(s, isNew, done) {
     const cats = (s.catches || []).map((c) => ({ ...c }));
     let hasF = !!s.hasFinally;
-    const body = h('div', { class: 'fields' }, h('p', { class: 'help' }, 'I blocchi dentro il Try sono protetti: se uno di loro (o una funzione che chiamano) lancia un\'eccezione, il Try si interrompe e si esegue il primo Catch del tipo giusto. Il Finally si esegue sempre, alla fine.'));
+    const body = h('div', { class: 'fields' }, h('p', { class: 'help' }, L('ui.theBlocksInsideTheTryAre')));
     const list = h('div', { class: 'params' });
     const draw = () => {
       list.innerHTML = '';
-      if (!cats.length) list.append(h('p', { class: 'muted small' }, 'Nessun Catch: l\'eccezione prosegue dopo il Finally.'));
+      if (!cats.length) list.append(h('p', { class: 'muted small' }, L('ui.noCatchTheExceptionContinuesAfter')));
       cats.forEach((c, i) => {
-        const sel = h('select', { 'aria-label': 'Tipo del Catch ' + (i + 1), onchange: (e) => { c.type = e.target.value; } }, excTypes().map((t) => h('option', { value: t, selected: t.toLowerCase() === String(c.type).toLowerCase(), title: excDoc(t) }, t)));
-        const nm = h('input', { type: 'text', class: 'mono', value: c.variable, 'aria-label': 'Variabile del Catch ' + (i + 1), placeholder: 'e', oninput: (e) => { c.variable = e.target.value.trim(); } });
+        const sel = h('select', { 'aria-label': L('ui.catchType') + (i + 1), onchange: (e) => { c.type = e.target.value; } }, excTypes().map((t) => h('option', { value: t, selected: t.toLowerCase() === String(c.type).toLowerCase(), title: excDoc(t) }, t)));
+        const nm = h('input', { type: 'text', class: 'mono', value: c.variable, 'aria-label': L('ui.catchVariable') + (i + 1), placeholder: 'e', oninput: (e) => { c.variable = e.target.value.trim(); } });
         list.append(h('div', { class: 'prow catchrow' }, h('span', { class: 'ckw' }, 'Catch'), sel, nm,
-          h('button', { class: 'iconbtn', type: 'button', title: 'Sposta su: i Catch si controllano in ordine', 'aria-label': 'Sposta su', disabled: i === 0, onclick: () => { cats.splice(i - 1, 0, cats.splice(i, 1)[0]); draw(); } }, '↑'),
-          h('button', { class: 'iconbtn', type: 'button', title: 'Rimuovi (con i suoi blocchi)', 'aria-label': 'Rimuovi il Catch', onclick: () => { cats.splice(i, 1); draw(); } }, '✕')));
+          h('button', { class: 'iconbtn', type: 'button', title: L('ui.moveUpTheCatchesAreChecked'), 'aria-label': L('ui.moveUp'), disabled: i === 0, onclick: () => { cats.splice(i - 1, 0, cats.splice(i, 1)[0]); draw(); } }, '↑'),
+          h('button', { class: 'iconbtn', type: 'button', title: L('ui.removeWithItsBlocks'), 'aria-label': L('ui.removeTheCatch'), onclick: () => { cats.splice(i, 1); draw(); } }, '✕')));
       });
     };
     draw();
-    const finW = field({ key: 'fin', label: 'Finally: blocchi eseguiti sempre, alla fine del Try', type: 'check' }, hasF);
-    body.append(h('div', { class: 'flabel' }, 'Catch (si controllano in ordine: prima i tipi più specifici)'), list,
-      h('button', { class: 'btn small', type: 'button', onclick: () => { const used = cats.map((c) => c.type); cats.push(M.makeCatch({ type: excTypes().find((t) => !used.includes(t)) || 'Eccezione' })); draw(); } }, '+ Aggiungi Catch'),
-      finW, h('p', { class: 'muted small', style: 'margin:0' }, 'Nel Catch e.messaggio è il messaggio dell\'eccezione. Errori come la divisione per zero o un indice fuori dall\'array diventano eccezioni dei tipi predefiniti.'));
+    const finW = field({ key: 'fin', label: L('ui.finallyBlocksAlwaysRunAtThe'), type: 'check' }, hasF);
+    body.append(h('div', { class: 'flabel' }, L('ui.catchCheckedInOrderMoreSpecific')), list,
+      h('button', { class: 'btn small', type: 'button', onclick: () => { const used = cats.map((c) => c.type); cats.push(M.makeCatch({ type: excTypes().find((t) => !used.includes(t)) || 'Exception' })); draw(); } }, L('ui.addCatch')),
+      finW, h('p', { class: 'muted small', style: 'margin:0' }, L('ui.inTheCatchEMessaggioIs')));
     openModal({
-      title: (isNew ? 'Nuovo blocco: ' : '') + 'Try', body, okText: isNew ? 'Aggiungi' : 'Salva', wide: true,
+      title: (isNew ? L('ui.newBlock') : '') + 'Try', body, okText: isNew ? L('ui.add') : L('ui.save'), wide: true,
       onOk: () => {
         hasF = finW._get();
-        if (!cats.length && !hasF) return 'Un Try ha almeno un Catch oppure il Finally';
+        if (!cats.length && !hasF) return L('ui.aTryHasAtLeastOne');
         const own = declaredNames(func());
         const catchVars = new Set(); M.walk(func().body, (x) => { if (x.kind === 'try') (x.catches || []).forEach((c) => catchVars.add(c.variable.toLowerCase())); });
         for (const [i, c] of cats.entries()) {
-          if (!E.validIdent(c.variable)) return `Catch ${i + 1}: "${c.variable || '(vuoto)'}" non è un nome di variabile valido`;
-          if (own.some((n) => n.toLowerCase() === c.variable.toLowerCase()) && !catchVars.has(c.variable.toLowerCase())) return `Catch ${i + 1}: "${c.variable}" è già una variabile della funzione, scegli un altro nome (di solito e)`;
-          // un Catch dopo uno di un tipo più generale non si raggiungerebbe mai (in Java è un errore)
+          if (!E.validIdent(c.variable)) return L('ui.catchIsNotAValidVariable', { value: i + 1, value2: c.variable || L('ui.empty') });
+          if (own.some((n) => n.toLowerCase() === c.variable.toLowerCase()) && !catchVars.has(c.variable.toLowerCase())) return L('ui.catchIsAlreadyAVariableOf', { value: i + 1, variable: c.variable });
+          // a Catch after one of a more general type would never be reached (in Java it is an error)
           const prev = cats.slice(0, i).find((p) => M.isSubclass(st.prog, M.classByName(st.prog, c.type), M.classByName(st.prog, p.type)));
-          if (prev) return `Il Catch ${c.type} non verrebbe mai eseguito: viene dopo il Catch ${prev.type}, che cattura anche ${c.type}. Spostalo più in alto`;
+          if (prev) return L('ui.theCatchWouldNeverRunIt', { type: c.type, type2: prev.type, type3: c.type });
         }
         done({ catches: cats, hasFinally: hasF, finally: hasF ? (s.finally || []) : [] });
         return true;
@@ -985,8 +983,8 @@
   function stmtDialog(s, isNew, done) {
     if (s.kind === 'try') { tryDialog(s, isNew, done); return; }
     let form = STMT_FORMS[s.kind];
-    if (s.kind === 'throw' && isNew && !s.expression) s = { ...s, expression: 'new Eccezione("")' };
-    // nella vista Oggetti si possono dichiarare variabili di tipo classe
+    if (s.kind === 'throw' && isNew && !s.expression) s = { ...s, expression: 'new Exception("")' };
+    // in the Objects view variables of class type can be declared
     if (s.kind === 'declare' && (M.hasClasses(st.prog) || (func().tparams || []).length)) form = { ...form, fields: form.fields.map((f) => (f.key === 'type' ? { ...f, type: 'typepick', ctx: typeCtx(func()) } : f)) };
     const vars = declaredNames(func());
     const body = h('div', { class: 'fields' });
@@ -1005,19 +1003,19 @@
       }
     };
     body.addEventListener('change', sync); sync();
-    // Throw: scelta rapida del tipo di eccezione (cambia la parte new Tipo(...) dell'espressione)
+    // Throw: quick choice of the exception type (changes the new Type(...) part of the expression)
     if (s.kind === 'throw') {
       const inp = ws.expression._input;
       const cur = (/^\s*new\s+([\p{L}_][\p{L}\p{N}_]*)/u.exec(s.expression || '') || [])[1] || '';
-      const sel = h('select', { id: 'f_exctype', 'aria-label': 'Tipo di eccezione', onchange: (e) => {
+      const sel = h('select', { id: 'f_exctype', 'aria-label': L('ui.exceptionType'), onchange: (e) => {
         const t = e.target.value, v = inp.value;
         inp.value = /^\s*new\s+[\p{L}_][\p{L}\p{N}_]*/u.test(v) ? v.replace(/^\s*new\s+[\p{L}_][\p{L}\p{N}_]*/u, 'new ' + t) : `new ${t}("")`;
         inp.dispatchEvent(new Event('input')); inp.focus();
       } }, excTypes().map((t) => h('option', { value: t, selected: t.toLowerCase() === cur.toLowerCase(), title: excDoc(t) }, `${t} — ${excDoc(t)}`)));
-      body.insertBefore(h('div', { class: 'field' }, h('label', { class: 'flabel', for: 'f_exctype' }, 'Tipo di eccezione'), sel), ws.expression);
+      body.insertBefore(h('div', { class: 'field' }, h('label', { class: 'flabel', for: 'f_exctype' }, L('ui.exceptionType')), sel), ws.expression);
     }
     openModal({
-      title: (isNew ? 'Nuovo blocco: ' : '') + form.title, body, okText: isNew ? 'Aggiungi' : 'Salva',
+      title: (isNew ? L('ui.newBlock') : '') + form.title, body, okText: isNew ? L('ui.add') : L('ui.save'),
       onOk: () => {
         const vals = {};
         for (const spec of form.fields) {
@@ -1027,19 +1025,19 @@
           vals[spec.key] = ws[spec.key]._get();
           if (typeof vals[spec.key] === 'string' && spec.type !== 'textarea') vals[spec.key] = vals[spec.key].trim();
         }
-        if (s.kind === 'declare' && vals.array && !String(vals.size).trim()) return 'Indica il numero di elementi dell\'array';
+        if (s.kind === 'declare' && vals.array && !String(vals.size).trim()) return L('ui.enterTheNumberOfElementsOf');
         if (s.kind === 'declare') vals.name = vals.name.split(',').map((x) => x.trim()).join(', ');
-        if (s.kind === 'breakpoint' && !vals.always && !String(vals.expression || '').trim()) return 'Scrivi una condizione oppure scegli «Fermati sempre»';
+        if (s.kind === 'breakpoint' && !vals.always && !String(vals.expression || '').trim()) return L('ui.writeAConditionOrChooseAlways');
         done(vals);
         return true;
       },
     });
   }
 
-  /* Funzioni */
-  // forma di un parametro o di un valore restituito: valore singolo o array a 1…5 dimensioni
-  const SHAPES = [[0, 'valore'], [1, 'array [ ]'], [2, 'matrice [ , ]'], [3, '3 dimensioni'], [4, '4 dimensioni'], [5, '5 dimensioni']];
-  /* opts (vista Oggetti, nuovo metodo): { cls, ctor } */
+  /* Functions */
+  // shape of a parameter or of a return value: single value or array with 1…5 dimensions
+  const SHAPES = [[0, L('run.value')], [1, 'array [ ]'], [2, L('ui.matrix')], [3, L('ui.3Dimensions')], [4, L('ui.4Dimensions')], [5, L('ui.5Dimensions')]];
+  /* opts (Objects view, new method): { cls, ctor } */
   function editFunction(index, opts) {
     const isNew = index == null;
     const f = isNew ? M.makeFunction('') : st.prog.functions[index];
@@ -1049,26 +1047,26 @@
     const ctor = oo && (isNew ? !!(opts && opts.ctor) : !!f.ctor);
     const params = f.params.map((p) => ({ ...p }));
     const body = h('div', { class: 'fields' });
-    const what = ctor ? 'costruttore' : oo ? 'metodo' : 'funzione';
-    if (ctor) body.append(h('p', { class: 'help' }, `Il costruttore prepara un nuovo oggetto ${cls.name}: si esegue con new ${cls.name}(...). Si possono avere più costruttori con parametri diversi.${cls.parent ? ` Il primo blocco può essere la Chiamata super(...) al costruttore di ${cls.parent}.` : ''}`));
-    const nameW = field({ key: 'fname', label: ctor ? 'Nome (è quello della classe)' : oo ? 'Nome del metodo' : 'Nome della funzione', type: 'ident', required: true, placeholder: 'es. Massimo' }, ctor ? cls.name : f.name);
+    const what = ctor ? L('uml.constructor') : oo ? L('uml.method') : L('ui.function2');
+    if (ctor) body.append(h('p', { class: 'help' }, L('ui.theConstructorPreparesANewObject', { name: cls.name, name2: cls.name, text: cls.parent ? L('ui.theFirstBlockCanBeThe', { parent: cls.parent }) : '' })));
+    const nameW = field({ key: 'fname', label: ctor ? L('ui.nameItIsTheClassName') : oo ? L('ui.methodName') : L('ui.functionName'), type: 'ident', required: true, placeholder: L('ui.eGMaximum') }, ctor ? cls.name : f.name);
     if (ctor) nameW._input.disabled = true;
     const rets = ctor ? [] : M.rets(f).map((r) => ({ ...r }));
     body.append(nameW);
     let visW = null, statW = null, absW = null;
     if (oo) {
-      visW = field({ key: 'fvis', label: 'Accesso', type: 'seg', options: VIS_OPTS }, isNew ? 'public' : (f.visibility || 'public'));
+      visW = field({ key: 'fvis', label: L('ui.access'), type: 'seg', options: VIS_OPTS }, isNew ? 'public' : (f.visibility || 'public'));
       body.append(visW);
-      if (!ctor) { statW = field({ key: 'fstatic', label: 'Statico: si chiama con ' + cls.name + '.nome(...) senza creare un oggetto', type: 'check' }, isNew ? cls === M.mainClass(st.prog) : !!f.static); body.append(statW); }
+      if (!ctor) { statW = field({ key: 'fstatic', label: L('ui.staticCalledWith') + cls.name + L('ui.nameWithoutCreatingAnObject'), type: 'check' }, isNew ? cls === M.mainClass(st.prog) : !!f.static); body.append(statW); }
       if (!ctor && cls !== M.mainClass(st.prog)) {
-        // astratto: senza corpo, lo definiscono le sottoclassi (la classe diventa astratta)
-        absW = field({ key: 'fabs', label: 'Astratto: senza corpo, lo definiscono le sottoclassi', type: 'check' }, !isNew && !!f.abstract);
+        // abstract: without body, the subclasses define it (the class becomes abstract)
+        absW = field({ key: 'fabs', label: L('ui.abstractNoBodyTheSubclassesDefine'), type: 'check' }, !isNew && !!f.abstract);
         body.append(absW);
         const syncAbs = () => { const a = absW._get(); statW._input.disabled = a; if (a) statW._input.checked = false; };
         absW._input.addEventListener('change', syncAbs); syncAbs();
       }
     }
-    // Tipi Generici: nei parametri si può crearne uno nuovo; nei valori restituiti si usano quelli già presenti
+    // Generic Types: in the parameters a new one can be created; in the return values the existing ones are used
     const mainCls = oo && cls === M.mainClass(st.prog);
     const isInstance = () => oo && (ctor || !(statW && statW._get()) || !!(absW && absW._get()));
     const dialogGens = (withRets) => genNamesIn([...params.map((p) => p.type), ...(withRets ? rets.map((r) => r.type) : [])], [...(f.tparams || []), ...(cls ? cls.tparams || [] : [])]);
@@ -1081,35 +1079,35 @@
     const plist = h('div', { class: 'params' });
     const drawParams = () => {
       plist.innerHTML = '';
-      if (!params.length) plist.append(h('p', { class: 'muted small' }, 'Nessun parametro.'));
+      if (!params.length) plist.append(h('p', { class: 'muted small' }, L('ui.noParameters')));
       params.forEach((p, i) => {
-        const nm = h('input', { type: 'text', class: 'mono', value: p.name, 'aria-label': 'Nome parametro ' + (i + 1), placeholder: 'nome', oninput: (e) => { p.name = e.target.value.trim(); } });
-        const tp = typePicker(p.type, genCtx(true), (t) => { p.type = t; regen(); }, 'Tipo parametro ' + (i + 1)).el;
+        const nm = h('input', { type: 'text', class: 'mono', value: p.name, 'aria-label': L('ui.parameterName') + (i + 1), placeholder: 'nome', oninput: (e) => { p.name = e.target.value.trim(); } });
+        const tp = typePicker(p.type, genCtx(true), (t) => { p.type = t; regen(); }, L('ui.parameterType') + (i + 1)).el;
         const shape = p.array ? (p.dims || 1) : 0;
-        const arr = h('select', { 'aria-label': 'Forma del parametro ' + (i + 1), title: 'Valore singolo o array', onchange: (e) => { const d = +e.target.value; p.array = d > 0; p.dims = Math.max(1, d); } }, SHAPES.map(([v, l]) => h('option', { value: v, selected: v === shape }, l)));
+        const arr = h('select', { 'aria-label': L('ui.parameterShape') + (i + 1), title: L('ui.singleValueOrArray'), onchange: (e) => { const d = +e.target.value; p.array = d > 0; p.dims = Math.max(1, d); } }, SHAPES.map(([v, l]) => h('option', { value: v, selected: v === shape }, l)));
         plist.append(h('div', { class: 'prow' }, nm, tp, arr,
-          h('button', { class: 'iconbtn', type: 'button', title: 'Sposta su', 'aria-label': 'Sposta su', disabled: i === 0, onclick: () => { params.splice(i - 1, 0, params.splice(i, 1)[0]); drawParams(); } }, '↑'),
-          h('button', { class: 'iconbtn', type: 'button', title: 'Rimuovi', 'aria-label': 'Rimuovi parametro', onclick: () => { params.splice(i, 1); drawParams(); } }, '✕')));
+          h('button', { class: 'iconbtn', type: 'button', title: L('ui.moveUp'), 'aria-label': L('ui.moveUp'), disabled: i === 0, onclick: () => { params.splice(i - 1, 0, params.splice(i, 1)[0]); drawParams(); } }, '↑'),
+          h('button', { class: 'iconbtn', type: 'button', title: L('ui.remove'), 'aria-label': L('ui.removeParameter'), onclick: () => { params.splice(i, 1); drawParams(); } }, '✕')));
       });
     };
     drawParams();
-    body.append(h('div', { class: 'flabel' }, 'Parametri'), plist,
-      h('button', { class: 'btn small', type: 'button', onclick: () => { params.push({ name: '', type: 'Integer', array: false }); drawParams(); plist.querySelector('.prow:last-child input').focus(); } }, '+ Aggiungi parametro'));
-    // valori restituiti: nessuno = procedura, uno = funzione classica, più di uno = come in Python
+    body.append(h('div', { class: 'flabel' }, L('ui.parameters')), plist,
+      h('button', { class: 'btn small', type: 'button', onclick: () => { params.push({ name: '', type: 'Integer', array: false }); drawParams(); plist.querySelector('.prow:last-child input').focus(); } }, L('ui.addParameter')));
+    // return values: none = procedure, one = classic function, more than one = as in Python
     const rlist = h('div', { class: 'params' });
-    // metodi: si può restituire un attributo della classe (anche ereditato, se non privato)
+    // methods: an attribute of the class can be returned (also inherited, if not private)
     const retAttrs = oo && !ctor ? retAttributes(cls) : [];
     const attrOf = (n) => retAttrs.find((x) => x.attr.name.toLowerCase() === String(n).toLowerCase());
     const dlId = 'retattrs_' + Math.random().toString(36).slice(2);
     const drawRets = () => {
       rlist.innerHTML = '';
-      if (!rets.length) rlist.append(h('p', { class: 'muted small' }, 'Nessun valore: è una procedura.'));
+      if (!rets.length) rlist.append(h('p', { class: 'muted small' }, L('ui.noValueItIsAProcedure')));
       rets.forEach((r, i) => {
-        const tpk = typePicker(r.type, genCtx(false), (t) => { r.type = t; }, 'Tipo del valore restituito ' + (i + 1)), tp = tpk.el;
-        // anche un valore restituito può essere un array, come i parametri
-        const arr = h('select', { 'aria-label': 'Forma del valore restituito ' + (i + 1), title: 'Valore singolo o array', onchange: (e) => { const d = +e.target.value; r.array = d > 0; r.dims = Math.max(1, d); if (!r.array) delete r.dims; } }, SHAPES.map(([v, l]) => h('option', { value: v, selected: v === (r.array ? r.dims || 1 : 0) }, l)));
-        const tag = h('span', { class: 'rtag', title: 'È un attributo della classe: il metodo lo restituisce direttamente, senza dichiarare una variabile' }, 'attributo');
-        // scegliendo un attributo il tipo e la forma sono i suoi e non si cambiano
+        const tpk = typePicker(r.type, genCtx(false), (t) => { r.type = t; }, L('ui.returnValueType') + (i + 1)), tp = tpk.el;
+        // a return value can be an array too, like the parameters
+        const arr = h('select', { 'aria-label': L('ui.returnValueShape') + (i + 1), title: L('ui.singleValueOrArray'), onchange: (e) => { const d = +e.target.value; r.array = d > 0; r.dims = Math.max(1, d); if (!r.array) delete r.dims; } }, SHAPES.map(([v, l]) => h('option', { value: v, selected: v === (r.array ? r.dims || 1 : 0) }, l)));
+        const tag = h('span', { class: 'rtag', title: L('ui.itIsAnAttributeOfThe') }, L('ui.attribute'));
+        // choosing an attribute, the type and the shape are its own and do not change
         const syncAttr = () => {
           const a = attrOf(r.name);
           if (a) {
@@ -1119,63 +1117,63 @@
           }
           tpk.setDisabled(!!a); arr.disabled = !!a; tag.hidden = !a;
         };
-        const nm = h('input', { type: 'text', class: 'mono', value: r.name, list: retAttrs.length ? dlId : null, 'aria-label': 'Variabile restituita ' + (i + 1), placeholder: retAttrs.length ? 'variabile o attributo' : 'variabile', oninput: (e) => { r.name = e.target.value.trim(); syncAttr(); } });
+        const nm = h('input', { type: 'text', class: 'mono', value: r.name, list: retAttrs.length ? dlId : null, 'aria-label': L('ui.returnedVariable') + (i + 1), placeholder: retAttrs.length ? L('ui.variableOrAttribute') : L('ui.variable2'), oninput: (e) => { r.name = e.target.value.trim(); syncAttr(); } });
         syncAttr();
         rlist.append(h('div', { class: 'prow rrow' }, h('div', { class: 'rname' }, nm, tag), tp, arr,
-          h('button', { class: 'iconbtn', type: 'button', title: 'Sposta su', 'aria-label': 'Sposta su', disabled: i === 0, onclick: () => { rets.splice(i - 1, 0, rets.splice(i, 1)[0]); drawRets(); } }, '↑'),
-          h('button', { class: 'iconbtn', type: 'button', title: 'Rimuovi', 'aria-label': 'Rimuovi valore restituito', onclick: () => { rets.splice(i, 1); drawRets(); } }, '✕')));
+          h('button', { class: 'iconbtn', type: 'button', title: L('ui.moveUp'), 'aria-label': L('ui.moveUp'), disabled: i === 0, onclick: () => { rets.splice(i - 1, 0, rets.splice(i, 1)[0]); drawRets(); } }, '↑'),
+          h('button', { class: 'iconbtn', type: 'button', title: L('ui.remove'), 'aria-label': L('ui.removeReturnValue'), onclick: () => { rets.splice(i, 1); drawRets(); } }, '✕')));
       });
     };
     drawRets();
     genKey = gensNow().join(',') + '|' + isInstance();
-    if (retAttrs.length) body.append(h('datalist', { id: dlId }, retAttrs.map((x) => h('option', { value: x.attr.name }, `attributo ${x.owner === cls ? '' : 'di ' + x.owner.name + ' '}· ${E.typeName(x.attr.type)}${x.attr.array ? `[${','.repeat(E.splitTop(x.attr.size).length - 1)}]` : ''}`))));
-    if (!ctor) body.append(h('div', { class: 'flabel' }, 'Valori restituiti'), h('p', { class: 'muted small', style: 'margin:0' }, `Le variabili vanno dichiarate nel corpo ${oo ? 'del metodo' : 'della funzione'}: quelle nuove vengono dichiarate in automatico.${retAttrs.length ? ' Si può scegliere anche un attributo della classe: in quel caso non serve dichiararlo.' : ''} Con più valori la chiamata si scrive a, b ← ${oo ? 'obj.metodo' : 'Funzione'}(...). Un array restituito si assegna a un array: v ← ${oo ? 'obj.metodo' : 'Funzione'}(...), e v diventa quell'array`), rlist,
-      h('button', { class: 'btn small', type: 'button', onclick: () => { rets.push({ name: '', type: 'Integer' }); drawRets(); rlist.querySelector('.prow:last-child input').focus(); } }, '+ Aggiungi valore restituito'));
+    if (retAttrs.length) body.append(h('datalist', { id: dlId }, retAttrs.map((x) => h('option', { value: x.attr.name }, L('ui.attribute2', { text: x.owner === cls ? '' : 'di ' + x.owner.name + ' ', type: E.typeName(x.attr.type), text2: x.attr.array ? `[${','.repeat(E.splitTop(x.attr.size).length - 1)}]` : '' })))));
+    if (!ctor) body.append(h('div', { class: 'flabel' }, L('ui.returnValues')), h('p', { class: 'muted small', style: 'margin:0' }, L('ui.theVariablesMustBeDeclaredIn', { text: oo ? L('chart.ofTheMethod') : L('chart.ofTheFunction'), text2: retAttrs.length ? L('ui.youCanAlsoChooseAnAttribute') : '', text3: oo ? 'obj.metodo' : L('ui.function'), text4: oo ? 'obj.metodo' : L('ui.function') })), rlist,
+      h('button', { class: 'btn small', type: 'button', onclick: () => { rets.push({ name: '', type: 'Integer' }); drawRets(); rlist.querySelector('.prow:last-child input').focus(); } }, L('ui.addReturnValue')));
     openModal({
-      title: isNew ? (ctor ? `Nuovo costruttore di ${cls.name}` : oo ? `Nuovo metodo in ${cls.name}` : 'Nuova funzione') : `Modifica ${what}`, body, okText: isNew ? 'Crea' : 'Salva', wide: true,
+      title: isNew ? (ctor ? L('ui.newConstructorOf', { name: cls.name }) : oo ? L('ui.newMethodIn', { name: cls.name }) : L('ui.newFunction')) : L('ui.edit2', { what }), body, okText: isNew ? L('ui.create') : L('ui.save'), wide: true,
       onOk: () => {
         const e1 = nameW._check(); if (e1) return e1;
         const name = ctor ? cls.name : nameW._get().trim();
-        if (name.toLowerCase() === 'main') return 'Il nome Main è riservato al programma principale (Inizio)';
-        // un metodo può avere il nome di una funzione integrata (si chiama con obj.nome() o this.nome());
-        // le funzioni e i metodi della classe principale no
+        if (name.toLowerCase() === 'main') return L('ui.theNameMainIsReservedFor');
+        // a method can have the name of a built-in function (it is called with obj.name() or this.name());
+        // the functions and methods of the main class cannot
         const plainFn = !oo || cls === M.mainClass(st.prog);
-        if (E.BUILTINS[name.toLowerCase()] && plainFn) return `${name} è già una funzione integrata`;
+        if (E.BUILTINS[name.toLowerCase()] && plainFn) return L('ui.isAlreadyABuiltInFunction', { name });
         const isAbs = !!(absW && absW._get());
         const isStatic = !ctor && !isAbs && !!(statW && statW._get());
-        // in Java toString() ridefinisce quello di Object: pubblico, non statico, restituisce una Stringa
+        // in Java toString() overrides the one of Object: public, non-static, returns a String
         if (oo && !ctor && name === 'toString' && !params.length) {
           const vis = visW ? visW._get() : 'public';
-          if (vis !== 'public' || isStatic || rets.length !== 1 || rets[0].type !== 'String') return 'toString() deve essere pubblico, non statico e restituire una Stringa: ridefinisce il toString() che ogni oggetto ha in Java';
+          if (vis !== 'public' || isStatic || rets.length !== 1 || rets[0].type !== 'String') return L('ui.tostringMustBePublicNotStatic');
         }
-        if (isAbs && visW && visW._get() === 'private') return 'Un metodo astratto non può essere privato: le sottoclassi devono poterlo ridefinire';
+        if (isAbs && visW && visW._get() === 'private') return L('ui.anAbstractMethodCannotBePrivate');
         if (oo) {
           const sigOf = (list) => list.map((p) => p.type.toLowerCase() + (p.array ? '[' + (p.dims || 1) : '')).join(',');
-          if (!ctor && name.toLowerCase() === cls.name.toLowerCase()) return `${name} è il nome della classe: per un costruttore usa «Nuovo costruttore»`;
+          if (!ctor && name.toLowerCase() === cls.name.toLowerCase()) return L('ui.isTheNameOfTheClass', { name });
           const clash = M.membersOf(st.prog, cls).find((g) => g !== f && !!g.ctor === ctor && g.name.toLowerCase() === name.toLowerCase() && sigOf(g.params) === sigOf(params));
-          if (clash) return ctor ? 'Esiste già un costruttore con gli stessi tipi di parametri' : `Esiste già un metodo ${name} con gli stessi tipi di parametri (si possono avere più versioni solo con parametri diversi)`;
+          if (clash) return ctor ? L('ui.aConstructorWithTheSameParameter') : L('ui.aMethodWithTheSameParameter', { name });
           if (!ctor) for (const k of M.chainOf(st.prog, cls).slice(1)) {
             const g = M.membersOf(st.prog, k).find((x) => !x.ctor && x.name.toLowerCase() === name.toLowerCase() && sigOf(x.params) === sigOf(params));
             if (!g) continue;
-            if (!!g.static !== isStatic) return `${name} esiste già in ${k.name} come metodo ${g.static ? 'statico' : 'non statico'}: deve esserlo anche qui`;
+            if (!!g.static !== isStatic) return L('ui.alreadyExistsInAsAMethod', { name, name2: k.name, text: g.static ? L('ui.static') : L('ui.nonStatic') });
             const rt = (l) => l.map((r) => r.type + (r.array ? `[${','.repeat((r.dims || 1) - 1)}]` : '')).join(',');
-            if (rt(M.rets(g)) !== rt(rets)) return `${name} ridefinisce il metodo di ${k.name}: deve restituire gli stessi tipi (${M.rets(g).map((r) => E.typeName(r.type) + (r.array ? `[${','.repeat((r.dims || 1) - 1)}]` : '')).join(', ') || 'nessun valore'})`;
+            if (rt(M.rets(g)) !== rt(rets)) return L('ui.overridesTheMethodOfItMust', { name, name2: k.name, value: M.rets(g).map((r) => E.typeName(r.type) + (r.array ? `[${','.repeat((r.dims || 1) - 1)}]` : '')).join(', ') || L('win.noValue') });
             break;
           }
-        } else if (st.prog.functions.some((g, i) => i !== index && g.name.toLowerCase() === name.toLowerCase())) return `Esiste già una funzione chiamata ${name}`;
+        } else if (st.prog.functions.some((g, i) => i !== index && g.name.toLowerCase() === name.toLowerCase())) return L('ui.aFunctionCalledAlreadyExists', { name });
         const rseen = new Set();
         for (const r of rets) {
-          if (!E.validIdent(r.name)) return `Valore restituito "${r.name || '(vuoto)'}": nome di variabile non valido`;
-          if (E.RESERVED.has(r.name.toLowerCase())) return `"${r.name}" è una parola riservata`;
-          if (rseen.has(r.name)) return `La variabile restituita ${r.name} è ripetuta`;
+          if (!E.validIdent(r.name)) return L('ui.returnValueInvalidVariableName', { value: r.name || L('ui.empty') });
+          if (E.RESERVED.has(r.name.toLowerCase())) return L('run.isAReservedWord', { n: r.name });
+          if (rseen.has(r.name)) return L('ui.theReturnedVariableIsRepeated', { name: r.name });
           rseen.add(r.name);
           if (oo && !ctor) {
             const a = M.chainOf(st.prog, cls).flatMap((k) => k.attributes.map((x) => ({ attr: x, owner: k }))).find((x) => x.attr.name.toLowerCase() === r.name.toLowerCase());
-            if (a && a.owner !== cls && a.attr.visibility === 'private') return `${a.attr.name} è un attributo privato di ${a.owner.name}: ${cls.name} non lo vede`;
-            if (a && isStatic && !a.attr.static) return `${a.attr.name} è un attributo d'istanza: un metodo statico non lo può restituire`;
+            if (a && a.owner !== cls && a.attr.visibility === 'private') return L('ui.isAPrivateAttributeOfCannot', { name: a.attr.name, name2: a.owner.name, name3: cls.name });
+            if (a && isStatic && !a.attr.static) return L('ui.isAnInstanceAttributeAStatic', { name: a.attr.name });
           }
         }
-        // Tipi Generici: della classe (metodi non statici, costruttori) o della funzione
+        // Generic Types: of the class (non-static methods, constructors) or of the function
         const inst = isInstance();
         let tps = [], clsGen = null;
         if (inst) {
@@ -1184,15 +1182,15 @@
         } else {
           tps = orderGen(f.tparams, dialogGens(false));
           const missing = dialogGens(true).filter((t) => !tps.includes(t) && !(cls && M.isTypeParam(cls, t)));
-          if (missing.length) return `Il Tipo Generico ${missing.join(', ')} di un valore restituito deve comparire anche in un parametro: alla chiamata si ricava dagli argomenti`;
-          if (cls && dialogGens(true).some((t) => M.isTypeParam(cls, t))) return `${oo && !ctor ? 'Un metodo statico' : 'Questa funzione'} non può usare i Tipi Generici della classe ${M.classTitle(cls)}: valgono solo per i suoi oggetti`;
-          // il metodo diventa statico: la classe può perdere dei Tipi Generici
+          if (missing.length) return L('ui.theGenericTypeOfAReturn', { list: missing.join(', ') });
+          if (cls && dialogGens(true).some((t) => M.isTypeParam(cls, t))) return L('ui.cannotUseTheGenericTypesOf', { text: oo && !ctor ? L('ui.aStaticMethod') : L('ui.thisFunction'), cls: M.classTitle(cls) });
+          // the method becomes static: the class may lose some Generic Types
           if (oo && cls) { const ch = classGenChange(cls, f, []); if (ch.err) return ch.err; clsGen = ch.nu; }
         }
         const seen = new Set();
         for (const p of params) {
-          if (!E.validIdent(p.name)) return `Parametro "${p.name || '(vuoto)'}": nome non valido`;
-          if (seen.has(p.name)) return `Il parametro ${p.name} è ripetuto`;
+          if (!E.validIdent(p.name)) return L('ui.parameterInvalidName', { value: p.name || L('ui.empty') });
+          if (seen.has(p.name)) return L('ui.theParameterIsRepeated', { name: p.name });
           seen.add(p.name);
         }
         mutate(() => {
@@ -1201,29 +1199,29 @@
           if (tps.length) target.tparams = tps; else delete target.tparams;
           if (clsGen) cls.tparams = clsGen;
           if (oo) Object.assign(target, { cls: cls.id, visibility: visW ? visW._get() : 'public', static: isStatic || target === st.prog.functions[0], ctor, abstract: isAbs });
-          // un attributo restituito si scrive come è dichiarato (i linguaggi distinguono le maiuscole)
+          // a returned attribute is written as it is declared (the languages are case-sensitive)
           for (const r of rets) { const a = attrOf(r.name); if (a) { r.name = a.attr.name; r.type = a.attr.type; } }
-          if (isAbs && !cls.abstract) { cls.abstract = true; setTimeout(() => toast(`${cls.name} è diventata una classe astratta: contiene un metodo astratto`), 0); }
+          if (isAbs && !cls.abstract) { cls.abstract = true; setTimeout(() => toast(L('ui.hasBecomeAnAbstractClassIt', { name: cls.name })), 0); }
           M.setRets(target, rets);
-          // dichiara le variabili restituite che non sono ancora dichiarate (raggruppate per tipo)
+          // declares the returned variables that are not declared yet (grouped by type)
           const known = new Set(params.map((p) => p.name));
-          // gli attributi restituiti non si dichiarano
+          // the returned attributes are not declared
           if (oo && !ctor) retAttributes(cls).forEach((x) => known.add(x.attr.name));
           M.walk(target.body, (x) => { if (x.kind === 'declare') x.name.split(',').forEach((n) => known.add(n.trim())); });
           const missing = rets.filter((r) => ![...known].some((k) => k.toLowerCase() === r.name.toLowerCase()));
           const decls = [];
           for (const r of missing) {
             const last = decls[decls.length - 1];
-            // un array restituito va dichiarato con la sua dimensione: il blocco resta da completare
+            // a returned array must be declared with its size: the block stays to be completed
             if (r.array) decls.push(M.makeStmt('declare', { name: r.name, type: r.type, array: true, size: '' }));
             else if (last && !last.array && last.type === r.type) last.name += ', ' + r.name;
             else decls.push(M.makeStmt('declare', { name: r.name, type: r.type }));
           }
           target.body.unshift(...decls);
-          if (decls.some((d) => d.array)) setTimeout(() => toast(`Indica il numero di elementi di ${decls.filter((d) => d.array).map((d) => d.name).join(', ')} nel blocco Dichiara (doppio clic)`), 0);
+          if (decls.some((d) => d.array)) setTimeout(() => toast(L('ui.enterTheNumberOfElementsOf2', { list: decls.filter((d) => d.array).map((d) => d.name).join(', ') })), 0);
           if (isNew) {
             st.prog.functions.push(target);
-            // dal diagramma delle classi il nuovo metodo resta selezionato; altrimenti si apre
+            // from the class diagram the new method stays selected; otherwise it opens
             if (isUml()) st.usel = { cls: cls.id, kind: 'method', fid: target.id };
             else st.fi = st.prog.functions.length - 1;
           }
@@ -1236,12 +1234,12 @@
     const f = target || func();
     const i = st.prog.functions.indexOf(f);
     if (i <= 0 || roFunc(f) || roGuard(M.hasClasses(st.prog) ? M.classOf(st.prog, f) : null)) return;
-    const what = f.ctor ? `Il costruttore ${f.name}(…)` : isOO() ? `Il metodo ${fname(f)}` : `La funzione ${f.name}`;
-    // la classe può perdere un Tipo Generico usato solo da questo metodo
+    const what = f.ctor ? L('ui.theConstructor', { name: f.name }) : isOO() ? L('ui.theMethod', { f: fname(f) }) : L('ui.theFunction', { name: f.name });
+    // the class may lose a Generic Type used only by this method
     const owner = M.hasClasses(st.prog) ? M.classOf(st.prog, f) : null;
     const ch = owner ? classGenChange(owner, f, []) : {};
-    if (ch.err) { infoBox('Metodo con Tipo Generico', ch.err); return; }
-    confirmBox(f.ctor ? 'Eliminare il costruttore?' : isOO() ? 'Eliminare il metodo?' : 'Eliminare la funzione?', `${what} e tutti i suoi blocchi verranno eliminati.`, 'Elimina', () => mutate(() => {
+    if (ch.err) { infoBox(L('ui.methodWithGenericType'), ch.err); return; }
+    confirmBox(f.ctor ? L('ui.deleteTheConstructor') : isOO() ? L('ui.deleteTheMethod') : L('ui.deleteTheFunction'), L('ui.andAllItsBlocksWillBe', { what }), L('ui.delete'), () => mutate(() => {
       st.prog.functions.splice(i, 1);
       if (ch.nu) owner.tparams = ch.nu;
       if (st.fi === i) { st.fi = 0; if (isOO()) st.uml = true; } else if (st.fi > i) st.fi--;
@@ -1249,18 +1247,18 @@
     }));
   }
 
-  /* attributi che un metodo della classe può restituire: propri e ereditati non privati, anche array */
+  /* attributes that a method of the class can return: its own and the inherited non-private ones, arrays too */
   function retAttributes(cls) {
     const out = [];
     M.chainOf(st.prog, cls).forEach((k, i) => k.attributes.forEach((a) => { if (i === 0 || a.visibility !== 'private') out.push({ attr: a, owner: k }); }));
     return out;
   }
 
-  /* ------------------------ Classi (vista Oggetti) ------------------------ */
-  const VIS_OPTS = [['public', '+ pubblico'], ['private', '- privato'], ['protected', '# protetto']];
+  /* ------------------------ Classes (Objects view) ------------------------ */
+  const VIS_OPTS = [['public', L('ui.public')], ['private', L('ui.private')], ['protected', L('ui.protected')]];
   const sigOf = (list) => list.map((p) => p.type.toLowerCase() + (p.array ? '[' + (p.dims || 1) : '')).join(',');
   const descendants = (c) => st.prog.classes.filter((k) => k !== c && M.isSubclass(st.prog, k, c));
-  /* sostituisce il nome di una classe nelle espressioni: new Vecchio(...) e Vecchio.membro */
+  /* replaces the name of a class in the expressions: new Old(...) and Old.member */
   function renameInExpr(src, old, nu) {
     let toks;
     try { toks = E.tokenize(String(src)); } catch (e) { return src; }
@@ -1288,54 +1286,54 @@
       M.setRets(f, M.rets(f).map((r) => ({ name: r.name, type: T(r.type) })));
       M.walk(f.body, (x) => {
         if (x.kind === 'declare' || x.kind === 'const') x.type = T(x.type);
-        if (x.kind === 'try') for (const c of x.catches || []) c.type = T(c.type); // Catch di un'eccezione del programma
+        if (x.kind === 'try') for (const c of x.catches || []) c.type = T(c.type); // Catch of an exception of the program
         for (const k of ['expression', 'variable', 'start', 'end', 'step', 'size']) if (typeof x[k] === 'string') x[k] = renameInExpr(x[k], old, nu);
       });
     }
     c.name = nu;
   }
-  /* classi ed eccezioni sono due famiglie separate: una classe eredita solo da classi, un'eccezione
-     (Nuova eccezione…, Maiusc+E) solo da eccezioni, predefinite o del programma */
-  /* eccezione predefinita: a che cosa serve e come si eredita */
+  /* classes and exceptions are two separate families: a class inherits only from classes, an exception
+     (New exception…, Shift+E) only from exceptions, predefined or of the program */
+  /* predefined exception: what it is for and how to inherit from it */
   function builtinInfo(name) {
     const k = M.excClass(name); if (!k) return;
-    infoBox(`${k.name} · eccezione predefinita`, `${k.name}${k.parent ? ` (eredita da ${k.parent})` : ''}: ${k.doc}. Ha l'attributo messaggio, in sola lettura, e due costruttori: ${k.name}() e ${k.name}(messaggio). Per una tua eccezione usa «Nuova eccezione…» e scegli ${k.name} in «Eredita da»; nel suo costruttore puoi richiamare super(messaggio). Le eccezioni predefinite compaiono nel diagramma solo se il programma eredita da loro, e si mettono da sole nel posto migliore.`);
+    infoBox(L('ui.predefinedException', { name: k.name }), L('ui.itHasTheReadOnlyAttribute', { name: k.name, text: k.parent ? L('ui.inheritsFrom', { parent: k.parent }) : '', doc: k.doc, name2: k.name, name3: k.name, name4: k.name }));
   }
   function classDialog(c, pos, asExc, parentName) {
     const isNew = !c;
     if (c && roGuard(c)) return;
     const exc = c ? M.isExcClass(st.prog, c) : !!asExc;
-    const what = exc ? 'eccezione' : 'classe';
-    const nameW = field({ key: 'cname', label: exc ? 'Nome dell\'eccezione' : 'Nome della classe', type: 'ident', required: true, placeholder: exc ? 'es. VotoNonValido' : 'es. Punto', hint: 'Per convenzione inizia con la lettera maiuscola' }, c ? c.name : '');
+    const what = exc ? L('chart.exception') : L('ui.class');
+    const nameW = field({ key: 'cname', label: exc ? L('ui.exceptionName') : L('ui.className'), type: 'ident', required: true, placeholder: exc ? L('ui.eGInvalidgrade') : L('ui.eGPoint'), hint: L('ui.byConventionItStartsWithAn') }, c ? c.name : '');
     const banned = c ? [c, ...descendants(c)] : [];
     const mine = st.prog.classes.filter((k) => !banned.includes(k) && !(k.tparams || []).length && M.isExcClass(st.prog, k) === exc).map((k) => [k.name, k.name]);
     const parW = exc
-      ? field({ key: 'cpar', label: 'Eredita da (eccezione madre)', type: 'select', options: [...M.EXC_CLASSES.map((k) => [k.name, `${k.name} (eccezione predefinita)`]), ...mine] }, c ? c.parent : parentName || 'Eccezione')
-      : field({ key: 'cpar', label: 'Eredita da (classe madre)', type: 'select', options: [['', '— nessuna —'], ...mine] }, c ? (c.parent || '') : '');
+      ? field({ key: 'cpar', label: L('ui.inheritsFromParentException'), type: 'select', options: [...M.EXC_CLASSES.map((k) => [k.name, L('ui.predefinedException2', { name: k.name })]), ...mine] }, c ? c.parent : parentName || 'Exception')
+      : field({ key: 'cpar', label: L('ui.inheritsFromParentClass'), type: 'select', options: [['', L('ui.none')], ...mine] }, c ? (c.parent || '') : '');
     const isMainCls = c && c === M.mainClass(st.prog);
-    const absW = isMainCls ? null : field({ key: 'cabs', label: `Astratta: non si creano oggetti di questa ${what}, solo delle sue sottoclassi`, type: 'check' }, c ? !!c.abstract : false);
-    const help = exc ? 'Un\'eccezione segnala un errore: si crea e si lancia con Throw (Throw new VotoNonValido("…")) e si cattura con Catch. Eredita da Eccezione, o da un\'eccezione più specifica, e ne riceve l\'attributo messaggio; può avere altri attributi e metodi come una classe.'
-      : 'Una classe descrive un tipo di oggetti: i loro attributi (i dati) e i metodi (le operazioni). Con l\'ereditarietà la classe riceve attributi e metodi della classe madre e può ridefinire i metodi.';
+    const absW = isMainCls ? null : field({ key: 'cabs', label: L('ui.abstractNoObjectsOfThisAre', { what }), type: 'check' }, c ? !!c.abstract : false);
+    const help = exc ? L('ui.anExceptionReportsAnErrorIt')
+      : L('ui.aClassDescribesAKindOf');
     const body = h('div', { class: 'fields' }, h('p', { class: 'help' }, help), nameW, parW, absW);
     openModal({
-      title: isNew ? (exc ? 'Nuova eccezione' : 'Nuova classe') : `Modifica ${what} ${c.name}`, body, okText: isNew ? 'Crea' : 'Salva',
+      title: isNew ? (exc ? L('ui.newException') : L('ui.newClass')) : L('ui.edit3', { what, name: c.name }), body, okText: isNew ? L('ui.create') : L('ui.save'),
       onOk: () => {
         const e1 = nameW._check(); if (e1) return e1;
         const name = nameW._get().trim();
-        if (E.BUILTINS[name.toLowerCase()]) return `${name} è il nome di una funzione integrata`;
-        if (st.prog.classes.some((k) => k !== c && k.name.toLowerCase() === name.toLowerCase())) return `Esiste già una classe chiamata ${name}`;
-        if (M.excClass(name)) return `${name} è un'eccezione predefinita: scegli un altro nome${exc ? '' : ' (per una tua eccezione usa «Nuova eccezione…» nel menu del diagramma delle classi)'}`;
+        if (E.BUILTINS[name.toLowerCase()]) return L('ui.isTheNameOfABuilt', { name });
+        if (st.prog.classes.some((k) => k !== c && k.name.toLowerCase() === name.toLowerCase())) return L('ui.aClassCalledAlreadyExists', { name });
+        if (M.excClass(name)) return L('ui.isAPredefinedExceptionChooseAnother', { name, text: exc ? '' : L('ui.forYourOwnExceptionUseNew') });
         const parent = parW._get();
         const abs = !!(absW && absW._get());
-        // i Tipi Generici della classe vengono dagli attributi e dai metodi
+        // the Generic Types of the class come from the attributes and the methods
         const tps = c ? c.tparams || [] : [];
-        if (tps.length && parent) return `${c.name} ha dei Tipi Generici (${M.classTitle(c)}): in FlowLab una classe con Tipi Generici non può ereditare da un'altra classe`;
-        if ((!c || c.name !== name) && /^[A-Z][0-9]*$/.test(name)) return `${name} è un nome riservato ai Tipi Generici (T, S, V…): usa un nome più lungo`;
-        if (c && !abs) { const am = M.membersOf(st.prog, c).filter((f) => f.abstract); if (am.length) return `${c.name} ha metodi astratti (${am.map((f) => f.name + '()').join(', ')}): per renderla concreta togli prima «astratto» da quei metodi`; }
-        // gli attributi non possono avere lo stesso nome di quelli della nuova classe madre
+        if (tps.length && parent) return L('ui.hasGenericTypesInFlowlabA', { name: c.name, c: M.classTitle(c) });
+        if ((!c || c.name !== name) && /^[A-Z][0-9]*$/.test(name)) return L('ui.isANameReservedForGeneric', { name });
+        if (c && !abs) { const am = M.membersOf(st.prog, c).filter((f) => f.abstract); if (am.length) return L('ui.hasAbstractMethodsToMakeIt', { name: c.name, list: am.map((f) => f.name + '()').join(', ') }); }
+        // the attributes cannot have the same name as those of the new parent class
         if (parent) {
           const up = new Set(); M.chainOf(st.prog, M.classByName(st.prog, parent)).forEach((k) => k.attributes.forEach((a) => up.add(a.name.toLowerCase())));
-          for (const k of c ? [c, ...descendants(c)] : []) for (const a of k.attributes) if (up.has(a.name.toLowerCase())) return `L'attributo ${k.name}.${a.name} ha lo stesso nome di un attributo di ${parent} o delle sue classi madri`;
+          for (const k of c ? [c, ...descendants(c)] : []) for (const a of k.attributes) if (up.has(a.name.toLowerCase())) return L('ui.theAttributeHasTheSameName', { name: k.name, name2: a.name, parent });
         }
         mutate(() => {
           if (isNew) {
@@ -1352,28 +1350,28 @@
     const isNew = index == null;
     if (roGuard(c)) return;
     const a = isNew ? M.makeAttribute() : c.attributes[index];
-    const nameW = field({ key: 'aname', label: 'Nome dell\'attributo', type: 'ident', required: true, placeholder: 'es. raggio' }, a.name);
-    // un attributo d'istanza può avere un Tipo Generico: la classe diventa Classe<T>
+    const nameW = field({ key: 'aname', label: L('ui.attributeName'), type: 'ident', required: true, placeholder: L('ui.eGRadius') }, a.name);
+    // an instance attribute can have a Generic Type: the class becomes Class<T>
     const actx = { gens: c.tparams || [], allowNew: !isMainClsOf(c), taken: () => [...(c.tparams || []), ...genNamesIn([typeW._get()], c.tparams)] };
-    const typeW = field({ key: 'atype', label: 'Tipo', type: 'typepick', ctx: actx }, a.type);
+    const typeW = field({ key: 'atype', label: L('win.type'), type: 'typepick', ctx: actx }, a.type);
     const arrW = field({ key: 'aarr', label: 'Array', type: 'check' }, a.array);
-    const sizeW = field({ key: 'asize', label: 'Numero di elementi', type: 'exprlist', placeholder: 'es. 10   oppure   3, 4' }, a.size);
-    const visW = field({ key: 'avis', label: 'Accesso', type: 'seg', options: VIS_OPTS }, a.visibility);
-    const statW = field({ key: 'astat', label: 'Statico: uno solo per tutta la classe (Classe.nome)', type: 'check' }, a.static);
-    const initW = field({ key: 'ainit', label: 'Valore iniziale (facoltativo)', type: 'expr', placeholder: 'se vuoto: 0, "", false oppure null', hint: 'Ogni nuovo oggetto parte da questo valore; poi il costruttore lo può cambiare' }, a.init || '');
+    const sizeW = field({ key: 'asize', label: L('ui.numberOfElements'), type: 'exprlist', placeholder: L('ui.eG10Or342') }, a.size);
+    const visW = field({ key: 'avis', label: L('ui.access'), type: 'seg', options: VIS_OPTS }, a.visibility);
+    const statW = field({ key: 'astat', label: L('ui.staticOnlyOneForTheWhole'), type: 'check' }, a.static);
+    const initW = field({ key: 'ainit', label: L('ui.initialValueOptional'), type: 'expr', placeholder: L('ui.ifEmpty0FalseOrNull'), hint: L('ui.everyNewObjectStartsFromThis') }, a.init || '');
     const body = h('div', { class: 'fields' }, nameW, typeW, arrW, sizeW, visW, statW, initW);
     const sync = () => { sizeW.hidden = !arrW._get(); initW.hidden = arrW._get(); };
     body.addEventListener('change', sync); sync();
     openModal({
-      title: isNew ? `Nuovo attributo in ${c.name}` : `Modifica attributo ${c.name}.${a.name}`, body, okText: isNew ? 'Aggiungi' : 'Salva',
+      title: isNew ? L('ui.newAttributeIn', { name: c.name }) : L('ui.editAttribute', { name: c.name, name2: a.name }), body, okText: isNew ? L('ui.add') : L('ui.save'),
       onOk: () => {
         for (const w of [nameW, initW]) { if (w.hidden) continue; const e = w._check(); if (e) return e; }
         const name = nameW._get().trim(), lo = name.toLowerCase();
         const arr = arrW._get();
-        if (arr) { const e = sizeW._check(); if (e) return e; if (!String(sizeW._get()).trim()) return 'Indica il numero di elementi dell\'array'; }
-        for (const k of [...M.chainOf(st.prog, c), ...descendants(c)]) for (const x of k.attributes) if (x !== a && x.name.toLowerCase() === lo) return k === c ? `La classe ha già un attributo ${x.name}` : `${k.name} ha già un attributo ${x.name}: nella stessa gerarchia di classi i nomi devono essere diversi`;
+        if (arr) { const e = sizeW._check(); if (e) return e; if (!String(sizeW._get()).trim()) return L('ui.enterTheNumberOfElementsOf'); }
+        for (const k of [...M.chainOf(st.prog, c), ...descendants(c)]) for (const x of k.attributes) if (x !== a && x.name.toLowerCase() === lo) return k === c ? L('ui.theClassAlreadyHasAnAttribute', { name: x.name }) : L('ui.alreadyHasAnAttributeInThe', { name: k.name, name2: x.name });
         const ty = typeW._get();
-        if (statW._get() && genNamesIn([ty], c.tparams).length) return 'Un attributo statico non può avere un Tipo Generico: è uno solo per tutti gli oggetti, che possono avere tipi diversi';
+        if (statW._get() && genNamesIn([ty], c.tparams).length) return L('ui.aStaticAttributeCannotHaveA');
         const ch = classGenChange(c, a, statW._get() ? [] : [ty]);
         if (ch.err) return ch.err;
         mutate(() => {
@@ -1388,10 +1386,10 @@
   }
   function deleteClass(c) {
     if (c.module) { removeModule(c.module.name); return; }
-    if (c === M.mainClass(st.prog)) { infoBox('Classe principale', `${c.name} è la classe principale: contiene Main, da cui parte il programma, e non si può eliminare.`); return; }
+    if (c === M.mainClass(st.prog)) { infoBox(L('ui.mainClass'), L('ui.isTheMainClassItContains', { name: c.name })); return; }
     const kids = st.prog.classes.filter((k) => (k.parent || '').toLowerCase() === c.name.toLowerCase());
-    if (kids.length) { infoBox('Classe con sottoclassi', `Prima togli l'ereditarietà da ${kids.map((k) => k.name).join(', ')}: ereditano da ${c.name}.`); return; }
-    confirmBox('Eliminare la classe?', `La classe ${c.name}, i suoi attributi e i suoi ${M.membersOf(st.prog, c).length} metodi verranno eliminati. Le variabili e gli attributi di tipo ${c.name} andranno corretti.`, 'Elimina', () => mutate(() => {
+    if (kids.length) { infoBox(L('ui.classWithSubclasses'), L('ui.firstRemoveTheInheritanceFromInherit', { list: kids.map((k) => k.name).join(', '), name: c.name })); return; }
+    confirmBox(L('ui.deleteTheClass'), L('ui.theClassItsAttributesAndIts', { name: c.name, membersOfCount: M.membersOf(st.prog, c).length, name2: c.name }), L('ui.delete'), () => mutate(() => {
       const cur = func();
       st.prog.functions = st.prog.functions.filter((f) => f.cls !== c.id);
       st.prog.classes = st.prog.classes.filter((k) => k !== c);
@@ -1402,9 +1400,9 @@
   function deleteAttr(c, i) {
     const a = c.attributes[i]; if (!a || roGuard(c)) return;
     const ch = classGenChange(c, a, []);
-    if (ch.err) { infoBox('Attributo con Tipo Generico', ch.err); return; }
+    if (ch.err) { infoBox(L('ui.attributeWithGenericType'), ch.err); return; }
     mutate(() => { c.attributes.splice(i, 1); if (ch.nu) c.tparams = ch.nu; st.usel = { cls: c.id, kind: 'class' }; });
-    toast(`Attributo ${a.name} eliminato (Ctrl+Z per annullare)`);
+    toast(L('ui.attributeDeletedCtrlZToUndo', { name: a.name }));
   }
   const uselClass = () => st.usel && M.classById(st.prog, st.usel.cls);
   function openMethod(fid) { const i = st.prog.functions.findIndex((f) => f.id === fid); if (i >= 0) showFunc(i); }
@@ -1418,13 +1416,13 @@
   function deleteUmlSel() {
     const c = uselClass(); if (!c) return;
     if (st.usel.kind === 'attr') deleteAttr(c, st.usel.i);
-    else if (st.usel.kind === 'method') { const f = st.prog.functions.find((x) => x.id === st.usel.fid); if (f && f !== st.prog.functions[0]) deleteFunction(f); else if (f) toast('Main è il punto di partenza del programma e non si può eliminare', 'warn'); }
+    else if (st.usel.kind === 'method') { const f = st.prog.functions.find((x) => x.id === st.usel.fid); if (f && f !== st.prog.functions[0]) deleteFunction(f); else if (f) toast(L('ui.mainIsTheStartingPointOf'), 'warn'); }
     else deleteClass(c);
   }
   function memberMenu(c, x, y) {
     const box = h('div', { class: 'ctxmenu' },
-      h('button', { type: 'button', onclick: () => { closePop(); editFunction(null, { cls: c, ctor: false }); } }, h('span', null, 'Nuovo metodo…'), h('kbd', null, 'M')),
-      h('button', { type: 'button', onclick: () => { closePop(); editFunction(null, { cls: c, ctor: true }); } }, h('span', null, 'Nuovo costruttore…'), h('kbd', null, 'C')));
+      h('button', { type: 'button', onclick: () => { closePop(); editFunction(null, { cls: c, ctor: false }); } }, h('span', null, L('ui.newMethod')), h('kbd', null, 'M')),
+      h('button', { type: 'button', onclick: () => { closePop(); editFunction(null, { cls: c, ctor: true }); } }, h('span', null, L('ui.newConstructor2')), h('kbd', null, 'C')));
     openPop(x, y, box);
   }
   function umlMenu(e) {
@@ -1435,37 +1433,37 @@
     const modEl = e.target.closest('.umod');
     const bi = box && box.classList.contains('builtin') ? box.dataset.cls.slice(4) : null;
     if (bi) {
-      menuBox = h('div', { class: 'ctxmenu' }, h('div', { class: 'pophead' }, `${bi} · eccezione predefinita`),
-        B(`Nuova eccezione che eredita da ${bi}…`, () => classDialog(null, svgPoint(e), true, bi)), B('Che cos\'è?', () => builtinInfo(bi)));
+      menuBox = h('div', { class: 'ctxmenu' }, h('div', { class: 'pophead' }, L('ui.predefinedException', { name: bi })),
+        B(L('ui.newExceptionInheritingFrom', { bi }), () => classDialog(null, svgPoint(e), true, bi)), B(L('ui.whatIsIt'), () => builtinInfo(bi)));
     } else if (modEl && !c) {
       const mn = modEl.dataset.module;
-      menuBox = h('div', { class: 'ctxmenu' }, h('div', { class: 'pophead' }, 'Modulo ' + mn), B('Aggiorna il modulo', () => updateModule(mn)), h('hr'), B('Rimuovi il modulo', () => removeModule(mn), 'danger'));
+      menuBox = h('div', { class: 'ctxmenu' }, h('div', { class: 'pophead' }, L('ui.module4') + mn), B(L('ui.updateTheModule'), () => updateModule(mn)), h('hr'), B(L('ui.removeTheModule'), () => removeModule(mn), 'danger'));
     } else if (!c) {
       const pt = svgPoint(e);
-      menuBox = h('div', { class: 'ctxmenu' }, B('Nuova classe…', () => classDialog(null, pt), '', 'N'), B('Nuova eccezione…', () => classDialog(null, pt, true), '', 'Maiusc+E'), B('Importa un modulo…', moduleDialog, '', 'Ctrl+I'));
+      menuBox = h('div', { class: 'ctxmenu' }, B(L('ui.newClass2'), () => classDialog(null, pt), '', 'N'), B(L('ui.newException2'), () => classDialog(null, pt, true), '', 'Shift+E'), B(L('ui.importAModule'), moduleDialog, '', 'Ctrl+I'));
     } else if (c.module) {
       const f = row && row.dataset.kind === 'method' ? st.prog.functions.find((x) => x.id === row.dataset.fid) : null;
-      menuBox = h('div', { class: 'ctxmenu' }, h('div', { class: 'pophead' }, `${M.classTitle(c)} · modulo ${c.module.name}`),
-        f ? B('Apri il diagramma di flusso', () => openMethod(f.id), '', 'Invio') : null,
-        B('Aggiorna il modulo', () => updateModule(c.module.name)), h('hr'), B('Rimuovi il modulo', () => removeModule(c.module.name), 'danger'));
+      menuBox = h('div', { class: 'ctxmenu' }, h('div', { class: 'pophead' }, L('ui.module5', { c: M.classTitle(c), name: c.module.name })),
+        f ? B(L('ui.openTheFlowchart'), () => openMethod(f.id), '', L('ui.enter')) : null,
+        B(L('ui.updateTheModule'), () => updateModule(c.module.name)), h('hr'), B(L('ui.removeTheModule'), () => removeModule(c.module.name), 'danger'));
     } else if (row && row.dataset.kind === 'method') {
       const f = st.prog.functions.find((x) => x.id === row.dataset.fid);
       menuBox = h('div', { class: 'ctxmenu' },
-        B('Apri il diagramma di flusso', () => openMethod(f.id), '', 'Invio'),
-        B(f === st.prog.functions[0] ? 'Proprietà del programma…' : f.ctor ? 'Modifica il costruttore…' : 'Modifica la firma del metodo…', () => editMethodSig(f), '', 'F2'),
+        B(L('ui.openTheFlowchart'), () => openMethod(f.id), '', L('ui.enter')),
+        B(f === st.prog.functions[0] ? L('ui.programProperties') : f.ctor ? L('ui.editTheConstructor') : L('ui.editTheMethodSignature'), () => editMethodSig(f), '', 'F2'),
         f === st.prog.functions[0] ? null : h('hr'),
-        f === st.prog.functions[0] ? null : B(f.ctor ? 'Elimina il costruttore' : 'Elimina il metodo', () => deleteFunction(f), 'danger', 'Canc'));
+        f === st.prog.functions[0] ? null : B(f.ctor ? L('ui.deleteTheConstructor2') : L('ui.deleteTheMethod2'), () => deleteFunction(f), 'danger', L('ui.del')));
     } else if (row && row.dataset.kind === 'attr') {
       const i = +row.dataset.i;
-      menuBox = h('div', { class: 'ctxmenu' }, B('Modifica l\'attributo…', () => attrDialog(c, i), '', 'Invio'), h('hr'), B('Elimina l\'attributo', () => deleteAttr(c, i), 'danger', 'Canc'));
+      menuBox = h('div', { class: 'ctxmenu' }, B(L('ui.editTheAttribute'), () => attrDialog(c, i), '', L('ui.enter')), h('hr'), B(L('ui.deleteTheAttribute'), () => deleteAttr(c, i), 'danger', L('ui.del')));
     } else {
       menuBox = h('div', { class: 'ctxmenu' },
-        B('Nuovo attributo…', () => attrDialog(c, null), '', 'A'),
-        B('Nuovo metodo…', () => editFunction(null, { cls: c, ctor: false }), '', 'M'),
-        B('Nuovo costruttore…', () => editFunction(null, { cls: c, ctor: true }), '', 'C'),
+        B(L('ui.newAttribute'), () => attrDialog(c, null), '', 'A'),
+        B(L('ui.newMethod'), () => editFunction(null, { cls: c, ctor: false }), '', 'M'),
+        B(L('ui.newConstructor2'), () => editFunction(null, { cls: c, ctor: true }), '', 'C'),
         h('hr'),
-        B('Modifica la classe…', () => classDialog(c), '', 'Invio'),
-        B('Elimina la classe', () => deleteClass(c), 'danger', 'Canc'));
+        B(L('ui.editTheClass'), () => classDialog(c), '', L('ui.enter')),
+        B(L('ui.deleteTheClass2'), () => deleteClass(c), 'danger', L('ui.del')));
     }
     openPop(e.clientX, e.clientY, menuBox);
   }
@@ -1473,7 +1471,7 @@
     const svg = $('svg', V.chart); const r = svg.getBoundingClientRect();
     return { x: (e.clientX - r.left) / st.zoom, y: (e.clientY - r.top) / st.zoom };
   }
-  /* evidenzia la selezione senza ridisegnare (altrimenti il doppio clic si perde) */
+  /* highlights the selection without redrawing (otherwise the double click is lost) */
   function decorateUml() {
     const u = st.usel;
     $$('.ubox', V.chart).forEach((b) => { const on = !!u && u.cls === b.dataset.cls; b.classList.toggle('cur', on); b.classList.toggle('sel', on && u.kind === 'class'); });
@@ -1484,22 +1482,22 @@
     });
     if (V.main) renderFuncSelect();
   }
-  /* selezione nel diagramma delle classi */
+  /* selection in the class diagram */
   function umlSelectFrom(target) {
     const box = target.closest('.ubox'), row = target.closest('.urow');
-    if (!box || box.classList.contains('builtin')) st.usel = null; // eccezione predefinita: non si seleziona
+    if (!box || box.classList.contains('builtin')) st.usel = null; // predefined exception: it is not selected
     else if (row) st.usel = { cls: box.dataset.cls, kind: row.dataset.kind, i: row.dataset.i != null ? +row.dataset.i : undefined, fid: row.dataset.fid };
     else st.usel = { cls: box.dataset.cls, kind: 'class' };
   }
   function editProgram() {
     const a = st.prog.attrs;
-    const n = field({ key: 'pname', label: 'Nome del programma', type: 'plain' }, a.name);
-    const au = field({ key: 'pauth', label: 'Autori', type: 'plain' }, a.authors);
-    const ab = field({ key: 'pabout', label: 'Descrizione', type: 'textarea', hint: 'Se il programma viene usato come modulo, è la descrizione mostrata quando lo si importa' }, a.about);
-    openModal({ title: 'Proprietà del programma', body: h('div', { class: 'fields' }, n, au, ab), okText: 'Salva', onOk: () => {
-      if (isRunning()) return 'Ferma il programma prima di modificarlo';
+    const n = field({ key: 'pname', label: L('ui.programName'), type: 'plain' }, a.name);
+    const au = field({ key: 'pauth', label: L('ui.authors'), type: 'plain' }, a.authors);
+    const ab = field({ key: 'pabout', label: L('ui.description'), type: 'textarea', hint: L('ui.ifTheProgramIsUsedAs') }, a.about);
+    openModal({ title: L('ui.programProperties2'), body: h('div', { class: 'fields' }, n, au, ab), okText: L('ui.save'), onOk: () => {
+      if (isRunning()) return L('ui.stopTheProgramBeforeEditingIt');
       mutate(() => {
-        // la classe predefinita prende il nome del programma
+        // the default class takes the name of the program
         const c = M.hasClasses(st.prog) && st.prog.classes.length === 1 && st.prog.classes[0].name === M.defaultClassName(st.prog) ? st.prog.classes[0] : null;
         a.name = n._get().trim(); a.authors = au._get().trim(); a.about = ab._get();
         if (c && !st.prog.classes.some((k) => k !== c && k.name === M.defaultClassName(st.prog))) renameClass(c, M.defaultClassName(st.prog));
@@ -1508,9 +1506,9 @@
     } });
   }
 
-  /* ------------------------ Interazione col disegno ---------------------- */
+  /* ------------------------ Interaction with the drawing ---------------------- */
   let drag = null, suppressClick = false, udrag = null;
-  /* eventi del foglio di una vista (principale o ausiliaria) */
+  /* events of the sheet of a view (main or auxiliary) */
   function bindChart(v) {
     const chart = v.chart;
     chart.addEventListener('click', (e) => {
@@ -1522,7 +1520,7 @@
         const add = e.target.closest('.uadd');
         if (add) {
           const c = M.classById(st.prog, add.closest('.ubox').dataset.cls);
-          if (isRunning()) { toast('Ferma il programma per modificare il diagramma', 'warn'); return; }
+          if (isRunning()) { toast(L('ui.stopTheProgramToEditThe'), 'warn'); return; }
           if (add.dataset.add === 'attr') attrDialog(c, null); else memberMenu(c, e.clientX + 6, e.clientY + 6);
           return;
         }
@@ -1532,7 +1530,7 @@
       const tog = e.target.closest('.ctoggle');
       if (tog) { const id = tog.dataset.toggle; st.expanded.has(id) ? st.expanded.delete(id) : st.expanded.add(id); render(); return; }
       const ins = e.target.closest('.ins');
-      if (ins) { if (isRunning()) { toast('Ferma il programma per modificare il diagramma', 'warn'); return; } insertMenu(+ins.dataset.ins, e.clientX + 6, e.clientY + 6); return; }
+      if (ins) { if (isRunning()) { toast(L('ui.stopTheProgramToEditThe'), 'warn'); return; } insertMenu(+ins.dataset.ins, e.clientX + 6, e.clientY + 6); return; }
       const g = e.target.closest('.shape');
       const gid = g ? ownerOf(g.dataset.id) : null;
       st.sel = gid && !gid.includes(':') ? gid : null;
@@ -1544,11 +1542,11 @@
         if (e.target.closest('.uadd') || e.target.closest('.umodtog')) return;
         const mc = e.target.closest('.umodc');
         if (mc) { toggleModule(mc.dataset.module); return; }
-        if (e.target.closest('.umod')) return; // riquadro di un modulo: niente nuova classe
+        if (e.target.closest('.umod')) return; // box of a module: no new class
         const row = e.target.closest('.urow'), box = e.target.closest('.ubox');
         if (box && box.classList.contains('builtin')) { builtinInfo(box.dataset.cls.slice(4)); return; }
         if (row && row.dataset.kind === 'method') { openMethod(row.dataset.fid); return; }
-        if (isRunning()) { toast('Ferma il programma per modificare il diagramma', 'warn'); return; }
+        if (isRunning()) { toast(L('ui.stopTheProgramToEditThe'), 'warn'); return; }
         if (row) { attrDialog(M.classById(st.prog, box.dataset.cls), +row.dataset.i); return; }
         if (box) { classDialog(M.classById(st.prog, box.dataset.cls)); return; }
         classDialog(null, svgPoint(e));
@@ -1564,7 +1562,7 @@
       focusView(v);
       if (isUml()) {
         e.preventDefault();
-        if (isRunning()) { toast('Ferma il programma per modificare il diagramma', 'warn'); return; }
+        if (isRunning()) { toast(L('ui.stopTheProgramToEditThe'), 'warn'); return; }
         umlSelectFrom(e.target); decorateUml(); umlMenu(e);
         return;
       }
@@ -1577,11 +1575,11 @@
     chart.addEventListener('pointerdown', (e) => {
       focusView(v);
       if (isUml()) {
-        // le classi si spostano trascinandole; un modulo (riquadro o etichetta) si sposta con tutte le sue classi
+        // classes are moved by dragging them; a module (box or label) moves with all its classes
         if (e.button !== 0 || isRunning() || e.target.closest('.uadd') || e.target.closest('.umodtog')) return;
         const box = e.target.closest('.ubox'), mod = !box && e.target.closest('.umod');
         let cs;
-        // eccezione predefinita: si sposta la sua posizione (non è nel file)
+        // predefined exception: its position is moved (it is not in the file)
         if (box && box.classList.contains('builtin')) cs = [Object.assign(st.excPos.get(box.dataset.cls.slice(4)) || {}, { builtin: true })];
         else if (box) cs = [M.classById(st.prog, box.dataset.cls)];
         else if (mod) { const m = M.modulesOf(st.prog).find((x) => x.name === mod.dataset.module); cs = m ? m.classes : []; }
@@ -1595,12 +1593,12 @@
     });
     v.wrap.addEventListener('wheel', (e) => {
       if (e.ctrlKey) { e.preventDefault(); focusView(v); setZoom(st.zoom * (e.deltaY < 0 ? 1.1 : 0.9)); return; }
-      // una vista «Continua» non scorre da sola: la rotella fa scorrere il foglio principale
+      // a «Continue» view does not scroll by itself: the wheel scrolls the main sheet
       if (v.sync) { e.preventDefault(); MAIN.wrap.scrollBy(e.deltaX, e.deltaY); }
     }, { passive: false });
     v.wrap.addEventListener('scroll', closePop);
   }
-  /* trascinamenti (anche da una vista all'altra) */
+  /* dragging (also from one view to another) */
   function bindDrag() {
     window.addEventListener('pointermove', (e) => {
       if (udrag) {
@@ -1612,7 +1610,7 @@
           st.usel = udrag.mod || udrag.items[0].c.builtin ? null : { cls: udrag.items[0].c.id, kind: 'class' };
         }
         if (udrag.on) {
-          // passo di 10 e mai oltre il bordo in alto o a sinistra (le classi di un modulo restano allineate tra loro)
+          // step of 10 and never beyond the top or left edge (the classes of a module stay aligned with each other)
           const it = udrag.items;
           const mx = Math.max(Math.round(dx / 10) * 10, 10 - Math.min(...it.map((i) => i.ox)));
           const my = Math.max(Math.round(dy / 10) * 10, 10 - Math.min(...it.map((i) => i.oy)));
@@ -1653,7 +1651,7 @@
       const ins = el && el.closest && el.closest('.vchart .ins');
       $$('.vchart .ins.drop').forEach((x) => x.classList.remove('drop'));
       if (!ins) return;
-      // il blocco si può lasciare anche nel diagramma di un'altra vista
+      // the block can also be dropped in the diagram of another view
       const tv = viewOfEl(ins) || V;
       const pt = (vget(tv, 'ins') || [])[+ins.dataset.ins];
       if (!pt) return;
@@ -1662,7 +1660,7 @@
     });
   }
 
-  /* ============================ ESECUZIONE =============================== */
+  /* ============================ EXECUTION =============================== */
   const run = { state: 'idle', gen: null, interp: null, timer: null, steps: 0, curId: null, curFrame: null, errId: null, pending: undefined, mode: 'run', mainFrame: null, viewFrame: null, prevVals: new Map(), lastVarsAt: 0 };
 
   /* ---- Console ---- */
@@ -1691,46 +1689,46 @@
     requestAnimationFrame(() => { scrollPending = false; const o = $('#conOut'); o.scrollTop = o.scrollHeight; });
   }
 
-  /* ---- File virtuali ---- */
+  /* ---- Virtual files ---- */
   const streams = { read: null, write: null };
   function saveVfs() { store.set('vfs', Object.fromEntries(st.vfs)); renderFiles(); }
   function fileOpen(name, mode) {
-    if (!name.trim()) throw new E.FlowError('Il nome del file è vuoto');
-    if (streams[mode]) throw new E.FlowError(`C'è già un file aperto in ${mode === 'read' ? 'lettura' : 'scrittura'}: chiudilo prima di aprirne un altro`);
+    if (!name.trim()) throw new E.FlowError(L('ui.theFileNameIsEmpty'));
+    if (streams[mode]) throw new E.FlowError(L('ui.thereIsAlreadyAFileOpen', { text: mode === 'read' ? L('chart.reading') : L('chart.writing') }));
     if (mode === 'read') {
-      if (!st.vfs.has(name)) throw new E.FlowError(`File "${name}" non trovato: caricalo nella scheda File`, { exc: 'ErroreFile' });
+      if (!st.vfs.has(name)) throw new E.FlowError(L('ui.fileNotFoundUploadItIn', { name }), { exc: 'FileError' });
       const lines = st.vfs.get(name).split(/\r?\n/);
       if (lines.length && lines[lines.length - 1] === '') lines.pop();
       streams.read = { name, lines, pos: 0 };
     } else streams.write = { name, lines: [] };
   }
   function fileClose(mode) {
-    if (!streams[mode]) throw new E.FlowError(`Nessun file aperto in ${mode === 'read' ? 'lettura' : 'scrittura'}`);
+    if (!streams[mode]) throw new E.FlowError(L('ui.noFileOpenFor', { text: mode === 'read' ? L('chart.reading') : L('chart.writing') }));
     if (mode === 'write') { st.vfs.set(streams.write.name, streams.write.lines.join('\n') + (streams.write.lines.length ? '\n' : '')); saveVfs(); }
     streams[mode] = null;
   }
-  function flushStreams() { if (streams.write) { try { fileClose('write'); } catch (e) { /* ignora */ } } streams.read = null; streams.write = null; }
+  function flushStreams() { if (streams.write) { try { fileClose('write'); } catch (e) { /* ignore */ } } streams.read = null; streams.write = null; }
 
   const env = {
     output: (t, nl, cls) => conWrite(t, nl, cls),
-    eof: () => { if (!streams.read) throw new E.FlowError('EOF(): nessun file aperto in lettura'); return streams.read.pos >= streams.read.lines.length; },
+    eof: () => { if (!streams.read) throw new E.FlowError(L('ui.eofNoFileOpenForReading')); return streams.read.pos >= streams.read.lines.length; },
     fileOpen, fileClose,
     fileRead: () => {
       const r = streams.read;
-      if (!r) throw new E.FlowError('Nessun file aperto in lettura');
-      if (r.pos >= r.lines.length) throw new E.FlowError(`Lettura oltre la fine del file "${r.name}" (controlla con EOF())`, { exc: 'ErroreFile' });
+      if (!r) throw new E.FlowError(L('ui.noFileOpenForReading'));
+      if (r.pos >= r.lines.length) throw new E.FlowError(L('ui.readingPastTheEndOfThe', { name: r.name }), { exc: 'FileError' });
       return r.lines[r.pos++];
     },
-    fileWrite: (s) => { if (!streams.write) throw new E.FlowError('Nessun file aperto in scrittura'); streams.write.lines.push(s); },
+    fileWrite: (s) => { if (!streams.write) throw new E.FlowError(L('ui.noFileOpenForWriting')); streams.write.lines.push(s); },
   };
 
   function setStatus(kind, text) {
     const s = $('#status');
     s.className = 'status ' + kind;
     $('#statusText').textContent = text;
-    $('#stepCount').textContent = run.steps ? `${run.steps.toLocaleString('it-IT')} passi` : '';
+    $('#stepCount').textContent = run.steps ? L('ui.steps', { toLocaleStringNaN: run.steps.toLocaleString('it-IT') }) : '';
     document.body.dataset.run = run.state;
-    $('#runBtn').querySelector('span').textContent = run.state === 'paused' ? 'Continua' : 'Esegui';
+    $('#runBtn').querySelector('span').textContent = run.state === 'paused' ? L('ui.continue') : L('ui.run');
     $('#pauseBtn').disabled = run.state !== 'running';
     $('#stopBtn').disabled = !isRunning();
   }
@@ -1742,13 +1740,13 @@
     run.trail = null; clearTrail();
     ArrayView.markStale();
     conClear(); flushStreams();
-    conWrite(`▶ ${st.prog.attrs.name || 'Programma'}`, true, 'sys');
-    // esegue una copia, così le modifiche al diagramma non toccano l'esecuzione
+    conWrite(`▶ ${st.prog.attrs.name || L('model.program')}`, true, 'sys');
+    // runs a copy, so the changes to the diagram do not touch the execution
     const prog = JSON.parse(JSON.stringify(st.prog));
     run.interp = new Interpreter(prog, env);
     run.gen = run.interp.run();
     if (!paneVisible('console') && !paneVisible('vars')) showPane('console');
-    if (mode === 'run') { run.state = 'running'; setStatus('running', 'In esecuzione…'); pump(); }
+    if (mode === 'run') { run.state = 'running'; setStatus('running', L('ui.running')); pump(); }
     else { run.state = 'paused'; stepOnce(); }
   }
 
@@ -1760,13 +1758,13 @@
       try { r = run.gen.next(run.pending); run.pending = undefined; } catch (e) { onError(e); return null; }
       if (r.done) { onFinish(); return null; }
       ev = r.value;
-      // il ramo scelto da un Se serve solo al cursore: non è un passo
+      // the branch chosen by an If is only for the cursor: it is not a step
       if (ev.type === 'branch') { ev.frame._branch = { id: ev.stmt.id, taken: ev.taken }; continue; }
       break;
     }
     if (ev.type === 'stmt') {
       run.steps++; run.curId = ev.stmt.id; run.curFrame = ev.frame;
-      // percorso per il cursore: dall'ultimo blocco eseguito in questa stessa chiamata
+      // path for the cursor: from the last block run in this same call
       run.trail = { from: ev.frame._last || null, to: ev.stmt.id, frame: ev.frame, branch: ev.frame._branch || null, step: run.steps, exc: ev.exc || null };
       ev.frame._last = ev.stmt.id;
       if (!run.mainFrame) run.mainFrame = ev.frame;
@@ -1775,8 +1773,8 @@
     if (ev.type === 'input') { onInput(ev); return null; }
     if (ev.type === 'break') {
       run.state = 'paused'; run.mode = 'step';
-      showCurrent(); setStatus('paused', 'In pausa al punto di interruzione');
-      conWrite('⏸ Punto di interruzione', true, 'sys');
+      showCurrent(); setStatus('paused', L('ui.pausedAtTheBreakpoint'));
+      conWrite(L('ui.breakpoint2'), true, 'sys');
       return null;
     }
     return ev;
@@ -1792,7 +1790,7 @@
       if (!ev) return;
       if (ms > 0) { showCurrent(); run.timer = setTimeout(pump, ms); return; }
       if (performance.now() - t0 > 16) {
-        setStatus('running', 'In esecuzione…');
+        setStatus('running', L('ui.running'));
         if (performance.now() - run.lastVarsAt > 400) { renderVars(); run.lastVarsAt = performance.now(); }
         run.timer = setTimeout(pump, 0);
         return;
@@ -1804,11 +1802,11 @@
     if (run.state === 'input') return;
     run.state = 'paused'; run.mode = 'step';
     const ev = advance();
-    if (ev) { showCurrent(); setStatus('paused', 'Passo a passo: premi Passo per continuare'); }
+    if (ev) { showCurrent(); setStatus('paused', L('ui.stepByStepPressStepTo')); }
   }
 
-  /* Passo sopra: esegue fino al prossimo blocco della stessa chiamata (o di quella che l'ha chiamata),
-     senza fermarsi dentro le funzioni e i metodi chiamati dal blocco corrente */
+  /* Step over: runs up to the next block of the same call (or of the one that called it),
+     without stopping inside the functions and methods called by the current block */
   function onOverBtn() {
     if (run.state === 'input') return;
     if (run.state === 'running') { onStepBtn(); return; }
@@ -1817,8 +1815,8 @@
     run.mode = 'over'; run.state = 'running';
     pumpOver();
   }
-  /* Esci dalla funzione: esegue il resto della funzione (o del metodo) in corso e si ferma
-     sul blocco successivo di chi l'ha chiamata; nel Main esegue fino alla fine */
+  /* Step out: runs the rest of the current function (or method) and stops
+     on the next block of the caller; in Main it runs to the end */
   function onOutBtn() {
     if (run.state === 'input') return;
     if (run.state === 'running') { onStepBtn(); return; }
@@ -1833,21 +1831,21 @@
     const t0 = performance.now();
     while (run.state === 'running') {
       const ev = advance();
-      if (!ev) return; // fine, errore, input o punto di interruzione
+      if (!ev) return; // end, error, input or breakpoint
       if (ev.frame.depth <= run.overDepth) {
         run.state = 'paused'; run.mode = 'step';
-        showCurrent(); setStatus('paused', 'Passo a passo: premi Passo per continuare');
+        showCurrent(); setStatus('paused', L('ui.stepByStepPressStepTo'));
         return;
       }
       if (performance.now() - t0 > 16) {
-        setStatus('running', 'Esecuzione della chiamata…');
+        setStatus('running', L('ui.runningTheCall'));
         run.timer = setTimeout(pumpOver, 0);
         return;
       }
     }
   }
 
-  /* l'esecuzione si segue nel foglio principale; le altre viste illuminano gli stessi blocchi */
+  /* the execution is followed in the main sheet; the other views light up the same blocks */
   function showCurrent() { withView(MAIN, showCurrentMain); }
   function showCurrentMain() {
     const fid = run.curFrame && run.curFrame.func.id;
@@ -1863,7 +1861,7 @@
     drawTrail();
   }
 
-  /* ---- Cursore lungo le frecce ---- */
+  /* ---- Cursor along the arrows ---- */
   let trailRaf = 0;
   function clearTrail() {
     cancelAnimationFrame(trailRaf);
@@ -1878,7 +1876,7 @@
   function findPath(from, to, branch) {
     const out = new Map();
     for (const e of st.edges || []) { if (!out.has(e.from)) out.set(e.from, []); out.get(e.from).push(e); }
-    // ricerca in ampiezza: il primo passo da un Se segue il ramo davvero preso
+    // breadth-first search: the first step from an If follows the branch really taken
     let first = out.get(from) || [];
     if (branch && branch.id === from) first = first.filter((e) => e.tag === (branch.taken ? 'T' : 'F'));
     const queue = first.map((e) => ({ node: e.to, path: [e] }));
@@ -1892,7 +1890,7 @@
     }
     return null;
   }
-  /* nelle viste ausiliarie con lo stesso diagramma la freccia rossa di un'eccezione compare ferma */
+  /* in the auxiliary views with the same diagram the red arrow of an exception appears still */
   function drawAuxExc(t) {
     const NS = 'http://www.w3.org/2000/svg';
     for (const v of views) {
@@ -1923,7 +1921,7 @@
     const ov = $('svg .exc-over', V.chart); if (ov) ov.innerHTML = '';
     if (!t.from || isUml() || func().id !== t.frame.func.id) return;
     let pts = [];
-    if (t.exc) pts = excPath(t, g); // eccezione: freccia rossa tratteggiata dal blocco da cui arriva al Catch (o al Finally)
+    if (t.exc) pts = excPath(t, g); // exception: dashed red arrow from the block it comes from to the Catch (or to the Finally)
     else {
       const path = findPath(t.from, t.to, t.branch);
       if (!path) return;
@@ -1953,7 +1951,7 @@
     const reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
     const ms = run.mode === 'step' ? 520 : Math.min(SPEEDS[st.speed].ms * 0.8, 650);
     if (reduce || ms < 60) { place(1); return; }
-    // durante il tragitto il blocco di arrivo resta spento; si illumina all'arrivo del cursore
+    // during the trip the arrival block stays off; it lights up when the cursor arrives
     run.hold = t.to; run.holdFrom = t.from; decorate();
     const t0 = performance.now();
     const tick = (now) => {
@@ -1965,9 +1963,9 @@
     place(0);
     trailRaf = requestAnimationFrame(tick);
   }
-  /* percorso dell'eccezione: dal blocco da cui arriva (quello che l'ha lanciata, oppure la chiamata
-     della funzione da cui risale) all'intestazione del Catch che la cattura o del Finally; il blocco di
-     partenza si cerchia di rosso e un'etichetta dice di che eccezione si tratta */
+  /* path of the exception: from the block it comes from (the one that threw it, or the call
+     of the function it goes up from) to the header of the Catch that catches it or of the Finally; the starting
+     block is circled in red and a label says which exception it is */
   function excPath(t, g) {
     const box = (id) => { const el = $(`.shape[data-id="${CSS.escape(id)}"]`, V.chart); return el ? el.getBBox() : null; };
     const a = box(t.from), b = box(t.to);
@@ -1979,23 +1977,23 @@
     const lab = document.createElementNS(NS, 'text');
     lab.setAttribute('class', 'exc-lab');
     lab.setAttribute('x', a.x - 4); lab.setAttribute('y', a.y - 9);
-    lab.textContent = `⚡ ${t.exc.type}${t.exc.lost && t.exc.lost.length ? ` da ${t.exc.lost[0]}()` : ''}${t.exc.pending ? ' → Finally, poi prosegue' : ''}`;
-    // sopra i blocchi, così l'etichetta si legge sempre
+    lab.textContent = `⚡ ${t.exc.type}${t.exc.lost && t.exc.lost.length ? ` da ${t.exc.lost[0]}()` : ''}${t.exc.pending ? L('ui.finallyThenContinues') : ''}`;
+    // above the blocks, so the label can always be read
     const svg = g.ownerSVGElement;
     const over = svg.querySelector('.exc-over') || svg.appendChild(document.createElementNS(NS, 'g'));
     over.setAttribute('class', 'exc-over'); over.innerHTML = '';
     over.append(ring, lab);
     const sy = a.y + a.height / 2, hy = b.y + b.height / 2;
     if (b.x > a.x + a.width) {
-      // Catch a destra: corsia appena a sinistra della sua colonna
+      // Catch on the right: lane just to the left of its column
       const lane = b.x - 14;
       return [[a.x + a.width, sy], [lane, sy], [lane, hy], [b.x, hy]];
     }
-    // Finally (sotto, al centro): corsia a sinistra
+    // Finally (below, in the middle): lane on the left
     const lane = Math.min(a.x, b.x) - 18;
     return [[a.x, sy], [lane, sy], [lane, hy], [b.x, hy]];
   }
-  /* il blocco è tutto visibile nella vista (rettangolo dello schermo) */
+  /* the block is all visible in the view (screen rectangle) */
   function shownIn(v, el) {
     const r = el.getBoundingClientRect(), w = v.wrap.getBoundingClientRect();
     return r.width > 0 && r.top >= w.top + 30 && r.bottom <= w.bottom - 30 && r.left >= w.left && r.right <= w.right;
@@ -2003,7 +2001,7 @@
   function scrollIntoViewIfNeeded(el) {
     const v = viewOfEl(el) || V, wrap = v.wrap;
     const r = el.getBoundingClientRect(), w = wrap.getBoundingClientRect();
-    // nel foglio principale: se il blocco si vede già in una vista «Continua», non serve scorrere
+    // in the main sheet: if the block is already seen in a «Continue» view, there is no need to scroll
     if (v.main && views.some((x) => x.sync && !x.min && (() => { const o = $(`.shape[data-id="${CSS.escape(el.dataset.id)}"]`, x.chart); return o && shownIn(x, o); })())) return;
     if (v.sync) return;
     if (r.top < w.top + 30 || r.bottom > w.bottom - 30 || r.left < w.left || r.right > w.right) {
@@ -2014,13 +2012,13 @@
   function onInput(ev) {
     run.state = 'input';
     showCurrent();
-    setStatus('input', `In attesa di un valore per ${ev.varName}`);
+    setStatus('input', L('ui.waitingForAValueFor', { varName: ev.varName }));
     const inp = $('#conInput');
     inp.disabled = false; $('#conSend').disabled = false;
-    inp.placeholder = `${ev.varName} (${TYPE_IT[ev.varType]}) — scrivi e premi Invio`;
+    inp.placeholder = L('ui.typeAndPressEnter', { varName: ev.varName, value: TYPE_IT[ev.varType] });
     $('#conPrompt').textContent = ev.varName;
     $('#conForm').classList.add('waiting');
-    // l'input deve essere visibile: se la console è nel pannello nascosto, il pannello si riapre
+    // the input must be visible: if the console is in the hidden panel, the panel opens again
     if (!isFloat('console') && document.body.classList.contains('side-hidden')) setSideHidden(false);
     showPane('console');
     setTimeout(() => inp.focus(), 0);
@@ -2029,11 +2027,11 @@
     if (run.state !== 'input') return;
     conWrite(text, true, 'echo');
     const inp = $('#conInput');
-    inp.value = ''; inp.disabled = true; $('#conSend').disabled = true; inp.placeholder = 'L\'input si attiva quando il programma chiede un valore';
+    inp.value = ''; inp.disabled = true; $('#conSend').disabled = true; inp.placeholder = L('ui.inputBecomesActiveWhenTheProgram');
     $('#conPrompt').textContent = '›';
     $('#conForm').classList.remove('waiting');
     run.pending = text;
-    if (run.mode === 'run') { run.state = 'running'; setStatus('running', 'In esecuzione…'); pump(); }
+    if (run.mode === 'run') { run.state = 'running'; setStatus('running', L('ui.running')); pump(); }
     else if (run.mode === 'over') { run.state = 'running'; pumpOver(); }
     else { run.state = 'paused'; stepOnce(); }
   }
@@ -2041,11 +2039,11 @@
   function onFinish() {
     flushStreams();
     run.state = 'done';
-    conWrite(`■ Fine del programma · ${run.steps.toLocaleString('it-IT')} passi`, true, 'sys');
+    conWrite(L('ui.endOfProgramSteps', { toLocaleStringNaN: run.steps.toLocaleString('it-IT') }), true, 'sys');
     run.curId = null; run.curFrame = null; clearTrail();
     decorate(); renderVars();
-    setStatus('done', 'Programma terminato');
-    // dopo Esegui si mostrano i risultati: la console (anche se era aperta la scheda Variabili)
+    setStatus('done', L('ui.programFinished'));
+    // after Run the results are shown: the console (even if the Variables tab was open)
     if (run.mode === 'run') {
       if (!isFloat('console') && document.body.classList.contains('side-hidden')) setSideHidden(false);
       showPane('console');
@@ -2062,37 +2060,37 @@
     if (e.stmtId) {
       const fs = M.findStmt(st.prog, e.stmtId);
       const fn = e.funcId && st.prog.functions.find((f) => f.id === e.funcId);
-      if (fs) where = ` (in ${fname(fs.func)}, blocco «${RenderLib.caption(fs.stmt).text}»)`;
+      if (fs) where = L('ui.inBlock', { func: fname(fs.func), text: RenderLib.caption(fs.stmt).text });
       else if (fn) where = ` (in ${fname(fn)})`;
     }
-    conWrite('✖ Errore: ' + (e.message || String(e)) + where, true, 'error');
+    conWrite(L('ui.error') + (e.message || String(e)) + where, true, 'error');
     decorate(); renderVars();
     const el = run.errId && $(`.shape[data-id="${CSS.escape(run.errId)}"]`, MAIN.chart);
     if (el) scrollIntoViewIfNeeded(el);
     showPane('console');
-    setStatus('error', 'Errore durante l\'esecuzione');
+    setStatus('error', L('ui.errorDuringExecution'));
     if (!(e instanceof E.FlowError)) console.error(e);
   }
   function stopRun() {
     if (!isRunning()) return;
     stopTimer();
-    try { run.gen.return(); } catch (e) { /* ignora */ }
+    try { run.gen.return(); } catch (e) { /* ignore */ }
     flushStreams();
     run.state = 'done';
     const inp = $('#conInput'); inp.disabled = true; $('#conSend').disabled = true; $('#conForm').classList.remove('waiting'); $('#conPrompt').textContent = '›';
-    conWrite('■ Esecuzione interrotta', true, 'sys');
+    conWrite(L('ui.executionStopped'), true, 'sys');
     run.curId = null; decorate(); clearTrail();
-    setStatus('done', 'Interrotto');
+    setStatus('done', L('ui.stopped'));
   }
   function onRunBtn() {
-    if (run.state === 'paused') { run.mode = 'run'; run.state = 'running'; setStatus('running', 'In esecuzione…'); pump(); return; }
+    if (run.state === 'paused') { run.mode = 'run'; run.state = 'running'; setStatus('running', L('ui.running')); pump(); return; }
     if (run.state === 'running' || run.state === 'input') return;
     run.errId = null;
     startRun('run');
   }
   function onStepBtn() {
     if (run.state === 'paused') { stepOnce(); return; }
-    if (run.state === 'running') { stopTimer(); run.state = 'paused'; run.mode = 'step'; showCurrent(); setStatus('paused', 'In pausa'); return; }
+    if (run.state === 'running') { stopTimer(); run.state = 'paused'; run.mode = 'step'; showCurrent(); setStatus('paused', L('ui.paused')); return; }
     if (run.state === 'input') return;
     run.errId = null;
     startRun('step');
@@ -2100,24 +2098,24 @@
   function onPauseBtn() {
     if (run.state !== 'running') return;
     stopTimer(); run.state = 'paused'; run.mode = 'step';
-    showCurrent(); setStatus('paused', 'In pausa');
+    showCurrent(); setStatus('paused', L('ui.paused'));
   }
 
-  /* ---- Variabili ---- */
+  /* ---- Variables ---- */
   const CARET = '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M4.5 2.5L8 6L4.5 9.5"/></svg>';
   const GRID_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M3 15h18M9 4v16M15 4v16"/></svg>';
-  /* dopo ogni aggiornamento: le finestre degli oggetti seguono i riferimenti che cambiano */
+  /* after each update: the object windows follow the references that change */
   function renderVars() { renderVarsTable(); ArrayView.relink(); }
   function renderVarsTable() {
     const box = $('#varsBody');
     const interp = run.interp;
     const stack = interp && isRunning() ? interp.stack : (run.mainFrame ? [run.mainFrame] : []);
-    // le finestre degli array seguono la chiamata più recente della loro funzione
+    // the array windows follow the most recent call of their function
     if (ArrayView.count) ArrayView.refresh((fid, vn) => { for (let i = stack.length - 1; i >= 0; i--) { const fr = stack[i]; if (fr.func.id === fid) { const c = fr.vars.get(vn.toLowerCase()); if (c && c.array) return c; } } return null; });
     box.innerHTML = '';
-    if (!stack.length) { box.append(h('p', { class: 'empty' }, 'Le variabili compaiono qui quando esegui il programma. Usa Passo per osservarle cambiare istruzione dopo istruzione.')); return; }
+    if (!stack.length) { box.append(h('p', { class: 'empty' }, L('ui.variablesAppearHereWhenYouRun'))); return; }
     const frame = run.viewFrame && stack.includes(run.viewFrame) ? run.viewFrame : stack[stack.length - 1];
-    const crumbs = h('nav', { class: 'crumbs', 'aria-label': 'Chiamate in corso' });
+    const crumbs = h('nav', { class: 'crumbs', 'aria-label': L('ui.callsInProgress') });
     stack.forEach((fr, i) => {
       if (i) crumbs.append(h('span', { class: 'sep' }, '›'));
       crumbs.append(h('button', { type: 'button', class: fr === frame ? 'on' : '', onclick: () => { run.viewFrame = fr; renderVars(); } }, fname(fr.func)));
@@ -2125,20 +2123,20 @@
     if (stack.length > 6) crumbs.classList.add('long');
     box.append(crumbs);
     const statics = interp && interp.oo ? [...interp.statics].filter(([, m]) => m.size) : [];
-    if (!frame.vars.size && !frame.self && !statics.length) { box.append(h('p', { class: 'empty' }, 'Nessuna variabile dichiarata finora in ' + fname(frame.func) + '.')); return; }
-    const tbl = h('table', { class: 'vars' }, h('thead', null, h('tr', null, h('th', null, 'Nome'), h('th', null, 'Tipo'), h('th', null, 'Valore'))));
+    if (!frame.vars.size && !frame.self && !statics.length) { box.append(h('p', { class: 'empty' }, L('ui.noVariablesDeclaredSoFarIn') + fname(frame.func) + '.')); return; }
+    const tbl = h('table', { class: 'vars' }, h('thead', null, h('tr', null, h('th', null, L('ui.name')), h('th', null, L('win.type')), h('th', null, L('win.value')))));
     const tb = h('tbody');
-    // src: chiave della riga, per collegare la finestra all'elemento cliccato
+    // src: key of the row, to link the window to the clicked element
     const srcSel = (k) => `#varsBody [data-src="${CSS.escape(k)}"]`;
-    const fmt = (v, k) => (v === undefined ? h('span', { class: 'undef' }, 'nessun valore')
-      : v.t === 'Object' && v.v ? h('button', { type: 'button', class: 'ov-link obj', 'data-src': k || null, 'data-uid': v.v.uid, title: 'Apri l\'oggetto in una finestra', onclick: () => ArrayView.openObject(v.v, k ? ArrayView.domSrc(srcSel(k)) : null) }, E.literalOf(v))
+    const fmt = (v, k) => (v === undefined ? h('span', { class: 'undef' }, L('win.noValue'))
+      : v.t === 'Object' && v.v ? h('button', { type: 'button', class: 'ov-link obj', 'data-src': k || null, 'data-uid': v.v.uid, title: L('ui.openTheObjectInAWindow'), onclick: () => ArrayView.openObject(v.v, k ? ArrayView.domSrc(srcSel(k)) : null) }, E.literalOf(v))
       : h('span', { class: 'v-' + v.t }, E.literalOf(v)));
     const prev = run.prevVals; const next = new Map();
     const fkey = fname(frame.func);
-    /* freccina che apre o chiude le righe sotto (lo stato resta tra un passo e l'altro) */
+    /* small arrow that opens or closes the rows below (the state stays from one step to the next) */
     const makeCaret = (okey, label, onToggle) => {
       const isOpen = st.varsOpen.has(okey);
-      const b = h('button', { class: 'caret' + (isOpen ? ' open' : ''), type: 'button', 'aria-expanded': String(isOpen), 'aria-label': `Mostra o nascondi i dettagli di ${label}`, html: CARET, onclick: () => {
+      const b = h('button', { class: 'caret' + (isOpen ? ' open' : ''), type: 'button', 'aria-expanded': String(isOpen), 'aria-label': L('ui.showOrHideTheDetailsOf', { label }), html: CARET, onclick: () => {
         const open = !st.varsOpen.has(okey);
         if (open) st.varsOpen.add(okey); else st.varsOpen.delete(okey);
         b.classList.toggle('open', open); b.setAttribute('aria-expanded', String(open));
@@ -2147,23 +2145,23 @@
       return { el: b, isOpen };
     };
     const ind = (depth) => (depth ? { style: `padding-left:${8 + depth * 16}px` } : null);
-    /* una riga per variabile o attributo; gli oggetti si aprono per vedere i loro attributi */
+    /* one row per variable or attribute; objects open to show their attributes */
     const addCell = (c, label, depth, path, seen, extra) => {
       const key = frame.depth + ':' + path;
-      const tags = [c.param ? h('span', { class: 'ptag', title: 'parametro' }, 'par') : null, c.constant ? h('span', { class: 'ptag', title: 'costante' }, 'cost') : null, c.field && c.visibility && c.visibility !== 'public' ? h('span', { class: 'ptag vis', title: M.VIS_IT[c.visibility] }, M.VISIBILITY[c.visibility]) : null, extra || null];
+      const tags = [c.param ? h('span', { class: 'ptag', title: L('ui.parameter') }, 'par') : null, c.constant ? h('span', { class: 'ptag', title: L('ui.constant') }, 'cost') : null, c.field && c.visibility && c.visibility !== 'public' ? h('span', { class: 'ptag vis', title: M.VIS_IT[c.visibility] }, M.VISIBILITY[c.visibility]) : null, extra || null];
       if (c.array) {
         const n = c.items.length, dims = c.dims || [n];
         const sv = String(c.writes || 0); next.set(key, sv);
         const changed = prev.has(key) && prev.get(key) !== sv;
         const src = ArrayView.domSrc(srcSel(key));
         const openArr = () => (depth ? ArrayView.open('@' + path, c, { label, fixed: true, src }) : ArrayView.open(frame.func.id, c, { src }));
-        const icon = h('button', { class: 'iconbtn avopen', type: 'button', 'data-src': key, title: 'Visualizza i valori', 'aria-label': `Visualizza i valori di ${label}`, html: GRID_ICON, onclick: openArr });
+        const icon = h('button', { class: 'iconbtn avopen', type: 'button', 'data-src': key, title: L('ui.showTheValues'), 'aria-label': L('ui.showTheValuesOf', { label }), html: GRID_ICON, onclick: openArr });
         const okey = fkey + '::' + path.toLowerCase();
         const detail = h('tr', { class: 'detail' + (st.varsOpen.has(okey) ? ' open' : '') + (changed ? ' changed' : '') }, h('td', { colspan: 3 },
           h('div', { class: 'det-wrap' }, h('div', { class: 'det-inner', ...(ind(depth + 1) || {}) },
-            h('button', { class: 'avlink', type: 'button', tabindex: st.varsOpen.has(okey) ? '0' : '-1', title: 'Apri una finestra con i valori dell\'array', onclick: openArr }, 'visualizza i valori')))));
+            h('button', { class: 'avlink', type: 'button', tabindex: st.varsOpen.has(okey) ? '0' : '-1', title: L('ui.openAWindowWithTheValues'), onclick: openArr }, L('ui.showTheValues2'))))));
         const car = makeCaret(okey, label, (open) => { detail.classList.toggle('open', open); detail.querySelector('.avlink').tabIndex = open ? 0 : -1; });
-        tb.append(h('tr', { class: 'arr' + (changed ? ' changed' : '') }, h('td', ind(depth), car.el, label, ...tags, icon), h('td', null, `${E.typeName(cellT(c))}[${dims.join(' × ')}]`), h('td', { class: 'muted' }, `${n} elementi`)));
+        tb.append(h('tr', { class: 'arr' + (changed ? ' changed' : '') }, h('td', ind(depth), car.el, label, ...tags, icon), h('td', null, `${E.typeName(cellT(c))}[${dims.join(' × ')}]`), h('td', { class: 'muted' }, L('ui.elements', { n }))));
         tb.append(detail);
         return;
       }
@@ -2176,69 +2174,69 @@
         const loop = seen.has(obj);
         const rows = [];
         const car = loop ? null : makeCaret(okey, label, () => renderVars());
-        tb.append(h('tr', { class: 'objrow' + (changed ? ' changed' : '') }, h('td', ind(depth), car ? car.el : h('span', { class: 'caret-sp' }), label, ...tags), h('td', null, E.typeName(cellT(c))), h('td', null, fmt(v, key), loop ? h('span', { class: 'muted small' }, ' ↺ già sopra') : null)));
+        tb.append(h('tr', { class: 'objrow' + (changed ? ' changed' : '') }, h('td', ind(depth), car ? car.el : h('span', { class: 'caret-sp' }), label, ...tags), h('td', null, E.typeName(cellT(c))), h('td', null, fmt(v, key), loop ? h('span', { class: 'muted small' }, L('ui.alreadyAbove')) : null)));
         if (car && car.isOpen && depth < 6) {
           const s2 = new Set(seen); s2.add(obj);
           for (const fc of obj.fields.values()) addCell(fc, fc.name, depth + 1, path + '.' + fc.name, s2);
-          if (!obj.fields.size) tb.append(h('tr', { class: 'objrow' }, h('td', { colspan: 3, class: 'muted small', ...(ind(depth + 1) || {}) }, 'nessun attributo')));
+          if (!obj.fields.size) tb.append(h('tr', { class: 'objrow' }, h('td', { colspan: 3, class: 'muted small', ...(ind(depth + 1) || {}) }, L('ui.noAttributes'))));
         }
         return;
       }
       tb.append(h('tr', { class: changed ? 'changed' : '' }, h('td', ind(depth), depth || (v && v.t === 'Object') ? h('span', { class: 'caret-sp' }) : null, label, ...tags), h('td', null, E.typeName(cellT(c))), h('td', null, fmt(c.value))));
     };
-    if (frame.self) addCell({ name: 'this', type: frame.self.cls.name, value: E.V.obj(frame.self) }, 'this', 0, 'this', new Set(), h('span', { class: 'ptag', title: 'l\'oggetto su cui lavora il metodo' }, 'oggetto'));
+    if (frame.self) addCell({ name: 'this', type: frame.self.cls.name, value: E.V.obj(frame.self) }, 'this', 0, 'this', new Set(), h('span', { class: 'ptag', title: L('ui.theObjectTheMethodWorksOn') }, L('ui.object')));
     for (const c of frame.vars.values()) addCell(c, c.name, 0, c.name, new Set());
-    // attributi statici: uno per classe, condivisi da tutti gli oggetti
+    // static attributes: one per class, shared by all the objects
     for (const [cid, m] of statics) {
       const cls = interp.prog.classes.find((k) => k.id === cid); if (!cls) continue;
       const okey = 'statici::' + cls.name.toLowerCase();
       const car = makeCaret(okey, cls.name, () => renderVars());
-      tb.append(h('tr', { class: 'objrow statrow' }, h('td', { colspan: 3 }, car.el, h('span', null, `${cls.name} · attributi statici`))));
+      tb.append(h('tr', { class: 'objrow statrow' }, h('td', { colspan: 3 }, car.el, h('span', null, L('ui.staticAttributes', { name: cls.name })))));
       if (car.isOpen) for (const fc of m.values()) addCell(fc, `${cls.name}.${fc.name}`, 1, `static.${cls.name}.${fc.name}`, new Set());
     }
     for (const [k, v] of next) prev.set(k, v);
     tbl.append(tb); box.append(tbl);
   }
 
-  /* ---- File (scheda) ---- */
+  /* ---- Files (tab) ---- */
   function renderFiles() {
     const box = $('#filesBody'); box.innerHTML = '';
-    if (!st.vfs.size) box.append(h('p', { class: 'empty' }, 'Nessun file. I blocchi Apri/Leggi/Scrivi usano questi file: caricane uno dal computer o creane uno nuovo.'));
+    if (!st.vfs.size) box.append(h('p', { class: 'empty' }, L('ui.noFilesTheOpenReadWrite')));
     const ul = h('ul', { class: 'files' });
     for (const [name, txt] of [...st.vfs].sort()) {
       const lines = txt ? txt.split(/\r?\n/).filter((x, i, a) => !(i === a.length - 1 && x === '')).length : 0;
       ul.append(h('li', null,
-        h('div', { class: 'fname' }, h('strong', null, name), h('span', { class: 'muted small' }, `${lines} righe`)),
+        h('div', { class: 'fname' }, h('strong', null, name), h('span', { class: 'muted small' }, L('ui.lines', { lines }))),
         h('div', { class: 'factions' },
-          h('button', { class: 'btn small', type: 'button', onclick: () => editFile(name) }, 'Apri'),
-          h('button', { class: 'btn small', type: 'button', onclick: () => download(name, txt, 'text/plain') }, 'Scarica'),
-          h('button', { class: 'btn small danger', type: 'button', onclick: () => confirmBox('Eliminare il file?', `${name} verrà rimosso.`, 'Elimina', () => { st.vfs.delete(name); saveVfs(); }) }, 'Elimina'))));
+          h('button', { class: 'btn small', type: 'button', onclick: () => editFile(name) }, L('ui.open')),
+          h('button', { class: 'btn small', type: 'button', onclick: () => download(name, txt, 'text/plain') }, L('ui.download')),
+          h('button', { class: 'btn small danger', type: 'button', onclick: () => confirmBox(L('ui.deleteTheFile'), L('ui.willBeRemoved', { name }), L('ui.delete'), () => { st.vfs.delete(name); saveVfs(); }) }, L('ui.delete')))));
     }
     box.append(ul);
   }
   function editFile(name) {
-    const nm = field({ key: 'vfname', label: 'Nome del file', type: 'plain', placeholder: 'es. dati.txt' }, name || '');
-    const ta = h('textarea', { class: 'mono', rows: 12, id: 'vfcontent', 'aria-label': 'Contenuto (una voce per riga)' });
+    const nm = field({ key: 'vfname', label: L('ui.fileName'), type: 'plain', placeholder: L('ui.eGDataTxt2') }, name || '');
+    const ta = h('textarea', { class: 'mono', rows: 12, id: 'vfcontent', 'aria-label': L('ui.contentOneItemPerLine') });
     ta.value = name ? st.vfs.get(name) : '';
-    openModal({ title: name ? 'Modifica file' : 'Nuovo file', wide: true, body: h('div', { class: 'fields' }, nm, h('label', { class: 'flabel', for: 'vfcontent' }, 'Contenuto (una voce per riga)'), ta), okText: 'Salva', onOk: () => {
-      const n = nm._get().trim(); if (!n) return 'Dai un nome al file';
+    openModal({ title: name ? L('ui.editFile') : L('ui.newFile'), wide: true, body: h('div', { class: 'fields' }, nm, h('label', { class: 'flabel', for: 'vfcontent' }, L('ui.contentOneItemPerLine')), ta), okText: L('ui.save'), onOk: () => {
+      const n = nm._get().trim(); if (!n) return L('ui.giveTheFileAName');
       if (name && n !== name) st.vfs.delete(name);
       st.vfs.set(n, ta.value); saveVfs(); return true;
     } });
   }
 
-  /* ---- Codice ---- */
+  /* ---- Code ---- */
   function renderCode() {
     if (!paneVisible('code')) return;
     const code = CodeGen.generate(st.prog, st.lang);
     $('#codeOut').innerHTML = highlight(code, st.lang);
     $('#codeOut').dataset.raw = code;
   }
-  /* il codice in righe di pezzi [classe, testo]: tk parola chiave, ts stringa, tn numero, tc commento */
+  /* the code in rows of pieces [class, text]: tk keyword, ts string, tn number, tc comment */
   function codeTokens(code, lang) {
-    const L = CodeGen.LANGS[lang];
-    const kw = new Set(L.keywords);
-    const cm = L.comment === '#' ? '#[^\\n]*' : '\\/\\/[^\\n]*';
+    const LG = CodeGen.LANGS[lang];
+    const kw = new Set(LG.keywords);
+    const cm = LG.comment === '#' ? '#[^\\n]*' : '\\/\\/[^\\n]*';
     const re = new RegExp(`(${cm})|("(?:[^"\\\\\\n]|\\\\.)*"|'(?:[^'\\\\\\n]|\\\\.)*')|(\\b\\d+(?:\\.\\d+)?\\b)|([\\p{L}_][\\p{L}\\p{N}_]*)|(\\n)|([\\s\\S])`, 'gu');
     const lines = [[]];
     const put = (cls, t) => { const ln = lines[lines.length - 1], last = ln[ln.length - 1]; if (last && last[0] === cls) last[1] += t; else ln.push([cls, t]); };
@@ -2256,13 +2254,13 @@
   function highlight(code, lang) {
     const escH = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const lines = codeTokens(code, lang);
-    // un a capo finale non apre una riga numerata vuota
+    // a final newline does not open an empty numbered row
     const tail = lines.length > 1 && !lines[lines.length - 1].length ? (lines.pop(), '\n') : '';
     return lines.map((ln) => '<span class="ln"></span>' + ln.map(([c, t]) => c ? `<span class="${c}">${escH(t)}</span>` : escH(t)).join('')).join('\n') + tail;
   }
 
-  /* ------------------------- Schede e finestre mobili --------------------- */
-  const PANES = [['console', 'Console'], ['vars', 'Variabili'], ['code', 'Codice'], ['files', 'File']];
+  /* ------------------------- Tabs and floating windows --------------------- */
+  const PANES = [['console', L('ui.console')], ['vars', L('ui.variables')], ['code', L('ui.code')], ['files', L('ui.files')]];
   const PANE_TITLE = Object.fromEntries(PANES);
   const ICON_POP = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-8 8M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>';
   const ICON_MIN = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg>';
@@ -2302,8 +2300,8 @@
     const docked = layout.order.filter((id) => !isFloat(id));
     for (const id of docked) {
       const w = h('div', { class: 'tabw', 'data-tab': id, draggable: 'true', role: 'presentation' },
-        h('button', { role: 'tab', type: 'button', 'data-tab': id, title: 'Trascina per riordinare, oppure sul diagramma per sganciare', onclick: () => setTab(id) }, PANE_TITLE[id]),
-        h('button', { class: 'detach', type: 'button', title: 'Sgancia in una finestra mobile', 'aria-label': 'Sgancia ' + PANE_TITLE[id], html: ICON_POP, onclick: (e) => { e.stopPropagation(); detachPane(id); } }));
+        h('button', { role: 'tab', type: 'button', 'data-tab': id, title: L('ui.dragToReorderOrOntoThe'), onclick: () => setTab(id) }, PANE_TITLE[id]),
+        h('button', { class: 'detach', type: 'button', title: L('ui.detachIntoAFloatingWindow'), 'aria-label': L('ui.detach') + PANE_TITLE[id], html: ICON_POP, onclick: (e) => { e.stopPropagation(); detachPane(id); } }));
       w.addEventListener('dragstart', (e) => { e.dataTransfer.setData('application/x-flowlab-pane', id); e.dataTransfer.setData('text/plain', PANE_TITLE[id]); e.dataTransfer.effectAllowed = 'move'; w.classList.add('dragging'); document.body.classList.add('panedrag'); });
       w.addEventListener('dragend', () => { w.classList.remove('dragging'); document.body.classList.remove('panedrag'); $$('.tabw').forEach((x) => x.classList.remove('drop-before', 'drop-after')); });
       w.addEventListener('dragover', (e) => {
@@ -2357,8 +2355,8 @@
       h('div', { class: 'fwin-head' },
         h('span', { class: 'fwin-title' }, PANE_TITLE[id]),
         h('span', { class: 'grow' }),
-        h('button', { class: 'iconbtn minbtn', type: 'button', title: 'Riduci alla barra del titolo', 'aria-label': 'Riduci ' + PANE_TITLE[id], 'aria-expanded': 'true', html: ICON_MIN, onclick: () => minimizeWin(id) }),
-        h('button', { class: 'iconbtn dock', type: 'button', title: 'Riporta nel pannello', 'aria-label': 'Riporta ' + PANE_TITLE[id] + ' nel pannello', html: ICON_DOCK, onclick: () => dockPane(id) })),
+        h('button', { class: 'iconbtn minbtn', type: 'button', title: L('ui.collapseToTheTitleBar'), 'aria-label': L('ui.collapse') + PANE_TITLE[id], 'aria-expanded': 'true', html: ICON_MIN, onclick: () => minimizeWin(id) }),
+        h('button', { class: 'iconbtn dock', type: 'button', title: L('ui.putBackInThePanel'), 'aria-label': L('ui.putBack') + PANE_TITLE[id] + L('ui.inThePanel'), html: ICON_DOCK, onclick: () => dockPane(id) })),
       body);
     pane.hidden = false;
     body.append(pane);
@@ -2403,10 +2401,10 @@
     win.classList.toggle('min', min);
     const b = win.querySelector('.minbtn');
     b.innerHTML = min ? ICON_RESTORE : ICON_MIN;
-    b.title = min ? 'Ripristina la finestra' : 'Riduci alla barra del titolo';
+    b.title = min ? L('ui.restoreTheWindow') : L('ui.collapseToTheTitleBar');
     b.setAttribute('aria-expanded', String(!min));
   }
-  /* riduce la finestra alla sola barra del titolo, o la ripristina (force = true/false per imporre lo stato) */
+  /* reduces the window to its title bar only, or restores it (force = true/false to impose the state) */
   function minimizeWin(id, force) {
     const win = $(`.fwin[data-win="${id}"]`); const g = layout.float[id];
     if (!win || !g) return;
@@ -2427,7 +2425,7 @@
   function setSideHidden(hidden) {
     document.body.classList.toggle('side-hidden', hidden);
     const b = $('#sideToggle');
-    b.title = (hidden ? 'Mostra il pannello' : 'Nascondi il pannello') + ' (Ctrl+B)';
+    b.title = (hidden ? L('ui.showThePanel') : L('ui.hideThePanel')) + ' (Ctrl+B)';
     b.setAttribute('aria-label', b.title);
     b.setAttribute('aria-expanded', String(!hidden));
     store.set('sideHidden', hidden);
@@ -2448,7 +2446,7 @@
     for (const id of layout.order) if (isFloat(id)) mountWin(id);
     buildTabs();
     window.addEventListener('resize', () => $$('.fwin').forEach(clampWin));
-    // trascinare una scheda sul diagramma la sgancia in quel punto
+    // dragging a tab onto the diagram detaches it at that point
     const col = winHost();
     col.addEventListener('dragover', (e) => { if ([...e.dataTransfer.types].includes('application/x-flowlab-pane')) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; } });
     col.addEventListener('drop', (e) => {
@@ -2458,38 +2456,38 @@
     });
   }
 
-  /* ========================== VISTE AUSILIARIE ===========================
-     finestre mobili con un diagramma del programma, da navigare e modificare come il foglio
-     principale (anche lo stesso diagramma, su un'altra parte). Con «Continua» la vista mostra il
-     seguito del foglio principale: la parte che esce dal fondo della finestra, e scorre con lui;
-     più viste «Continua» si mettono in fila, una dopo l'altra */
+  /* ========================== AUXILIARY VIEWS ===========================
+     floating windows with a diagram of the program, to navigate and edit like the main
+     sheet (also the same diagram, on another part). With «Continue» the view shows the
+     continuation of the main sheet: the part that goes out of the bottom of the window, and it scrolls with it;
+     several «Continue» views line up, one after the other */
   let viewSeq = 0;
   const ICON_COMPACT = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect class="cb1" x="6" y="2.5" width="12" height="5" rx="1"/><path class="cb-arrow" d="M12 7.5v3"/><rect class="cb2" x="6" y="10.5" width="12" height="5" rx="1"/><path class="cb-arrow" d="M12 15.5v3"/><rect class="cb3" x="6" y="18.5" width="12" height="3.5" rx="1"/></svg>';
   const ICON_CLOSE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>';
   const fidAt = (i) => { const f = st.prog.functions[i]; return f && f.id; };
-  /* o: posizione e stato salvati (fi, uml, zoom, compact, sync, min, x, y, w, h); senza, la vista
-     parte dal diagramma della vista attiva */
+  /* o: saved position and state (fi, uml, zoom, compact, sync, min, x, y, w, h); without it, the view
+     starts from the diagram of the active view */
   function openView(o) {
     o = o || {};
     const n = views.length - 1;
     const fi = o.fi != null ? Math.max(0, Math.min(o.fi, st.prog.functions.length - 1)) : st.fi;
     const v = { id: ++viewSeq, main: false, sync: false, min: false, h: 0,
       state: { fi, uml: o.fi != null ? !!o.uml : st.uml, sel: null, usel: null, zoom: o.zoom || st.zoom, ins: [], edges: [], compact: o.fi != null ? !!o.compact : !!st.compact, compactFid: fidAt(fi), fid: fidAt(fi) } };
-    v.sel = h('select', { class: 'vsel', 'aria-label': 'Diagramma della vista' });
+    v.sel = h('select', { class: 'vsel', 'aria-label': L('ui.diagramOfTheView') });
     v.compactBtn = h('button', { class: 'iconbtn vcompact', type: 'button', 'aria-pressed': 'false', html: ICON_COMPACT });
-    v.syncBtn = h('button', { class: 'vsync', type: 'button', 'aria-pressed': 'false', title: 'Continua il foglio principale: la vista mostra la parte del diagramma che il foglio non mostra (tagliata in alto se il foglio è scorso in giù, altrimenti quella che esce dal fondo) e scorre con lui' }, v.syncIco = h('span', { 'aria-hidden': 'true' }, '⇣'), ' Continua');
-    v.zoomVal = h('button', { class: 'vzoomval', type: 'button', title: 'Torna al 100%' }, '100%');
+    v.syncBtn = h('button', { class: 'vsync', type: 'button', 'aria-pressed': 'false', title: L('ui.continueTheMainSheetTheView') }, v.syncIco = h('span', { 'aria-hidden': 'true' }, '⇣'), L('ui.continue2'));
+    v.zoomVal = h('button', { class: 'vzoomval', type: 'button', title: L('ui.backTo100') }, '100%');
     const zb = (label, title, fn) => h('button', { type: 'button', 'aria-label': title, title, onclick: () => { focusView(v); fn(); } }, label);
-    const minBtn = h('button', { class: 'iconbtn minbtn', type: 'button', title: 'Riduci alla barra del titolo', 'aria-label': 'Riduci la vista', 'aria-expanded': 'true', html: ICON_MIN });
-    const closeBtn = h('button', { class: 'iconbtn vclose', type: 'button', title: 'Chiudi la vista', 'aria-label': 'Chiudi la vista', html: ICON_CLOSE });
+    const minBtn = h('button', { class: 'iconbtn minbtn', type: 'button', title: L('ui.collapseToTheTitleBar'), 'aria-label': L('ui.collapseTheView'), 'aria-expanded': 'true', html: ICON_MIN });
+    const closeBtn = h('button', { class: 'iconbtn vclose', type: 'button', title: L('ui.closeTheView'), 'aria-label': L('ui.closeTheView'), html: ICON_CLOSE });
     v.chart = h('div', { class: 'vchart' });
     v.wrap = h('div', { class: 'vwrap' }, v.chart);
-    v.done = h('div', { class: 'vdone', hidden: true }, 'Il resto del diagramma è già tutto visibile');
+    v.done = h('div', { class: 'vdone', hidden: true }, L('ui.theRestOfTheDiagramIs'));
     const head = h('div', { class: 'fwin-head' }, v.sel, v.compactBtn, v.syncBtn, h('span', { class: 'grow' }),
-      h('span', { class: 'vzoom', role: 'group', 'aria-label': 'Zoom della vista' }, zb('−', 'Riduci', () => setZoom(st.zoom / 1.15)), v.zoomVal, zb('+', 'Ingrandisci', () => setZoom(st.zoom * 1.15)), zb('⤢', 'Adatta alla finestra', fitZoom)),
+      h('span', { class: 'vzoom', role: 'group', 'aria-label': L('ui.viewZoom') }, zb('−', L('ui.zoomOut'), () => setZoom(st.zoom / 1.15)), v.zoomVal, zb('+', L('ui.zoomIn'), () => setZoom(st.zoom * 1.15)), zb('⤢', L('ui.fitToWindow'), fitZoom)),
       minBtn, closeBtn);
-    v.win = h('div', { class: 'fwin auxwin', role: 'region', 'aria-label': 'Vista ausiliaria' }, head, h('div', { class: 'fwin-body' }, v.wrap, v.done));
-    // posizione: di solito nella metà destra del foglio, un po' sfalsata rispetto alle altre viste
+    v.win = h('div', { class: 'fwin auxwin', role: 'region', 'aria-label': L('ui.auxiliaryView') }, head, h('div', { class: 'fwin-body' }, v.wrap, v.done));
+    // position: usually in the right half of the sheet, a little staggered from the other views
     const col = $('.canvas-col').getBoundingClientRect();
     const w = o.w || Math.max(360, Math.min(520, col.width * 0.48)), hh = o.h || Math.max(260, col.height - 80);
     Object.assign(v.win.style, { left: (o.x != null ? o.x : col.right - w - 16 - n * 28) + 'px', top: (o.y != null ? o.y : col.top + 12 + n * 28) + 'px', width: w + 'px', height: hh + 'px', zIndex: ++zTop });
@@ -2526,20 +2524,20 @@
     saveViewsSoon();
     return v;
   }
-  /* intestazione della vista attiva: selettore, Compatta, Continua */
+  /* header of the active view: selector, Compact, Continue */
   function renderViewHead(v) {
     fillFuncOptions(v.sel);
-    v.sel.title = v.sync ? 'La vista segue il foglio principale: scegliendo un altro diagramma, «Continua» si spegne' : 'Diagramma mostrato nella vista';
+    v.sel.title = v.sync ? L('ui.theViewFollowsTheMainSheet') : L('ui.diagramShownInTheView');
     v.wrap.classList.toggle('uml', isUml());
     const cb = v.compactBtn, can = !isUml() && !(isOO() && func().abstract);
     cb.hidden = !can;
     cb.setAttribute('aria-pressed', String(!!st.compact && can));
-    cb.title = v.sync ? 'Vista compatta o estesa (come nel foglio principale)' : st.compact ? 'Vista estesa: frecce tra tutti i blocchi' : 'Vista compatta: i blocchi in sequenza si toccano';
+    cb.title = v.sync ? L('ui.compactOrExtendedViewAsIn') : st.compact ? L('ui.extendedViewArrowsBetweenAllBlocks2') : L('ui.compactViewBlocksInSequenceTouch2');
     cb.setAttribute('aria-label', cb.title);
     const o = v.sel.options[v.sel.selectedIndex];
-    v.win.setAttribute('aria-label', 'Vista: ' + (o ? o.textContent : ''));
+    v.win.setAttribute('aria-label', L('ui.view') + (o ? o.textContent : ''));
   }
-  /* «Continua»: la vista segue il foglio principale (diagramma, zoom, vista compatta) */
+  /* «Continue»: the view follows the main sheet (diagram, zoom, compact view) */
   function setSync(v, on) {
     v.sync = !!on;
     v.syncBtn.setAttribute('aria-pressed', String(v.sync));
@@ -2547,7 +2545,7 @@
     if (v.sync) {
       if (v === V) { saveViewState(v); loadViewState(v); renderChart(); } else withView(v, renderChart);
       decorate();
-      toast('La vista mostra la parte del diagramma che non si vede nel foglio principale e scorre con lui');
+      toast(L('ui.theViewShowsThePartOf'));
     } else { v.done.hidden = true; v.padB = 0; v.chart.style.paddingBottom = ''; withView(v, () => renderViewHead(v)); }
     scheduleSync(); saveViewsSoon();
   }
@@ -2567,16 +2565,16 @@
     document.body.classList.toggle('hasviews', views.length > 1);
     scheduleSync(); saveViewsSoon();
   }
-  /* un altro programma: le viste si chiudono */
+  /* another program: the views close */
   function resetViews() { focusView(MAIN); for (const v of views.slice(1)) closeView(v); }
   let syncRaf = 0;
   function scheduleSync() {
     if (syncRaf) return;
     syncRaf = requestAnimationFrame(() => { syncRaf = 0; syncScroll(); });
   }
-  /* le viste «Continua» mostrano quello che il foglio principale non mostra: se il foglio è scorso
-     in giù, la prima mostra la parte tagliata in alto (fino al punto dove comincia il foglio);
-     le altre, in fila, la parte che esce dal fondo */
+  /* the «Continue» views show what the main sheet does not show: if the sheet is scrolled
+     down, the first shows the part cut off at the top (up to the point where the sheet starts);
+     the others, in a row, the part that goes out of the bottom */
   let needView = false;
   function syncScroll() {
     const ms = $('svg', MAIN.chart);
@@ -2590,7 +2588,7 @@
     const topCut = !!ms && mStart > 4;
     let coveredAbove = !topCut, coveredBelow = !ms || mEnd >= H - 4;
     let prev = MAIN, first = true, n = 0;
-    const marks = new Map(); // segni del punto in comune: vista → { top, bottom }
+    const marks = new Map(); // marks of the point in common: view → { top, bottom }
     const mark = (v, edge, m) => { if (!marks.has(v)) marks.set(v, {}); marks.get(v)[edge] = m; };
     for (const v of views) {
       if (v.main || !v.sync || v.min) continue;
@@ -2603,42 +2601,42 @@
       if (!ms || !ps || !vs) { v.done.hidden = true; continue; }
       const pw = prev.wrap.getBoundingClientRect(), pr = ps.getBoundingClientRect();
       const ww = v.wrap.getBoundingClientRect(), vr = vs.getBoundingClientRect();
-      // in orizzontale la stessa colonna del disegno resta al centro
+      // horizontally the same column of the drawing stays in the middle
       const cx = pw.left + prev.wrap.clientLeft + prev.wrap.clientWidth / 2 - pr.left;
       v.wrap.scrollLeft += vr.left - ww.left - v.wrap.clientLeft + cx - v.wrap.clientWidth / 2;
       if (above) {
-        // in fondo alla vista, il punto del disegno dove comincia il foglio principale
+        // at the bottom of the view, the point of the drawing where the main sheet starts
         v.wrap.scrollTop += vr.top - ww.top - v.wrap.clientTop + mStart - v.wrap.clientHeight;
         coveredAbove = mStart <= v.wrap.clientHeight;
         v.done.hidden = true;
-        // punto in comune: il bordo in alto del foglio e lo stesso punto del disegno nella vista
+        // point in common: the top edge of the sheet and the same point of the drawing in the view
         mark(MAIN, 'top', Object.assign({ y: 0 }, link));
         mark(v, 'bottom', Object.assign({ y: vs.getBoundingClientRect().top + mStart - ww.top - v.wrap.clientTop }, link));
         continue;
       }
-      // punto del disegno (in pixel sullo schermo) che sta in fondo alla vista precedente
+      // point of the drawing (in screen pixels) that is at the bottom of the previous view
       const endY = pw.top + prev.wrap.clientTop + prev.wrap.clientHeight - pr.top;
-      // sotto il disegno c'è spazio per scorrere oltre la fine
+      // below the drawing there is space to scroll beyond the end
       const need = Math.ceil(Math.max(0, endY - vr.height) + v.wrap.clientHeight + 40);
       if ((v.padB || 0) < need) { v.padB = need + 400; v.chart.style.paddingBottom = v.padB + 'px'; }
       v.wrap.scrollTop += vr.top - ww.top - v.wrap.clientTop + endY;
       v.done.hidden = endY < pr.height - 4;
       if (endY + v.wrap.clientHeight >= H - 4) coveredBelow = true;
-      // punto in comune: il bordo in fondo della vista precedente e lo stesso punto del disegno in questa
+      // point in common: the bottom edge of the previous view and the same point of the drawing in this one
       mark(prev, 'bottom', Object.assign({ y: prev.wrap.clientHeight }, link));
       mark(v, 'top', Object.assign({ y: vs.getBoundingClientRect().top + endY - ww.top - v.wrap.clientTop }, link));
       prev = v;
     }
     for (const v of views) drawLinks(v, marks.get(v) || {});
-    // pallino sul pulsante «Nuova vista»: una parte del diagramma non si vede da nessuna parte
+    // dot on the «New view» button: a part of the diagram is not seen anywhere
     needView = !(coveredAbove && coveredBelow);
     const b = $('#viewAdd');
     b.classList.toggle('notify', needView);
-    b.title = needView ? 'Nuova vista «Continua»: mostra la parte del diagramma che non si vede nel foglio principale (Ctrl+Alt+V)' : 'Nuova vista: un\'altra finestra sul programma, per vedere e modificare un altro diagramma o un\'altra parte di questo (Ctrl+Alt+V)';
-    b.setAttribute('aria-label', needView ? 'Nuova vista Continua: una parte del diagramma non si vede' : 'Nuova vista');
+    b.title = needView ? L('ui.newContinueViewShowsThePart') : L('ui.newViewAnotherWindowOnThe');
+    b.setAttribute('aria-label', needView ? L('ui.newContinueViewPartOfThe') : L('ui.newView'));
   }
-  /* segno del punto in comune tra due viste collegate da «Continua»: una riga tratteggiata dello
-     stesso colore con il numero della vista, nel punto del disegno dove una finisce e l'altra comincia */
+  /* mark of the point in common between two views linked by «Continue»: a dashed line of the
+     same colour with the number of the view, at the point of the drawing where one ends and the other starts */
   const LINK_COLORS = ['#d9480f', '#7048e8', '#2b8a3e', '#c2255c', '#1971c2'];
   function drawLinks(v, m) {
     const host = v.main ? $('.canvas-col') : v.wrap.parentNode;
@@ -2656,12 +2654,12 @@
       el.style.left = v.wrap.offsetLeft + 'px'; el.style.width = v.wrap.clientWidth + 'px';
       el.firstChild.textContent = k.dir + ' ' + k.n;
       if (v.main) { const t = edge === 'top' ? $('#chartTools') : $('.zoombar'); el.firstChild.style.left = Math.max(8, t.offsetLeft + t.offsetWidth + 10 - v.wrap.offsetLeft) + 'px'; }
-      el.title = v.main ? `Qui il foglio continua nella vista ${k.n}` : `Punto in comune con ${k.n === 1 || k.dir === '⇡' ? 'il foglio principale' : 'la vista ' + (k.n - 1)}`;
+      el.title = v.main ? L('ui.hereTheSheetContinuesInView', { n: k.n }) : L('ui.pointInCommonWith', { text: k.n === 1 || k.dir === '⇡' ? L('ui.theMainSheet') : L('ui.view2') + (k.n - 1) });
     }
   }
-  /* con il pallino acceso la nuova vista è già «Continua» */
+  /* with the dot on, the new view is already «Continue» */
   function newView() { if (syncRaf) { cancelAnimationFrame(syncRaf); syncRaf = 0; syncScroll(); } openView(needView ? { sync: true } : undefined); }
-  /* le viste si ricordano con il programma aperto (salvataggio automatico) */
+  /* the views are remembered with the open program (automatic saving) */
   function viewsData() {
     return views.filter((v) => !v.main).map((v) => {
       const id = v === V ? fidAt(st.fi) : v.state.fid;
@@ -2669,7 +2667,7 @@
       return { fi, uml: !!vget(v, 'uml'), zoom: vget(v, 'zoom'), compact: !!vget(v, 'compact'), sync: v.sync, min: v.min, x: v.win.offsetLeft, y: v.win.offsetTop, w: v.win.offsetWidth, h: v.min ? v.h : v.win.offsetHeight };
     });
   }
-  /* la vista attiva è quella in cui si clicca o si porta il cursore della tastiera */
+  /* the active view is the one clicked or where the keyboard cursor is brought */
   function bindViews() {
     const pick = (e) => {
       const t = e.target; if (!t || !t.closest) return;
@@ -2685,15 +2683,15 @@
   let viewsTimer = 0;
   function saveViewsSoon() { clearTimeout(viewsTimer); viewsTimer = setTimeout(autosave, 300); }
 
-  /* ----------------------------- Salvataggio ----------------------------- */
-  function safeName(s) { return (s || 'programma').replace(/[\\/:*?"<>|]+/g, '').replace(/\s+/g, '_').slice(0, 60) || 'programma'; }
+  /* ----------------------------- Saving ----------------------------- */
+  function safeName(s) { return (s || L('ui.program')).replace(/[\\/:*?"<>|]+/g, '').replace(/\s+/g, '_').slice(0, 60) || L('ui.program'); }
   async function download(name, text, mime) {
     if (window.showSaveFilePicker && window.self === window.top) {
       try {
         const ext = name.split('.').pop();
         const hdl = await window.showSaveFilePicker({ suggestedName: name, types: [{ description: ext.toUpperCase(), accept: { [mime]: ['.' + ext] } }] });
         const w = await hdl.createWritable(); await w.write(text); await w.close();
-        toast('Salvato: ' + hdl.name, 'ok');
+        toast(L('ui.saved') + hdl.name, 'ok');
         return hdl.name;
       } catch (e) { if (e && e.name === 'AbortError') return null; }
     }
@@ -2706,22 +2704,22 @@
   async function saveFile() {
     const xml = M.serializeFprg(st.prog);
     const ext = M.extendedFeatures(st.prog);
-    if (ext.length) toast(`Salvato in formato .fprg esteso (${ext.join(', ')}). FlowLab lo riapre senza problemi; gli altri editor .fprg potrebbero non eseguirlo.`, 'warn');
+    if (ext.length) toast(L('ui.savedInExtendedFprgFormatFlowlab', { list: ext.join(', ') }), 'warn');
     const name = st.fileName || safeName(st.prog.attrs.name) + '.fprg';
-    // file aperto con doppio clic nell'app installata: si salva direttamente lì
+    // file opened with a double click in the installed app: it is saved directly there
     if (st.fileHandle) {
       try {
         const fh = st.fileHandle, mode = { mode: 'readwrite' };
-        if ((await fh.queryPermission(mode)) !== 'granted' && (await fh.requestPermission(mode)) !== 'granted') throw new Error('permesso negato');
+        if ((await fh.queryPermission(mode)) !== 'granted' && (await fh.requestPermission(mode)) !== 'granted') throw new Error(L('ui.permissionDenied'));
         const w = await fh.createWritable(); await w.write(xml); await w.close();
-        toast('Salvato: ' + fh.name, 'ok'); st.dirty = false; autosave();
+        toast(L('ui.saved') + fh.name, 'ok'); st.dirty = false; autosave();
         return;
       } catch (e) { st.fileHandle = null; }
     }
     const saved = await download(name, xml, 'application/xml');
     if (saved) { st.fileName = saved; st.dirty = false; autosave(); }
   }
-  /* keepUndo: il programma di prima resta recuperabile con Annulla */
+  /* keepUndo: the previous program stays recoverable with Undo */
   function loadText(text, name, keepUndo) {
     let prog;
     try { prog = M.parseFprg(text); } catch (e) { toast(e.message, 'error'); return false; }
@@ -2734,15 +2732,15 @@
     startView();
     render(); renderVars();
     setTimeout(fitIfLarge, 0);
-    if (prog.skipped && prog.skipped.length) toast(`Aperto ${name || 'programma'}: ignorati ${prog.skipped.length} blocchi non supportati (${[...new Set(prog.skipped)].join(', ')})`, 'warn');
-    else toast(`Aperto ${name || 'programma'}${before ? ' · Ctrl+Z per tornare al programma di prima' : ''}`, 'ok');
+    if (prog.skipped && prog.skipped.length) toast(L('ui.openedSkippedUnsupportedBlocks', { value: name || L('ui.program'), skippedCount: prog.skipped.length, list: [...new Set(prog.skipped)].join(', ') }), 'warn');
+    else toast(L('ui.opened', { value: name || L('ui.program'), text: before ? L('ui.ctrlZToGoBackTo') : '' }), 'ok');
     return true;
   }
 
-  /* ------------------------ Apertura da indirizzo web ----------------------
-     FlowLab.html?url=https://…/programma.fprg apre il file all'avvio. Il sito deve
-     permettere la lettura da altre pagine (CORS): va bene per esempio un file su
-     GitHub (i link «blob» si trasformano nel file grezzo), GitHub Pages, un Gist. */
+  /* ------------------------ Opening from a web address ----------------------
+     FlowLab.html?url=https://…/program.fprg opens the file at startup. The site must
+     allow reading from other pages (CORS): for example a file on
+     GitHub (the «blob» links become the raw file), GitHub Pages, a Gist. */
   function rawUrl(u) {
     const s = String(u).trim();
     let m = s.match(/^https?:\/\/github\.com\/([^/]+)\/([^/]+)\/(?:blob|raw)\/(.+)$/i);
@@ -2755,16 +2753,16 @@
   async function openUrl(u, keepUndo) {
     const src = rawUrl(u);
     let abs;
-    try { abs = new URL(src, location.href).href; } catch (e) { toast('Indirizzo non valido: ' + u, 'error'); return false; }
-    toast('Apro ' + abs + '…');
+    try { abs = new URL(src, location.href).href; } catch (e) { toast(L('ui.invalidAddress') + u, 'error'); return false; }
+    toast(L('ui.opening') + abs + '…');
     let text;
     try {
       const r = await fetch(abs, { cache: 'no-cache' });
-      if (!r.ok) throw new Error(`il server risponde ${r.status} ${r.statusText || ''}`.trim());
+      if (!r.ok) throw new Error(L('ui.theServerReplies', { status: r.status, value: r.statusText || '' }).trim());
       text = await r.text();
     } catch (e) {
-      const why = e instanceof TypeError ? 'il sito non risponde oppure non permette di leggere il file da un\'altra pagina (CORS). Prova con un link a GitHub, a un Gist o a GitHub Pages' : e.message;
-      toast(`Impossibile aprire ${abs}: ${why}`, 'error');
+      const why = e instanceof TypeError ? L('ui.theSiteDoesNotRespondOr') : e.message;
+      toast(L('ui.cannotOpen', { abs, why }), 'error');
       return false;
     }
     const name = decodeURIComponent(abs.split(/[?#]/)[0].split('/').pop() || 'programma.fprg');
@@ -2773,20 +2771,20 @@
     return true;
   }
   function openUrlDialog() {
-    const f = field({ key: 'furl', label: 'Indirizzo del file .fprg', type: 'plain', placeholder: 'https://github.com/…/programma.fprg', hint: 'Funziona con i file su GitHub, nei Gist e su GitHub Pages; i link «blob» di GitHub vanno bene così come sono.' }, st.sourceUrl || '');
-    openModal({ title: 'Apri da indirizzo web', body: h('div', { class: 'fields' }, f), okText: 'Apri', onOk: () => {
-      const u = f._get().trim(); if (!u) return 'Scrivi l\'indirizzo del file';
+    const f = field({ key: 'furl', label: L('ui.addressOfTheFprgFile'), type: 'plain', placeholder: 'https://github.com/…/programma.fprg', hint: L('ui.worksWithFilesOnGithubIn') }, st.sourceUrl || '');
+    openModal({ title: L('ui.openFromWebAddress'), body: h('div', { class: 'fields' }, f), okText: L('ui.open'), onOk: () => {
+      const u = f._get().trim(); if (!u) return L('ui.writeTheAddressOfTheFile');
       guardDirty(() => openUrl(u, true));
       return true;
     } });
   }
-  /* link a FlowLab che apre direttamente questo programma */
+  /* link to FlowLab that opens this program directly */
   async function copyShareLink() {
-    if (!st.sourceUrl) { infoBox('Link al programma', 'Il link si può creare per i programmi aperti da un indirizzo web (File › Apri da indirizzo web…). Pubblica il file .fprg online, per esempio su GitHub, e aprilo da lì.'); return; }
+    if (!st.sourceUrl) { infoBox(L('ui.linkToTheProgram'), L('ui.theLinkCanBeCreatedFor')); return; }
     const base = location.protocol.startsWith('http') ? location.href.split(/[?#]/)[0] : 'https://nicvac.github.io/flowlab/dist/FlowLab.html';
     const link = `${base}?url=${encodeURIComponent(st.sourceUrl)}`;
-    try { await navigator.clipboard.writeText(link); toast('Link copiato: chi lo apre trova questo programma in FlowLab', 'ok'); }
-    catch (e) { const ta = h('textarea', { class: 'mono', rows: 3, readonly: true, 'aria-label': 'Link al programma' }); ta.value = link; openModal({ title: 'Link al programma', wide: true, body: ta, okText: 'Chiudi', noCancel: true }); setTimeout(() => ta.select(), 50); }
+    try { await navigator.clipboard.writeText(link); toast(L('ui.linkCopiedWhoeverOpensItFinds'), 'ok'); }
+    catch (e) { const ta = h('textarea', { class: 'mono', rows: 3, readonly: true, 'aria-label': L('ui.linkToTheProgram') }); ta.value = link; openModal({ title: L('ui.linkToTheProgram'), wide: true, body: ta, okText: L('win.close'), noCancel: true }); setTimeout(() => ta.select(), 50); }
   }
   function fitIfLarge() {
     if (!V.main) { withView(MAIN, fitIfLarge); return; }
@@ -2797,18 +2795,18 @@
   }
   function openFile() { $('#fileInput').click(); }
 
-  /* ------------------------------ Moduli --------------------------------
-     Un modulo è un programma .fprg. Se ha delle classi, le classi si copiano nel programma;
-     se ha solo funzioni, si copiano le funzioni (e il programma resta nella sua vista).
-     In entrambi i casi restano in sola lettura, segnate con il nome del modulo e da dove
-     viene; il Main del modulo serve solo per provarlo e non si importa.
-     src: "lib:argomento/Nome" (raccolta ufficiale), "url:indirizzo", "file:nome.fprg"
-     Le raccolte di moduli sono cartelle GitHub: ogni sottocartella è un argomento
-     (strutture_dati -> «Strutture dati») e contiene i file .fprg dei moduli. */
-  const OFFICIAL_SRC = 'https://github.com/nicvac/flowlab/tree/main/moduli';
+  /* ------------------------------ Modules --------------------------------
+     A module is a .fprg program. If it has classes, the classes are copied into the program;
+     if it has only functions, the functions are copied (and the program stays in its view).
+     In both cases they stay read-only, marked with the name of the module and where it
+     comes from; the Main of the module is only for testing it and is not imported.
+     src: "lib:topic/Name" (official collection), "url:address", "file:name.fprg"
+     The module collections are GitHub folders: each subfolder is a topic
+     (data_structures -> «Data structures») and contains the .fprg files of the modules. */
+  const OFFICIAL_SRC = 'https://github.com/nicvac/flowlab/tree/main/modules';
   const isMainClsOf = (c) => !!c && c === M.mainClass(st.prog);
-  const topicTitle = (t) => { const x = String(t || '').replace(/[_-]+/g, ' ').trim(); return x ? x[0].toUpperCase() + x.slice(1) : 'Altri moduli'; };
-  /* la classe è usata come tipo da qualche parte nel programma? */
+  const topicTitle = (t) => { const x = String(t || '').replace(/[_-]+/g, ' ').trim(); return x ? x[0].toUpperCase() + x.slice(1) : L('ui.otherModules'); };
+  /* is the class used as a type somewhere in the program? */
   function classUsed(c) {
     const lo = c.name.toLowerCase();
     const uses = (t) => { const g = E.splitType(t); return g.base.toLowerCase() === lo || g.args.some(uses); };
@@ -2820,47 +2818,47 @@
     }
     return false;
   }
-  /* la funzione è chiamata da qualche parte nel programma (fuori dal suo modulo)? */
+  /* is the function called somewhere in the program (outside its module)? */
   function funcUsed(fn) {
     const re = new RegExp(`(^|[^\\w.])${fn.name}\\s*\\(`, 'i');
     let u = false;
     for (const f of st.prog.functions) if (!f.module) M.walk(f.body, (x) => { for (const k of ['expression', 'variable', 'start', 'end']) if (typeof x[k] === 'string' && re.test(x[k])) u = true; });
     return u;
   }
-  /* cosa importare da un modulo: le classi (tranne quella del Main, se ha solo il Main)
-     oppure, se il modulo ha solo funzioni, le funzioni tranne il Main */
+  /* what to import from a module: the classes (except the one of the Main, if it has only the Main)
+     or, if the module has only functions, the functions except the Main */
   function moduleParts(text, src) {
     const mp = M.parseFprg(text);
-    const name = (mp.attrs.name || String(src).replace(/^.*[/:]/, '').replace(/\.fprg$/i, '') || 'Modulo').trim();
+    const name = (mp.attrs.name || String(src).replace(/^.*[/:]/, '').replace(/\.fprg$/i, '') || L('ui.module6')).trim();
     const about = mp.attrs.about || '';
     if (!M.hasClasses(mp) || M.isTrivialOO(mp)) {
       const funcs = mp.functions.slice(1);
-      if (!funcs.length) throw new Error('il modulo non contiene funzioni da importare (il suo Main serve solo per provarlo)');
+      if (!funcs.length) throw new Error(L('ui.theModuleContainsNoFunctionsTo'));
       return { kind: 'functions', mp, name, about, classes: [], funcs };
     }
     const mc = M.mainClass(mp);
     const classes = mp.classes.filter((c) => c !== mc || c.attributes.length || M.membersOf(mp, c).length > 1);
-    if (!classes.length) throw new Error('il modulo non contiene classi da importare (il suo Main serve solo per provarlo)');
+    if (!classes.length) throw new Error(L('ui.theModuleContainsNoClassesTo'));
     const funcs = mp.functions.filter((f) => f !== mp.functions[0] && classes.some((c) => c.id === f.cls));
     return { kind: 'classes', mp, name, about, classes, funcs };
   }
   const cloneFunc = (f) => { const nf = JSON.parse(JSON.stringify(f)); nf.id = M.newId(); nf.body.forEach((s) => M.reId(s)); return nf; };
-  /* copia il modulo nel programma (sostituisce una versione già importata) */
+  /* copies the module into the program (replaces a version already imported) */
   function importModule(text, src) {
-    if (isRunning()) { toast('Ferma il programma per importare un modulo', 'warn'); return false; }
+    if (isRunning()) { toast(L('ui.stopTheProgramToImportA'), 'warn'); return false; }
     let parts;
-    try { parts = moduleParts(text, src); } catch (e) { toast('Impossibile importare il modulo: ' + e.message, 'error'); return false; }
+    try { parts = moduleParts(text, src); } catch (e) { toast(L('ui.cannotImportTheModule') + e.message, 'error'); return false; }
     const { name, classes, funcs } = parts;
     const same = (m) => m && m.name.toLowerCase() === name.toLowerCase();
     const oldC = (st.prog.classes || []).filter((c) => same(c.module));
     const oldF = st.prog.functions.filter((f) => same(M.moduleOfFunc(st.prog, f)));
-    const fail = (msg) => { infoBox('Modulo non importato', msg); return false; };
+    const fail = (msg) => { infoBox(L('ui.moduleNotImported'), msg); return false; };
     if (parts.kind === 'functions') {
-      // funzioni: stessi nomi non ammessi (nella vista Funzioni non c'è l'overloading)
+      // functions: same names not allowed (in the Functions view there is no overloading)
       for (const f of funcs) {
-        if (E.BUILTINS[f.name.toLowerCase()] || f.name.toLowerCase() === 'main') return fail(`Il modulo ${name} contiene la funzione ${f.name}, che ha il nome di una funzione integrata.`);
+        if (E.BUILTINS[f.name.toLowerCase()] || f.name.toLowerCase() === 'main') return fail(L('ui.theModuleContainsTheFunctionWhich', { name, name2: f.name }));
         const clash = st.prog.functions.find((g) => !oldF.includes(g) && g.name.toLowerCase() === f.name.toLowerCase() && (!M.hasClasses(st.prog) || g.cls === M.mainClass(st.prog).id));
-        if (clash) return fail(`Il modulo ${name} contiene la funzione ${f.name}, ma nel programma c'è già una funzione con questo nome${clash.module ? ` (dal modulo ${clash.module.name})` : ''}. Rinomina la tua funzione e riprova.`);
+        if (clash) return fail(L('ui.theModuleContainsTheFunctionBut', { name, name2: f.name, text: clash.module ? L('ui.fromTheModule', { name: clash.module.name }) : '' }));
       }
       mutate(() => {
         const cur = func();
@@ -2875,16 +2873,16 @@
         }
         st.fi = Math.max(0, st.prog.functions.indexOf(cur));
       });
-      toast(oldF.length ? `Modulo ${name} aggiornato` : `Modulo ${name} importato: ${funcs.map((f) => f.name + '()').join(', ')}`, 'ok');
+      toast(oldF.length ? L('ui.moduleUpdated', { name }) : L('ui.moduleImported', { name, list: funcs.map((f) => f.name + '()').join(', ') }), 'ok');
       return true;
     }
     if (!M.hasClasses(st.prog)) M.wrapInClass(st.prog);
     for (const c of classes) {
       const clash = st.prog.classes.find((k) => !oldC.includes(k) && k.name.toLowerCase() === c.name.toLowerCase());
-      if (clash) return fail(`Il modulo ${name} contiene la classe ${c.name}, ma nel programma c'è già una classe con questo nome${clash.module ? ` (dal modulo ${clash.module.name})` : ''}. Rinomina la tua classe e riprova.`);
+      if (clash) return fail(L('ui.theModuleContainsTheClassBut', { name, name2: c.name, text: clash.module ? L('ui.fromTheModule', { name: clash.module.name }) : '' }));
     }
     mutate(() => {
-      // posizione: quella della versione precedente, altrimenti a destra delle classi esistenti
+      // position: that of the previous version, otherwise to the right of the existing classes
       const prevPos = new Map(oldC.map((c) => [c.name.toLowerCase(), { x: c.x, y: c.y }]));
       st.prog.functions = st.prog.functions.filter((f) => !oldC.some((c) => c.id === f.cls));
       st.prog.classes = st.prog.classes.filter((c) => !oldC.includes(c));
@@ -2903,11 +2901,11 @@
       st.view = 'objects'; store.set('view', 'objects');
       st.uml = true; st.usel = null;
     });
-    toast(oldC.length ? `Modulo ${name} aggiornato` : `Modulo ${name} importato: ${classes.map((c) => M.classTitle(c)).join(', ')}`, 'ok');
+    toast(oldC.length ? L('ui.moduleUpdated', { name }) : L('ui.moduleImported', { name, list: classes.map((c) => M.classTitle(c)).join(', ') }), 'ok');
     return true;
   }
-  /* ---- raccolte di moduli su GitHub ---- */
-  /* "https://github.com/utente/repo/tree/ramo/cartella" -> { owner, repo, ref, path } */
+  /* ---- module collections on GitHub ---- */
+  /* "https://github.com/user/repo/tree/branch/folder" -> { owner, repo, ref, path } */
   function ghSource(u) {
     const m = String(u).trim().match(/^https?:\/\/github\.com\/([^/\s]+)\/([^/\s#?]+)(?:\/tree\/([^/\s]+)(?:\/([^?#\s]*))?)?\/?(?:[?#].*)?$/i);
     if (!m) return null;
@@ -2916,17 +2914,17 @@
   const srcLabel = (u) => { const g = ghSource(u); return g ? `${g.owner}/${g.repo}${g.path ? '/' + g.path : ''}` : u; };
   function getSources() { const v = store.get('moduleSources'); return Array.isArray(v) ? v : [OFFICIAL_SRC]; }
   function setSources(list) { store.set('moduleSources', list); }
-  /* moduli di una raccolta: [{ topic, id, text, src }] (con cache di qualche ora) */
+  /* modules of a collection: [{ topic, id, text, src }] (cached for a few hours) */
   const SRC_TTL = 6 * 3600 * 1000;
   async function loadSource(u, force) {
     const key = 'modsrc:' + u;
     const cached = store.get(key);
     if (!force && cached && Date.now() - cached.time < SRC_TTL) return { list: cached.list, cached: true };
     const g = ghSource(u);
-    if (!g) throw new Error('non è il link di una cartella GitHub');
+    if (!g) throw new Error(L('ui.itIsNotTheLinkOf'));
     const r = await fetch(`https://api.github.com/repos/${g.owner}/${g.repo}/git/trees/${encodeURIComponent(g.ref)}?recursive=1`, { cache: 'no-cache' });
-    if (r.status === 403 || r.status === 429) throw new Error('GitHub ha raggiunto il limite di richieste: riprova tra qualche minuto');
-    if (!r.ok) throw new Error(r.status === 404 ? 'repository o cartella non trovati (deve essere pubblico)' : `GitHub risponde ${r.status}`);
+    if (r.status === 403 || r.status === 429) throw new Error(L('ui.githubHasReachedItsRequestLimit'));
+    if (!r.ok) throw new Error(r.status === 404 ? L('ui.repositoryOrFolderNotFoundIt') : L('ui.githubReplies', { status: r.status }));
     const tree = (await r.json()).tree || [];
     const pre = g.path ? g.path + '/' : '';
     const files = tree.filter((x) => x.type === 'blob' && /\.fprg$/i.test(x.path) && x.path.startsWith(pre)).map((x) => x.path);
@@ -2936,13 +2934,13 @@
       const rel = p.slice(pre.length).split('/');
       const id = rel.pop().replace(/\.fprg$/i, ''), topic = rel.length ? rel[rel.length - 1] : '';
       const raw = `https://raw.githubusercontent.com/${g.owner}/${g.repo}/${g.ref}/${p.split('/').map(encodeURIComponent).join('/')}`;
-      try { const t = await fetch(raw, { cache: 'no-cache' }); if (t.ok) list.push({ topic, id, text: await t.text(), src: official ? `lib:${topic}/${id}` : 'url:' + raw }); } catch (e) { /* file non leggibile: si salta */ }
+      try { const t = await fetch(raw, { cache: 'no-cache' }); if (t.ok) list.push({ topic, id, text: await t.text(), src: official ? `lib:${topic}/${id}` : 'url:' + raw }); } catch (e) { /* unreadable file: skipped */ }
     }));
     list.sort((a, b) => (a.topic + '/' + a.id).localeCompare(b.topic + '/' + b.id));
     if (list.length) store.set(key, { time: Date.now(), list });
     return { list, cached: false };
   }
-  /* copia inclusa in FlowLab della raccolta ufficiale (per quando GitHub non risponde) */
+  /* copy of the official collection included in FlowLab (for when GitHub does not answer) */
   const builtinList = () => ModuleLibrary.map((m) => ({ topic: m.topic, id: m.id, text: m.text, src: `lib:${m.topic}/${m.id}` }));
   async function libText(src) {
     const m = /^lib:(.+)\/([^/]+)$/.exec(src || ''); if (!m) return null;
@@ -2950,19 +2948,19 @@
     try {
       const r = await fetch(`https://raw.githubusercontent.com/${g.owner}/${g.repo}/${g.ref}/${g.path}/${m[1]}/${m[2]}.fprg`, { cache: 'no-cache' });
       if (r.ok) return await r.text();
-    } catch (e) { /* si usa la copia inclusa */ }
+    } catch (e) { /* the included copy is used */ }
     const b = ModuleLibrary.find((x) => x.topic === m[1] && x.id === m[2]);
     return b ? b.text : null;
   }
   async function fetchText(u) {
     const abs = new URL(rawUrl(u), location.href).href;
     const r = await fetch(abs, { cache: 'no-cache' });
-    if (!r.ok) throw new Error(`il server risponde ${r.status}`);
+    if (!r.ok) throw new Error(L('ui.theServerReplies2', { status: r.status }));
     return { text: await r.text(), abs };
   }
   async function importModuleUrl(u) {
     try { const { text, abs } = await fetchText(u); return importModule(text, 'url:' + abs); }
-    catch (e) { toast(`Impossibile scaricare il modulo: ${e instanceof TypeError ? 'il sito non risponde oppure non permette di leggere il file (CORS)' : e.message}`, 'error'); return false; }
+    catch (e) { toast(L('ui.cannotDownloadTheModule', { text: e instanceof TypeError ? L('ui.theSiteDoesNotRespondOr2') : e.message }), 'error'); return false; }
   }
   function importModuleFile() {
     const inp = h('input', { type: 'file', accept: '.fprg,.xml', hidden: true });
@@ -2975,16 +2973,16 @@
   async function updateModule(name) {
     const m = M.modulesOf(st.prog).find((x) => x.name === name); if (!m) return;
     const src = m.src || '';
-    if (src.startsWith('lib:')) { const t = await libText(src); if (t) importModule(t, src); else toast(`Il modulo ${name} non è più nella raccolta ufficiale`, 'error'); return; }
+    if (src.startsWith('lib:')) { const t = await libText(src); if (t) importModule(t, src); else toast(L('ui.theModuleIsNoLongerIn', { name }), 'error'); return; }
     if (src.startsWith('url:')) { importModuleUrl(src.slice(4)); return; }
-    toast(`Scegli di nuovo il file del modulo ${name}`); importModuleFile();
+    toast(L('ui.chooseTheFileOfTheModule', { name })); importModuleFile();
   }
   function removeModule(name) {
-    if (isRunning()) { toast('Ferma il programma per rimuovere un modulo', 'warn'); return; }
+    if (isRunning()) { toast(L('ui.stopTheProgramToRemoveA'), 'warn'); return; }
     const m = M.modulesOf(st.prog).find((x) => x.name === name); if (!m) return;
     const used = m.classes.some((c) => classUsed(c)) || m.funcs.some((f) => !m.classes.length && funcUsed(f));
-    const what = m.classes.length ? `Le classi ${m.classes.map((c) => M.classTitle(c)).join(', ')}` : `Le funzioni ${m.funcs.map((f) => f.name + '()').join(', ')}`;
-    confirmBox('Rimuovere il modulo?', `${what} del modulo ${name} verranno tolte dal programma.${used ? ' Il programma le usa: andrà corretto.' : ''}`, 'Rimuovi', () => mutate(() => {
+    const what = m.classes.length ? L('ui.theClasses', { list: m.classes.map((c) => M.classTitle(c)).join(', ') }) : L('ui.theFunctions', { list: m.funcs.map((f) => f.name + '()').join(', ') });
+    confirmBox(L('ui.removeTheModule2'), L('ui.ofTheModuleWillBeRemoved', { what, name, text: used ? L('ui.theProgramUsesThemItWill') : '' }), L('ui.remove'), () => mutate(() => {
       const cur = func();
       st.prog.functions = st.prog.functions.filter((f) => !m.funcs.includes(f) && !m.classes.some((c) => c.id === f.cls));
       if (m.classes.length) st.prog.classes = st.prog.classes.filter((k) => !m.classes.includes(k));
@@ -2992,53 +2990,53 @@
       if (m.classes.length) st.uml = true;
     }));
   }
-  /* dialogo: moduli nel programma, raccolte di moduli (GitHub) per argomento, altri moduli */
+  /* dialog: modules in the program, module collections (GitHub) by topic, other modules */
   function moduleDialog() {
-    if (isRunning()) { toast('Ferma il programma per importare un modulo', 'warn'); return; }
+    if (isRunning()) { toast(L('ui.stopTheProgramToImportA'), 'warn'); return; }
     let closeIt = null;
     const done = (fn) => () => { if (closeIt) closeIt(); fn(); };
     const have = () => new Map(M.modulesOf(st.prog).map((m) => [m.name.toLowerCase(), m]));
-    // moduli già importati
+    // modules already imported
     const mine = h('div', { class: 'modlib' });
     const drawMine = () => {
       mine.innerHTML = '';
       const ms = M.modulesOf(st.prog);
       if (!ms.length) return;
-      mine.append(h('h3', { class: 'modh' }, 'Moduli nel programma'));
+      mine.append(h('h3', { class: 'modh' }, L('ui.modulesInTheProgram')));
       for (const m of ms) mine.append(h('div', { class: 'modrow' },
-        h('div', { class: 'modinfo' }, h('strong', null, m.name), h('span', { class: 'modcls mono' }, m.classes.length ? m.classes.map((c) => M.classTitle(c)).join(' · ') : m.funcs.map((f) => f.name + '()').join(' · ')), h('span', { class: 'muted small' }, m.src.startsWith('lib:') ? 'raccolta ufficiale' : m.src.replace(/^(url|file):/, ''))),
-        h('button', { class: 'btn small', type: 'button', onclick: done(() => updateModule(m.name)) }, 'Aggiorna'),
-        h('button', { class: 'btn small danger', type: 'button', onclick: done(() => removeModule(m.name)) }, 'Rimuovi')));
+        h('div', { class: 'modinfo' }, h('strong', null, m.name), h('span', { class: 'modcls mono' }, m.classes.length ? m.classes.map((c) => M.classTitle(c)).join(' · ') : m.funcs.map((f) => f.name + '()').join(' · ')), h('span', { class: 'muted small' }, m.src.startsWith('lib:') ? L('ui.officialCollection') : m.src.replace(/^(url|file):/, ''))),
+        h('button', { class: 'btn small', type: 'button', onclick: done(() => updateModule(m.name)) }, L('ui.update')),
+        h('button', { class: 'btn small danger', type: 'button', onclick: done(() => removeModule(m.name)) }, L('ui.remove'))));
     };
     drawMine();
-    // raccolte
+    // collections
     const coll = h('div', { class: 'modlib' });
     const row = (m) => {
       let info; try { info = moduleParts(m.text, m.src); } catch (e) { return null; }
       const got = have().get(info.name.toLowerCase());
       return h('div', { class: 'modrow' },
         h('div', { class: 'modinfo' }, h('strong', null, info.name), h('span', { class: 'modcls mono' }, info.kind === 'classes' ? info.classes.map((c) => M.classTitle(c)).join(' · ') : info.funcs.map((f) => f.name + '()').join(' · ')), info.about ? h('p', { class: 'muted small' }, info.about) : null),
-        h('button', { class: 'btn small' + (got ? '' : ' primary'), type: 'button', onclick: done(() => importModule(m.text, m.src)) }, got ? 'Aggiorna' : 'Importa'));
+        h('button', { class: 'btn small' + (got ? '' : ' primary'), type: 'button', onclick: done(() => importModule(m.text, m.src)) }, got ? L('ui.update') : L('ui.import')));
     };
-    // albero espandibile: raccolta › argomento › moduli (lo stato aperto/chiuso si ricorda)
-    // la prima volta la raccolta ufficiale è già aperta, così si vede subito com'è fatta
+    // expandable tree: collection › topic › modules (the open/closed state is remembered)
+    // the first time the official collection is already open, so one sees at once how it is made
     const openSet = new Set(store.get('modOpen', [OFFICIAL_SRC]));
-    // barra cliccabile: freccia grande, icona, titolo, conteggio
+    // clickable bar: big arrow, icon, title, count
     const ICON_CHEV = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>';
     const ICON_REPO = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h11l3 3v13H5z"/><path d="M8 4v6l2-1.5L12 10V4"/><path d="M8 14h8M8 17h6"/></svg>';
     const ICON_DIR = '<svg class="dir-closed" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6a1 1 0 0 1 1-1h5l2 2h9a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/></svg><svg class="dir-open" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6a1 1 0 0 1 1-1h5l2 2h8a1 1 0 0 1 1 1v2"/><path d="M3 18V6M3 18l2.6-7.2a1 1 0 0 1 .9-.8H21a.7.7 0 0 1 .7.9L19.4 18a1 1 0 0 1-1 .8H3"/></svg>';
-    const count = (n) => `${n} ${n === 1 ? 'modulo' : 'moduli'}`;
+    const count = (n) => `${n} ${n === 1 ? L('ui.module') : L('ui.modules')}`;
     const keepOpen = (key, det) => det.addEventListener('toggle', () => { if (det.open) openSet.add(key); else openSet.delete(key); store.set('modOpen', [...openSet]); });
     const fill = (box, list, u) => {
       box.innerHTML = '';
-      if (!list.length) { box.append(h('p', { class: 'muted small' }, 'Nessun file .fprg in questa cartella.')); return; }
+      if (!list.length) { box.append(h('p', { class: 'muted small' }, L('ui.noFprgFilesInThisFolder'))); return; }
       const topics = new Map();
       for (const m of list) { if (!topics.has(m.topic)) topics.set(m.topic, []); topics.get(m.topic).push(m); }
       for (const [topic, ms] of topics) {
         const key = u + '|' + topic;
         const rows = ms.map(row).filter(Boolean);
         const det = h('details', { class: 'modtopic', open: openSet.has(key) },
-          h('summary', { class: 'modbar', title: 'Clic per mostrare o nascondere i moduli' }, h('span', { class: 'modchev', html: ICON_CHEV }), h('span', { class: 'modicon', html: ICON_DIR }),
+          h('summary', { class: 'modbar', title: L('ui.clickToShowOrHideThe') }, h('span', { class: 'modchev', html: ICON_CHEV }), h('span', { class: 'modicon', html: ICON_DIR }),
             h('span', { class: 'modtname' }, topicTitle(topic)), h('span', { class: 'modlist muted small' }, ms.map((m) => m.id).join(', ')), h('span', { class: 'grow' }), h('span', { class: 'modcount' }, count(rows.length))),
           h('div', { class: 'modtopicbody' }, ...rows));
         keepOpen(key, det);
@@ -3056,47 +3054,47 @@
         let loaded = false;
         const load = (again) => {
           loaded = true;
-          box.innerHTML = ''; box.append(h('p', { class: 'muted small' }, 'Caricamento da GitHub…'));
-          const fallback = (why) => { fill(box, builtinList(), u); box.prepend(h('p', { class: 'muted small' }, `${why}: questa è la copia della raccolta inclusa in FlowLab.`)); showCount(); };
-          loadSource(u, again).then(({ list }) => { if (!list.length && official) fallback('La raccolta su GitHub è vuota o non ancora pubblicata'); else { fill(box, list, u); showCount(); } }).catch((e) => {
-            if (official) fallback(`GitHub non risponde (${e.message})`);
-            else { box.innerHTML = ''; box.append(h('p', { class: 'formerr' }, `Impossibile leggere la raccolta: ${e.message}`)); }
+          box.innerHTML = ''; box.append(h('p', { class: 'muted small' }, L('ui.loadingFromGithub')));
+          const fallback = (why) => { fill(box, builtinList(), u); box.prepend(h('p', { class: 'muted small' }, L('ui.thisIsTheCopyOfThe', { why }))); showCount(); };
+          loadSource(u, again).then(({ list }) => { if (!list.length && official) fallback(L('ui.theCollectionOnGithubIsEmpty')); else { fill(box, list, u); showCount(); } }).catch((e) => {
+            if (official) fallback(L('ui.githubDoesNotRespond', { message: e.message }));
+            else { box.innerHTML = ''; box.append(h('p', { class: 'formerr' }, L('ui.cannotReadTheCollection', { message: e.message }))); }
           });
         };
-        // i pulsanti nel titolo non devono aprire o chiudere la raccolta
+        // the buttons in the title must not open or close the collection
         const btn = (title, text, fn) => h('button', { class: 'iconbtn', type: 'button', title, 'aria-label': title, onclick: (e) => { e.preventDefault(); e.stopPropagation(); fn(); } }, text);
         const det = h('details', { class: 'modsrc', open: openSet.has(u) },
-          h('summary', { class: 'modsrchead modbar', title: 'Clic per mostrare o nascondere gli argomenti della raccolta' }, h('span', { class: 'modchev', html: ICON_CHEV }), h('span', { class: 'modicon', html: ICON_REPO }),
+          h('summary', { class: 'modsrchead modbar', title: L('ui.clickToShowOrHideThe2') }, h('span', { class: 'modchev', html: ICON_CHEV }), h('span', { class: 'modicon', html: ICON_REPO }),
             h('span', { class: 'modsname mono' }, srcLabel(u)), official ? h('span', { class: 'ptag' }, 'ufficiale') : null, h('span', { class: 'grow' }), badge,
-            btn('Ricarica da GitHub', '↻', () => { det.open = true; load(true); }),
-            btn('Togli questa raccolta', '✕', () => { setSources(getSources().filter((x) => x !== u)); drawSources(); })),
+            btn(L('ui.reloadFromGithub'), '↻', () => { det.open = true; load(true); }),
+            btn(L('ui.removeThisCollection'), '✕', () => { setSources(getSources().filter((x) => x !== u)); drawSources(); })),
           box);
         keepOpen(u, det);
         det.addEventListener('toggle', () => { if (det.open && !loaded) load(force); });
         coll.append(det);
         if (det.open) load(force);
       }
-      if (!srcs.includes(OFFICIAL_SRC)) coll.append(h('button', { class: 'btn small', type: 'button', onclick: () => { setSources([OFFICIAL_SRC, ...getSources()]); drawSources(); } }, 'Rimetti la raccolta ufficiale'));
+      if (!srcs.includes(OFFICIAL_SRC)) coll.append(h('button', { class: 'btn small', type: 'button', onclick: () => { setSources([OFFICIAL_SRC, ...getSources()]); drawSources(); } }, L('ui.restoreTheOfficialCollection')));
     };
     drawSources(false);
-    const srcW = field({ key: 'msrc', label: 'Aggiungi una raccolta di moduli (link a una cartella GitHub)', type: 'plain', placeholder: 'https://github.com/utente/repo/tree/main/moduli', hint: 'Ogni sottocartella è un argomento (es. strutture_dati) e contiene i file .fprg dei moduli. Il repository deve essere pubblico.' }, '');
+    const srcW = field({ key: 'msrc', label: L('ui.addAModuleCollectionLinkTo'), type: 'plain', placeholder: 'https://github.com/user/repo/tree/main/moduli', hint: L('ui.eachSubfolderIsATopicE') }, '');
     const addSrc = () => {
-      const u = srcW._get().trim(); if (!u) { toast('Incolla il link della cartella GitHub', 'warn'); return; }
-      if (!ghSource(u)) { toast('Serve il link di una cartella GitHub, es. https://github.com/utente/repo/tree/main/moduli', 'warn'); return; }
+      const u = srcW._get().trim(); if (!u) { toast(L('ui.pasteTheLinkOfTheGithub'), 'warn'); return; }
+      if (!ghSource(u)) { toast(L('ui.aLinkToAGithubFolder'), 'warn'); return; }
       if (!getSources().includes(u)) setSources([...getSources(), u]);
       srcW._input.value = ''; drawSources();
     };
-    const addRow = h('div', { class: 'modadd' }, srcW, h('button', { class: 'btn small', type: 'button', onclick: addSrc }, 'Aggiungi la raccolta'));
+    const addRow = h('div', { class: 'modadd' }, srcW, h('button', { class: 'btn small', type: 'button', onclick: addSrc }, L('ui.addTheCollection')));
     srcW._input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); addSrc(); } });
-    // altri moduli
-    const urlW = field({ key: 'murl', label: 'Oppure da un indirizzo web', type: 'plain', placeholder: 'https://github.com/…/Modulo.fprg' }, '');
+    // other modules
+    const urlW = field({ key: 'murl', label: L('ui.orFromAWebAddress'), type: 'plain', placeholder: 'https://github.com/…/Modulo.fprg' }, '');
     const other = h('div', { class: 'modother' },
-      h('button', { class: 'btn small', type: 'button', onclick: done(importModuleFile) }, 'Importa da un file .fprg…'),
-      urlW, h('button', { class: 'btn small', type: 'button', onclick: () => { const u = urlW._get().trim(); if (!u) { toast('Scrivi l\'indirizzo del modulo', 'warn'); return; } if (closeIt) closeIt(); importModuleUrl(u); } }, 'Importa dall\'indirizzo'));
+      h('button', { class: 'btn small', type: 'button', onclick: done(importModuleFile) }, L('ui.importFromAFprgFile')),
+      urlW, h('button', { class: 'btn small', type: 'button', onclick: () => { const u = urlW._get().trim(); if (!u) { toast(L('ui.writeTheAddressOfTheModule'), 'warn'); return; } if (closeIt) closeIt(); importModuleUrl(u); } }, L('ui.importFromTheAddress')));
     const body = h('div', { class: 'fields' },
-      h('p', { class: 'help' }, 'Un modulo è un programma .fprg da riusare: le sue classi o funzioni si importano nel tuo programma in sola lettura (il Main del modulo serve solo per provarlo). La descrizione di un modulo è quella scritta in Proprietà del programma.'),
-      mine, h('h3', { class: 'modh' }, 'Raccolte di moduli'), coll, addRow, h('h3', { class: 'modh' }, 'Altri moduli'), other);
-    closeIt = openModal({ title: 'Importa un modulo', body, wide: true, okText: 'Chiudi', noCancel: true }).close;
+      h('p', { class: 'help' }, L('ui.aModuleIsAReusableFprg')),
+      mine, h('h3', { class: 'modh' }, L('ui.moduleCollections')), coll, addRow, h('h3', { class: 'modh' }, L('ui.otherModules')), other);
+    closeIt = openModal({ title: L('ui.importAModule2'), body, wide: true, okText: L('win.close'), noCancel: true }).close;
     setTimeout(() => { const mb = body.closest('.modal-body'); if (mb) mb.scrollTop = 0; const b = body.querySelector('.modsrc > summary'); if (b) b.focus(); }, 20);
   }
 
@@ -3105,13 +3103,13 @@
     const r = new FileReader();
     r.onload = () => {
       if (/\.(fprg|xml)$/i.test(file.name) || /^\s*<\?xml/i.test(r.result) || r.result.toLowerCase().includes('<' + M.FPRG_ROOT)) loadText(r.result, file.name);
-      else { st.vfs.set(file.name, r.result); saveVfs(); setTab('files'); toast(`File di testo ${file.name} aggiunto alla scheda File`, 'ok'); }
+      else { st.vfs.set(file.name, r.result); saveVfs(); setTab('files'); toast(L('ui.textFileAddedToTheFiles', { name: file.name }), 'ok'); }
     };
     r.readAsText(file);
   }
   function guardDirty(action) {
     if (!st.dirty) { action(); return; }
-    confirmBox('Modifiche non salvate', 'Il programma attuale ha modifiche non salvate. Vuoi continuare e perderle?', 'Continua', action);
+    confirmBox(L('ui.unsavedChanges'), L('ui.theCurrentProgramHasUnsavedChanges'), L('ui.continue'), action);
   }
   function newProgram() {
     guardDirty(() => { if (isRunning()) stopRun(); resetViews(); st.excPos = new Map(); st.prog = M.newProgram(); st.fi = 0; st.sel = null; st.uml = isOO(); st.usel = null; st.undo = []; st.redo = []; st.fileName = null; st.dirty = false; run.mainFrame = null; render(); renderVars(); });
@@ -3128,7 +3126,7 @@
   }
 
   function exportSvg(source, css) {
-    // l'esportazione è sempre nella vista estesa
+    // export is always in the extended view
     if (!source && st.compact && !isUml() && !(isOO() && func().abstract)) {
       const f = func(), c = isOO() ? M.classOf(st.prog, f) : null;
       source = svgFromString(new RenderLib.Renderer().func(f, st.expanded, isOO() ? { owner: c ? c.name : '', isMain: st.fi === 0 } : {}).svg);
@@ -3140,15 +3138,15 @@
     return new XMLSerializer().serializeToString(svg);
   }
 
-  /* ------------------------- Esportazione in PDF -------------------------
-     Copertina con i dati e l'indice, diagramma delle classi, diagramma di flusso
-     di ogni funzione o metodo (con tutti i testi espansi), codice sorgente. */
+  /* ------------------------- PDF export -------------------------
+     Cover with the data and the contents, class diagram, flowchart
+     of each function or method (with all the texts expanded), source code. */
   const svgFromString = (str) => { const d = h('div', { html: str }); return d.firstElementChild; };
-  const loadImg = (svgStr) => new Promise((res, rej) => { const img = new Image(); img.onload = () => res(img); img.onerror = () => rej(new Error('immagine non disponibile')); img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgStr); });
+  const loadImg = (svgStr) => new Promise((res, rej) => { const img = new Image(); img.onload = () => res(img); img.onerror = () => rej(new Error(L('ui.imageNotAvailable'))); img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgStr); });
   async function exportPdf() {
-    if (isRunning()) { toast('Ferma il programma prima di esportare', 'warn'); return; }
-    toast('Preparo il PDF…');
-    // colori del tema chiaro, qualunque sia il tema in uso
+    if (isRunning()) { toast(L('ui.stopTheProgramBeforeExporting'), 'warn'); return; }
+    toast(L('ui.preparingThePdf'));
+    // colours of the light theme, whatever the theme in use
     const root = document.documentElement, oldTheme = root.dataset.theme;
     root.dataset.theme = 'light';
     const css = exportCss();
@@ -3159,36 +3157,36 @@
     const doc = new PdfLib.Doc();
     const M0 = 42, CW = doc.W - M0 * 2, TOP = 58, BOTTOM = doc.H - 46;
     const INK = [23, 34, 45], MUTED = [90, 104, 117], ACCENT = [12, 108, 128];
-    const title = prog.attrs.name || 'Programma senza nome';
+    const title = prog.attrs.name || L('ui.untitledProgram');
     const sigOf = (f) => `${f.name}(${f.params.map((p) => `${p.name}${p.array ? '[]' : ''}: ${E.typeName(p.type)}`).join(', ')})${M.rets(f).length ? ': ' + M.rets(f).map((r) => E.typeName(r.type)).join(', ') : ''}`;
     const heading = (f) => {
-      if (f === prog.functions[0]) return 'Inizio (programma principale)';
+      if (f === prog.functions[0]) return L('ui.mainMainProgram');
       const c = oo ? M.classOf(prog, f) : null;
-      if (!c) return 'Funzione ' + sigOf(f);
-      if (f.ctor) return `Costruttore di ${c.name}: new ${sigOf(f)}`;
-      return `${f.abstract ? 'Metodo astratto' : f.static ? 'Metodo statico' : 'Metodo'} ${c.name}.${sigOf(f)}`;
+      if (!c) return L('ui.function3') + sigOf(f);
+      if (f.ctor) return L('ui.constructorOfNew', { name: c.name, sigOf: sigOf(f) });
+      return `${f.abstract ? L('ui.abstractMethod') : f.static ? L('ui.staticMethod') : L('ui.method')} ${c.name}.${sigOf(f)}`;
     };
-    // ordine: Main, poi per classe (costruttori e metodi) o le funzioni nell'ordine del programma
+    // order: Main, then by class (constructors and methods) or the functions in the order of the program
     const funcs = oo ? [prog.functions[0], ...prog.classes.flatMap((c) => { const ms = M.membersOf(prog, c).filter((f) => f !== prog.functions[0]); return [...ms.filter((f) => f.ctor), ...ms.filter((f) => !f.ctor)]; })] : prog.functions.slice();
 
-    /* ---- copertina ---- */
+    /* ---- cover ---- */
     let p = doc.page();
     let y = 92;
     doc.text(p, M0, y, 'FlowLab', { font: 'F2', size: 12, color: ACCENT }); y += 34;
     for (const l of PdfLib.wrap(title, 'F2', 24, CW)) { doc.text(p, M0, y, l, { font: 'F2', size: 24, color: INK }); y += 30; }
-    const meta = [prog.attrs.authors ? 'Autori: ' + prog.attrs.authors : null, `Esportato il ${new Date().toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' })}`, oo ? `Programma a oggetti: ${prog.classes.length} ${prog.classes.length === 1 ? 'classe' : 'classi'}` : `Programma a funzioni: ${prog.functions.length} ${prog.functions.length === 1 ? 'diagramma' : 'diagrammi'}`].filter(Boolean);
+    const meta = [prog.attrs.authors ? L('ui.authors2') + prog.attrs.authors : null, L('ui.exportedOn', { toLocaleDateString: new Date().toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' }) }), oo ? L('ui.objectOrientedProgram', { classesCount: prog.classes.length, text: prog.classes.length === 1 ? L('ui.class') : L('ui.classes') }) : L('ui.programWithFunctions', { functionsCount: prog.functions.length, text: prog.functions.length === 1 ? L('ui.diagram2') : L('ui.diagrams') })].filter(Boolean);
     for (const m of meta) { doc.text(p, M0, y, m, { size: 11, color: MUTED }); y += 16; }
     y += 10; doc.line(p, M0, y, M0 + CW, y); y += 24;
     if (String(prog.attrs.about || '').trim()) {
       for (const l of PdfLib.wrap(prog.attrs.about, 'F1', 11.5, CW)) { doc.text(p, M0, y, l, { size: 11.5 }); y += 16; }
       y += 14;
     }
-    doc.text(p, M0, y, 'Contenuto', { font: 'F2', size: 13 }); y += 20;
-    // indice: i numeri di pagina si scrivono alla fine, quando l'impaginazione è nota
+    doc.text(p, M0, y, L('ui.contents'), { font: 'F2', size: 13 }); y += 20;
+    // contents: the page numbers are written at the end, when the layout is known
     const toc = [];
-    if (oo) toc.push({ key: 'uml', label: 'Diagramma delle classi' });
+    if (oo) toc.push({ key: 'uml', label: L('ui.classDiagram') });
     for (const f of funcs) toc.push({ key: f.id, label: heading(f) });
-    toc.push({ key: 'code', label: `Codice sorgente (${CodeGen.LANGS[st.lang].label})` });
+    toc.push({ key: 'code', label: L('ui.sourceCode', { label: CodeGen.LANGS[st.lang].label }) });
     const tocAt = [], sectionPage = {};
     for (const t of toc) {
       PdfLib.wrap(t.label, 'F1', 10.5, CW - 50).forEach((l, k, arr) => {
@@ -3199,22 +3197,22 @@
       });
     }
 
-    /* ---- diagrammi: ognuno su una pagina alta quanto serve (modulo continuo) ----
-       scala fissa: il testo dei blocchi (12,5 px) diventa di 9 pt; i diagrammi più larghi
-       di un A4 allargano la pagina invece di rimpicciolirsi */
-    const K = 2.2; // pixel per punto: risoluzione delle immagini
-    const STRIP = 8000; // pixel: i diagrammi molto alti si disegnano a strisce (limiti dei canvas)
+    /* ---- diagrams: each one on a page as tall as needed (continuous form) ----
+       fixed scale: the text of the blocks (12.5 px) becomes 9 pt; diagrams wider
+       than an A4 widen the page instead of shrinking */
+    const K = 2.2; // pixels per point: resolution of the images
+    const STRIP = 8000; // pixels: very tall diagrams are drawn in strips (canvas limits)
     const SCALE = 9 / 12.5;
     async function placeDiagram(key, label, svgStr, W, Hh, note) {
       const head = 30 + (note ? 18 : 0), foot = doc.H - BOTTOM + 14;
       let scale = SCALE;
-      // oltre le dimensioni massime di una pagina PDF il diagramma si rimpicciolisce
+      // beyond the maximum size of a PDF page the diagram shrinks
       const maxImg = doc.maxH - TOP - head - foot;
       if (svgStr && Hh * scale > maxImg) scale = maxImg / Hh;
       if (svgStr && W * scale > doc.maxH - M0 * 2) scale = (doc.maxH - M0 * 2) / W;
       const w = W * scale, hpt = svgStr ? Hh * scale : 0;
       p = doc.page(TOP + head + hpt + foot, svgStr ? w + M0 * 2 : 0); y = TOP;
-      const cwp = p.w - M0 * 2; // larghezza utile di questa pagina
+      const cwp = p.w - M0 * 2; // usable width of this page
       sectionPage[key] = doc.pages.length;
       doc.text(p, M0, y + 12, label, { font: 'F2', size: 12.5, color: INK });
       y += 20; doc.line(p, M0, y, M0 + cwp, y, { color: [207, 216, 225] }); y += 10;
@@ -3237,7 +3235,7 @@
     try {
       if (oo) {
         const u = UmlLib.render(prog, null, { excPos: st.excPos });
-        await placeDiagram('uml', 'Diagramma delle classi', exportSvg(svgFromString(u.svg), css), u.W, u.H);
+        await placeDiagram('uml', L('ui.classDiagram'), exportSvg(svgFromString(u.svg), css), u.W, u.H);
       }
       const all = new Set();
       for (const f of prog.functions) M.walk(f.body, (x) => all.add(x.id));
@@ -3245,27 +3243,27 @@
       for (const f of funcs) {
         if (f.abstract) {
           const c = M.classOf(prog, f);
-          await placeDiagram(f.id, heading(f), null, 1, 1, `Senza corpo: lo definiscono le sottoclassi di ${c.name}.`);
+          await placeDiagram(f.id, heading(f), null, 1, 1, L('ui.noBodyTheSubclassesOfDefine', { name: c.name }));
           continue;
         }
         const c = oo ? M.classOf(prog, f) : null;
         const out = r.func(f, all, oo ? { owner: c ? c.name : '', isMain: f === prog.functions[0] } : undefined);
         await placeDiagram(f.id, heading(f), exportSvg(svgFromString(out.svg), css), out.W, out.H);
       }
-    } catch (e) { toast('Impossibile creare le immagini dei diagrammi: ' + e.message, 'error'); return; }
+    } catch (e) { toast(L('ui.cannotCreateTheImagesOfThe') + e.message, 'error'); return; }
 
-    /* ---- codice: pagine A4 orizzontali con margini ridotti, colorato come nella scheda Codice ---- */
+    /* ---- code: landscape A4 pages with reduced margins, coloured as in the Code tab ---- */
     const code = CodeGen.generate(prog, st.lang).replace(/\n$/, '');
-    const LW = doc.H, LHt = doc.W, MC = 22, CTOP = 34, CBOT = LHt - 22; // A4 orizzontale
+    const LW = doc.H, LHt = doc.W, MC = 22, CTOP = 34, CBOT = LHt - 22; // landscape A4
     const codePage = () => { const pg = doc.page(LHt, LW); pg.compact = true; return pg; };
     p = codePage(); y = CTOP;
     sectionPage.code = doc.pages.length;
-    doc.text(p, MC, y + 12, `Codice sorgente · ${CodeGen.LANGS[st.lang].label}`, { font: 'F2', size: 12.5 }); y += 20;
+    doc.text(p, MC, y + 12, L('ui.sourceCode2', { label: CodeGen.LANGS[st.lang].label }), { font: 'F2', size: 12.5 }); y += 20;
     doc.line(p, MC, y, LW - MC, y, { color: [207, 216, 225] }); y += 14;
     const FS = 8.6, LH = 10.6, NW = 26, CH = 0.6 * FS, cols = Math.floor((LW - MC * 2 - NW) / CH);
     const FONT = { '': 'F3', tk: 'F5', ts: 'F3', tn: 'F3', tc: 'F6' };
     codeTokens(code, st.lang).forEach((toks, i) => {
-      // pezzi colorati con la loro colonna; le righe troppo lunghe vanno a capo
+      // coloured pieces with their column; lines that are too long wrap
       const segs = []; let col = 0;
       for (const [c, t] of toks) { const tx = t.replace(/\t/g, '    '); segs.push({ c, t: tx, at: col }); col += [...tx].length; }
       const rows = Math.max(1, Math.ceil(col / cols));
@@ -3284,12 +3282,12 @@
       }
     });
 
-    /* ---- intestazione e numeri di pagina ---- */
+    /* ---- header and page numbers ---- */
     for (const t of tocAt) { const n = String(sectionPage[t.key] || ''); doc.text(t.p, M0 + CW - PdfLib.textWidth(n, 'F1', 10.5), t.y, n, { size: 10.5, color: MUTED }); }
     const N = doc.pages.length;
     doc.pages.forEach((pg, i) => {
       if (i === 0) { doc.text(pg, M0, pg.h - 26, `${i + 1} / ${N}`, { size: 8.5, color: MUTED }); return; }
-      // le pagine del codice hanno margini ridotti
+      // the code pages have reduced margins
       const mx = pg.compact ? 22 : M0, ty = pg.compact ? 16 : 30, fy = pg.compact ? 12 : 26;
       doc.text(pg, mx, ty, title, { size: 8.5, color: MUTED });
       doc.line(pg, mx, ty + 6, pg.w - mx, ty + 6, { color: [225, 231, 237], width: 0.6 });
@@ -3297,7 +3295,7 @@
       doc.text(pg, pg.w - mx - PdfLib.textWidth(t, 'F1', 8.5), pg.h - fy, t, { size: 8.5, color: MUTED });
     });
     const blob = doc.build({ title, author: prog.attrs.authors || '' });
-    window.__lastPdf = blob; // per i test automatici
+    window.__lastPdf = blob; // for the automatic tests
     await download(safeName(prog.attrs.name) + '.pdf', blob, 'application/pdf');
   }
   function exportCss() {
@@ -3306,7 +3304,7 @@
     let css = `text{font:${RenderLib.R_.font};fill:${v('--sh-text')};text-anchor:middle}.cline-t{text-anchor:start}.comment text{font-weight:400;font-style:italic}.badge{font-size:10px}.c-in .badge{fill:${v('--s-in')}}.c-out .badge{fill:${v('--s-out')}}.c-decl .badge{fill:${v('--s-decl')}}.blabel{font-size:11px;font-weight:600;fill:${v('--muted')}}.flow{fill:none;stroke:${v('--flow')};stroke-width:1.6}.ahead{fill:${v('--flow')}}.joint{fill:${v('--flow')}}.shape>path,.shape>rect{stroke-width:1.6}.inner{fill:none!important}.note{stroke-dasharray:4 3}svg{background:${v('--paper')}}`;
     for (const c of ['term', 'decl', 'assign', 'in', 'out', 'cond', 'loop', 'call', 'comment', 'brk', 'file', 'inc', 'exc']) css += `.c-${c}>path,.c-${c}>rect{fill:${v('--f-' + c)};stroke:${v('--s-' + c)}}`;
     css += `.flow.exc{stroke:${v('--s-exc')};stroke-dasharray:5 4}`;
-    // diagramma delle classi
+    // class diagram
     css += `.exc .ubg{stroke:${v('--s-exc')}}.exc .uheadbg{fill:${v('--f-exc')}}.exc .usep{stroke:${v('--s-exc')}}.builtin .ubg{stroke-dasharray:6 3}.builtin .uheadbg{fill-opacity:.55}`;
     css += `.ubg{fill:${v('--paper')};stroke:${v('--s-call')};stroke-width:1.6}.uheadbg{fill:${v('--f-call')}}.main .uheadbg{fill:${v('--f-term')}}.main .ubg{stroke:${v('--s-term')}}.usep{stroke:${v('--s-call')};stroke-width:1.2}.uname{font:700 14px "Atkinson Hyperlegible",sans-serif;text-anchor:middle}.ustereo{font:italic 11.5px "Atkinson Hyperlegible",sans-serif;fill:${v('--muted')};text-anchor:middle}.umem{font:400 12.5px "JetBrains Mono",monospace;text-anchor:start}.urel{fill:none;stroke:${v('--flow')};stroke-width:1.6}.minh{fill:${v('--paper')};stroke:${v('--flow')};stroke-width:1.6}.mopen{fill:none;stroke:${v('--flow')};stroke-width:1.6}.ulab{font:600 11.5px "JetBrains Mono",monospace;fill:${v('--muted')};text-anchor:start}`;
     return css;
@@ -3319,7 +3317,7 @@
     img.onload = () => {
       const c = h('canvas', { width: w * k, height: hh * k });
       const x = c.getContext('2d'); x.scale(k, k); x.drawImage(img, 0, 0);
-      c.toBlob((b) => download(safeName(st.prog.attrs.name) + '_' + (isUml() ? 'classi' : safeName(fname(func()))) + '.png', b, 'image/png'));
+      c.toBlob((b) => download(safeName(st.prog.attrs.name) + '_' + (isUml() ? L('ui.classes') : safeName(fname(func()))) + '.png', b, 'image/png'));
     };
     img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(s);
   }
@@ -3336,24 +3334,51 @@
   }
   function fileMenu(btn) {
     menu(btn, [
-      { label: 'Nuovo programma', key: 'Ctrl+Alt+N', do: newProgram },
-      { label: 'Apri file .fprg…', key: 'Ctrl+O', do: openFile },
-      { label: 'Apri da indirizzo web…', key: 'Ctrl+Maiusc+O', do: openUrlDialog },
-      { label: 'Salva come .fprg', key: 'Ctrl+S', do: saveFile },
-      { label: 'Copia il link a questo programma', key: 'Ctrl+Maiusc+L', do: copyShareLink },
+      { label: L('ui.newProgram'), key: 'Ctrl+Alt+N', do: newProgram },
+      { label: L('ui.openFprgFile'), key: 'Ctrl+O', do: openFile },
+      { label: L('ui.openFromWebAddress2'), key: 'Ctrl+Shift+O', do: openUrlDialog },
+      { label: L('ui.saveAsFprg'), key: 'Ctrl+S', do: saveFile },
+      { label: L('ui.copyTheLinkToThisProgram'), key: 'Ctrl+Shift+L', do: copyShareLink },
       '-',
-      { label: 'Importa un modulo…', key: 'Ctrl+I', do: moduleDialog },
+      { label: L('ui.importAModule'), key: 'Ctrl+I', do: moduleDialog },
       '-',
-      { label: 'Esporta diagramma SVG', key: 'Ctrl+Maiusc+G', do: exportSvgFile },
-      { label: 'Esporta diagramma PNG', key: 'Ctrl+Maiusc+E', do: exportPng },
-      { label: 'Esporta tutto il progetto in PDF', key: 'Ctrl+P', do: exportPdf },
-      { label: 'Scarica codice sorgente', key: 'Ctrl+Maiusc+S', do: downloadCode },
+      { label: L('ui.exportDiagramAsSvg'), key: 'Ctrl+Shift+G', do: exportSvgFile },
+      { label: L('ui.exportDiagramAsPng'), key: 'Ctrl+Shift+E', do: exportPng },
+      { label: L('ui.exportTheWholeProjectAsPdf'), key: 'Ctrl+P', do: exportPdf },
+      { label: L('ui.downloadSourceCode'), key: 'Ctrl+Shift+S', do: downloadCode },
       '-',
-      { label: 'Proprietà del programma…', key: 'Alt+Invio', do: editProgram },
-      ...(isStandalone() ? [] : ['-', { label: 'Installa FlowLab come app…', do: installApp, cls: 'install' }]),
+      { label: L('ui.programProperties'), key: 'Alt+Enter', do: editProgram },
+      '-',
+      // the language item also says "Language" in English, so anyone can find it
+      { label: `🌐 ${L('ui.language')}: ${I18n.name}${I18n.lang === 'en' ? '' : ' (Language)'}…`, do: languageDialog },
+      ...(isStandalone() ? [] : ['-', { label: L('ui.installFlowlabAsAnApp'), do: installApp, cls: 'install' }]),
     ]);
   }
-  /* ---- installazione come app (PWA): dalla versione online, aperta in una scheda di Chrome o Edge ---- */
+  /* language: the ones built into FlowLab and those in the languages folder on GitHub; choosing one reloads the page
+     (the open program stays, it is saved automatically) */
+  function languageDialog() {
+    const list = h('div', { class: 'langlist', role: 'list' });
+    const choose = async (code) => {
+      if (code === I18n.lang) { closeTop(); return; }
+      if (isRunning()) stopRun();
+      autosave();
+      try { await I18n.set(code); } catch (e) { toast(L('ui.cannotLoadLanguage', { code, message: e.message }), 'error'); }
+    };
+    const item = (code, name, remote) => h('button', { type: 'button', class: 'btn langitem' + (code === I18n.lang ? ' on' : ''), role: 'listitem', onclick: () => choose(code) },
+      h('b', null, name), h('span', { class: 'muted small' }, remote ? `${code} · GitHub` : code));
+    const draw = (remote) => {
+      list.innerHTML = '';
+      for (const l of I18n.available()) list.append(item(l.code, l.name, false));
+      for (const c of remote.filter((x) => !I18n.packs[x])) list.append(item(c, c, true));
+    };
+    draw([]);
+    const note = h('p', { class: 'muted small' }, L('ui.languagesLoading'));
+    const close = openModal({ title: L('ui.language') + (I18n.lang === 'en' ? '' : ' · Language'), body: h('div', { class: 'fields' }, list, note), okText: L('win.close'), noCancel: true });
+    const closeTop = () => { const m = modalStack[modalStack.length - 1]; if (m) m(); };
+    I18n.remote().then((codes) => { draw(codes); note.textContent = L('ui.languagesHint'); }).catch(() => { note.textContent = L('ui.languagesOffline'); });
+    return close;
+  }
+  /* ---- installation as an app (PWA): from the online version, open in a Chrome or Edge tab ---- */
   const ONLINE_URL = 'https://nicvac.github.io/flowlab/dist/FlowLab.html';
   let installEvt = null;
   const isStandalone = () => { try { return matchMedia('(display-mode: standalone)').matches || navigator.standalone === true; } catch (e) { return false; } };
@@ -3361,10 +3386,10 @@
     if (location.protocol === 'file:' || window.self !== window.top) return;
     if (!document.querySelector('link[rel=manifest]')) document.head.append(h('link', { rel: 'manifest', href: 'manifest.webmanifest' }));
     if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
-    // Chrome propone l'installazione: si usa dal menu File
+    // Chrome offers the installation: it is used from the File menu
     addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installEvt = e; });
-    addEventListener('appinstalled', () => { installEvt = null; toast('FlowLab è installato: lo trovi tra le app del computer', 'ok'); });
-    // app installata: i file .fprg aperti dal sistema (doppio clic, «Apri con») arrivano qui
+    addEventListener('appinstalled', () => { installEvt = null; toast(L('ui.flowlabIsInstalledYouWillFind'), 'ok'); });
+    // installed app: the .fprg files opened by the system (double click, «Open with») arrive here
     if ('launchQueue' in window) {
       window.launchQueue.setConsumer(async (params) => {
         const fh = params.files && params.files[0];
@@ -3372,7 +3397,7 @@
         try {
           const file = await fh.getFile();
           if (loadText(await file.text(), file.name, true) !== false) st.fileHandle = fh;
-        } catch (e) { toast('Non riesco ad aprire il file: ' + e.message, 'error'); }
+        } catch (e) { toast(L('ui.cannotOpenTheFile') + e.message, 'error'); }
       });
     }
   }
@@ -3380,92 +3405,92 @@
     if (installEvt) {
       const e = installEvt; installEvt = null;
       e.prompt();
-      try { const r = await e.userChoice; if (r.outcome !== 'accepted') installEvt = e; } catch (err) { /* nulla */ }
+      try { const r = await e.userChoice; if (r.outcome !== 'accepted') installEvt = e; } catch (err) { /* nothing */ }
       return;
     }
     const ua = navigator.userAgent;
     let why;
-    if (location.protocol === 'file:' || window.self !== window.top) why = `Questa copia di FlowLab non si può installare. FlowLab si installa dalla versione online, ${ONLINE_URL}, aperta con Chrome o Edge: poi da qui, menu File › Installa FlowLab come app.`;
-    else if (/Firefox\//.test(ua)) why = 'Firefox non installa le app web. Apri questa pagina con Chrome o Edge e scegli di nuovo File › Installa FlowLab come app.';
-    else if (/Safari\//.test(ua) && !/Chrome|Chromium|Edg\//.test(ua)) why = /iPhone|iPad/.test(ua) ? 'In Safari: tocca Condividi e poi «Aggiungi alla schermata Home».' : 'In Safari: menu File › «Aggiungi al Dock».';
-    else why = 'FlowLab è forse già installato: lo trovi tra le app del computer (in Chrome anche alla pagina chrome://apps). Altrimenti usa l\'icona di installazione a destra nella barra degli indirizzi, oppure ricarica la pagina e riprova.';
-    infoBox('Installa FlowLab come app', why);
+    if (location.protocol === 'file:' || window.self !== window.top) why = L('ui.thisCopyOfFlowlabCannotBe', { ONLINEURL: ONLINE_URL });
+    else if (/Firefox\//.test(ua)) why = L('ui.firefoxDoesNotInstallWebApps');
+    else if (/Safari\//.test(ua) && !/Chrome|Chromium|Edg\//.test(ua)) why = /iPhone|iPad/.test(ua) ? L('ui.inSafariTapShareAndThen') : L('ui.inSafariFileMenuAddTo');
+    else why = L('ui.flowlabMayAlreadyBeInstalledYou');
+    infoBox(L('ui.installFlowlabAsAnApp2'), why);
   }
-  function exportSvgFile() { download(safeName(st.prog.attrs.name) + '_' + (isUml() ? 'classi' : safeName(fname(func()))) + '.svg', exportSvg(), 'image/svg+xml'); }
+  function exportSvgFile() { download(safeName(st.prog.attrs.name) + '_' + (isUml() ? L('ui.classes') : safeName(fname(func()))) + '.svg', exportSvg(), 'image/svg+xml'); }
   function downloadCode() { download(safeName(st.prog.attrs.name) + '.' + CodeGen.LANGS[st.lang].ext, CodeGen.generate(st.prog, st.lang), 'text/plain'); }
   function examplesMenu(btn) {
     const r = btn.getBoundingClientRect();
-    const box = h('div', { class: 'ctxmenu examples' }, h('div', { class: 'pophead' }, 'Programmi di esempio'));
+    const box = h('div', { class: 'ctxmenu examples' }, h('div', { class: 'pophead' }, L('ui.examplePrograms')));
     for (const ex of Examples.list) box.append(h('button', { type: 'button', onclick: () => { closePop(); loadExample(ex.id); } }, h('span', null, ex.title), h('span', { class: 'tag' }, ex.tags)));
     openPop(r.left, r.bottom + 4, box);
   }
   function helpDialog() {
     const fns = Object.entries(E.BUILTINS).map(([k, b]) => h('tr', null, h('td', { class: 'mono' }, b.doc.split(' — ')[0]), h('td', null, b.doc.split(' — ')[1] || '')));
     const ops = [
-      ['+  -  *  /', 'Aritmetica. La divisione / dà sempre un numero reale'], ['mod  %', 'Resto della divisione'], ['^', 'Potenza (2 ^ 3 = 8)'],
-      ['&', 'Unisce testi e numeri: "Totale: " & t'], ['=  ==   !=  <>', 'Uguale, diverso'], ['<  <=  >  >=', 'Confronti'],
-      ['and  &&   or  ||   not  !', 'Operatori logici'], ['true  false  Pi', 'Costanti'], ['v[i]', 'Elemento i di un array (da 0)'],
-      ['v ← quadrati(10)', 'Funzione che restituisce un array: v diventa l\'array restituito (forma «array» nel valore restituito)'],
-      ['Try  Catch  Finally', 'Eccezioni: se un blocco del Try (o una funzione che chiama) lancia un\'eccezione, si esegue il primo Catch del tipo giusto; il Finally si esegue sempre'],
-      ['Throw new Eccezione("…")', 'Lancia un\'eccezione. Tipi predefiniti: Eccezione, DivisionePerZero, IndiceNonValido, ConversioneNonValida, OggettoNullo, ErroreFile; nella vista Oggetti anche le classi che ereditano da Eccezione'],
-      ['e.messaggio', 'Nel Catch: il messaggio dell\'eccezione catturata e'],
-      ['massimo<T>(v: T[], n)', 'Tipo Generico T: un tipo qualsiasi, ricavato dagli argomenti della chiamata. Si sceglie «Nuovo Tipo Generico» nel menu del tipo di un parametro'],
+      ['+  -  *  /', L('ui.arithmeticDivisionAlwaysGivesAReal')], ['mod  %', L('ui.remainderOfTheDivision')], ['^', L('ui.power238')],
+      ['&', L('ui.joinsTextsAndNumbersTotalT')], ['=  ==   !=  <>', L('ui.equalNotEqual')], ['<  <=  >  >=', L('ui.comparisons')],
+      ['and  &&   or  ||   not  !', L('ui.logicalOperators')], ['true  false  Pi', L('ui.constants')], ['v[i]', L('ui.elementIOfAnArrayFrom')],
+      ['v ← quadrati(10)', L('ui.functionThatReturnsAnArrayV')],
+      ['Try  Catch  Finally', L('ui.exceptionsIfABlockOfThe')],
+      ['Throw new Exception("…")', L('ui.throwsAnExceptionPredefinedTypesEccezione')],
+      ['e.message', L('ui.inTheCatchTheMessageOf')],
+      ['massimo<T>(v: T[], n)', L('ui.genericTypeTAnyTypeInferred')],
     ].map(([a, b]) => h('tr', null, h('td', { class: 'mono' }, a), h('td', null, b)));
     const oo = [
-      ['p ← new Punto(1, 2)', 'Crea un oggetto: esegue il costruttore con quei parametri'], ['p.x   p.sposta(3, 4)', 'Attributo e metodo di un oggetto'],
-      ['this.x', 'Attributo dell\'oggetto su cui si sta lavorando (in un metodo basta x)'], ['Punto.contatore   Punto.crea()', 'Attributo o metodo statico: si usa con il nome della classe'],
-      ['super(nome)', 'Blocco Chiamata, primo blocco del costruttore: esegue il costruttore della classe madre'], ['super.descrivi()', 'Esegue la versione del metodo della classe madre'],
-      ['null   p = null', 'Nessun oggetto: si può assegnare e confrontare'], ['«abstract»', 'Classe astratta: non si creano oggetti. Un metodo astratto non ha corpo e lo definiscono le sottoclassi'], ['+  -  #', 'Accesso pubblico, privato, protetto (controllato durante l\'esecuzione)'],
-      ['ArrayList<T>', 'Classe con Tipo Generico T, scelto da chi la usa: nasce scegliendo «Nuovo Tipo Generico» per un attributo o un parametro di un metodo'], ['l ← new ArrayList<Intero>()', 'Oggetto di una classe con Tipo Generico; con new ArrayList<>() il tipo si ricava dalla variabile'],
-      ['a ← b', 'Con due array: a diventa lo stesso array di b (come in Java)'], ['Ctrl+I', 'Importa un modulo: classi già pronte (ArrayList, Stack, Queue, ordinamento…) da riusare in sola lettura'], ['p.   Punto.', 'Scrivendo il punto dopo un oggetto o una classe compare l\'elenco dei metodi e degli attributi utilizzabili'],
+      ['p ← new Punto(1, 2)', L('ui.createsAnObjectRunsTheConstructor')], ['p.x   p.sposta(3, 4)', L('ui.attributeAndMethodOfAnObject')],
+      ['this.x', L('ui.attributeOfTheObjectBeingWorked')], ['Punto.contatore   Punto.crea()', L('ui.staticAttributeOrMethodUsedWith')],
+      ['super(nome)', L('ui.callBlockFirstBlockOfThe')], ['super.descrivi()', L('ui.runsTheParentClassSVersion')],
+      ['null   p = null', L('ui.noObjectItCanBeAssigned')], [L('uml.abstract3'), L('ui.abstractClassNoObjectsAreCreated')], ['+  -  #', L('ui.publicPrivateProtectedAccessCheckedDuring')],
+      ['ArrayList<T>', L('ui.classWithGenericTypeTChosen')], ['l ← new ArrayList<Intero>()', L('ui.objectOfAClassWithA')],
+      ['a ← b', L('ui.withTwoArraysABecomesThe')], ['Ctrl+I', L('ui.importAModuleReadyMadeClasses')], ['p.   Punto.', L('ui.typingTheDotAfterAnObject')],
     ].map(([a, b]) => h('tr', null, h('td', { class: 'mono' }, a), h('td', null, b)));
     const keys = SHORTCUTS.flatMap(([g, rows]) => [h('tr', { class: 'kgroup' }, h('td', { colspan: 2 }, g)), ...rows.map(([a, b]) => h('tr', null, h('td', { class: 'mono' }, a), h('td', null, b)))]);
     const body = h('div', { class: 'help-body' },
-      h('p', null, 'Fai clic su una freccia del diagramma per aggiungere un blocco. Trascina un blocco su un\'altra freccia per spostarlo. I file .fprg si aprono e si salvano con lo stesso formato XML usato dagli editor di diagrammi di flusso più diffusi a scuola.'),
-      h('h3', null, 'Operatori'), h('table', { class: 'ref' }, h('tbody', null, ops)),
-      h('h3', null, 'Classi e oggetti (vista Oggetti)'), h('p', { class: 'muted small' }, 'Nel diagramma delle classi: doppio clic su un metodo per disegnarlo, doppio clic sul nome della classe o su un attributo per modificarlo, clic destro per aggiungere attributi, metodi e costruttori, trascina le classi per spostarle.'), h('table', { class: 'ref' }, h('tbody', null, oo)),
-      h('h3', null, 'Funzioni integrate'), h('table', { class: 'ref' }, h('tbody', null, fns)),
-      h('h3', null, 'Scorciatoie'), h('table', { class: 'ref' }, h('tbody', null, keys)));
-    openModal({ title: 'Guida rapida', wide: true, body, okText: 'Chiudi', noCancel: true });
+      h('p', null, L('ui.clickAnArrowOfTheDiagram')),
+      h('h3', null, L('ui.operators')), h('table', { class: 'ref' }, h('tbody', null, ops)),
+      h('h3', null, L('ui.classesAndObjectsObjectsView')), h('p', { class: 'muted small' }, L('ui.inTheClassDiagramDoubleClick')), h('table', { class: 'ref' }, h('tbody', null, oo)),
+      h('h3', null, L('ui.builtInFunctions')), h('table', { class: 'ref' }, h('tbody', null, fns)),
+      h('h3', null, L('ui.shortcuts')), h('table', { class: 'ref' }, h('tbody', null, keys)));
+    openModal({ title: L('ui.quickGuide'), wide: true, body, okText: L('win.close'), noCancel: true });
   }
 
-  /* ------------------------------ Tastiera ------------------------------- */
-  /* elenco delle scorciatoie (Guida rapida) */
+  /* ------------------------------ Keyboard ------------------------------- */
+  /* list of the shortcuts (Quick guide) */
   const SHORTCUTS = [
     ['File', [
-      ['Ctrl+Alt+N', 'Nuovo programma'], ['Ctrl+O', 'Apri file .fprg'], ['Ctrl+Maiusc+O', 'Apri da indirizzo web'], ['Ctrl+S', 'Salva come .fprg'],
-      ['Ctrl+Maiusc+L', 'Copia il link al programma'], ['Ctrl+I', 'Importa un modulo'],
-      ['Ctrl+Maiusc+G  ·  Ctrl+Maiusc+E', 'Esporta il diagramma in SVG, in PNG'], ['Ctrl+P', 'Esporta tutto il progetto in PDF'], ['Ctrl+Maiusc+S', 'Scarica il codice sorgente'],
-      ['Alt+Invio', 'Proprietà del programma'],
+      ['Ctrl+Alt+N', L('ui.newProgram')], ['Ctrl+O', L('ui.openFprgFile2')], ['Ctrl+Shift+O', L('ui.openFromWebAddress')], ['Ctrl+S', L('ui.saveAsFprg')],
+      ['Ctrl+Shift+L', L('ui.copyTheLinkToTheProgram')], ['Ctrl+I', L('ui.importAModule2')],
+      ['Ctrl+Shift+G  ·  Ctrl+Shift+E', L('ui.exportTheDiagramAsSvgAs')], ['Ctrl+P', L('ui.exportTheWholeProjectAsPdf')], ['Ctrl+Shift+S', L('ui.downloadTheSourceCode')],
+      ['Alt+Enter', L('ui.programProperties2')],
     ]],
-    ['Esecuzione', [
-      ['F5  ·  Ctrl+Invio', 'Esegui / continua'], ['F10', 'Passo successivo (entra nelle funzioni chiamate)'], ['F8', 'Passo sopra (esegue la chiamata senza entrarci)'], ['Maiusc+F8', 'Esci dalla funzione (esegue il resto e si ferma dopo la chiamata)'],
-      ['F6', 'Pausa'], ['Maiusc+F5', 'Ferma'],
+    [L('ui.execution'), [
+      ['F5  ·  Ctrl+Enter', L('ui.runContinue')], ['F10', L('ui.nextStepEntersTheCalledFunctions')], ['F8', L('ui.stepOverRunsTheCallWithout')], ['Shift+F8', L('ui.stepOutRunsTheRestAnd')],
+      ['F6', L('chart.pause')], ['Shift+F5', L('ui.stop')],
     ]],
-    ['Modifica', [
-      ['Ctrl+Z  ·  Ctrl+Y', 'Annulla, ripeti'], ['Ctrl+C  X  V  D', 'Copia, taglia, incolla (dopo il blocco selezionato), duplica'],
-      ['Invio  ·  doppio clic', 'Modifica il blocco selezionato'], ['Canc', 'Elimina il blocco selezionato'],
-      ['↑  ↓', 'Seleziona il blocco precedente, successivo'], ['Alt+↑  Alt+↓', 'Sposta il blocco selezionato su, giù'],
+    [L('ui.edit4'), [
+      ['Ctrl+Z  ·  Ctrl+Y', L('ui.undoRedo')], ['Ctrl+C  X  V  D', L('ui.copyCutPasteAfterTheSelected')],
+      [L('ui.enterDoubleClick'), L('ui.editTheSelectedBlock')], [L('ui.del'), L('ui.deleteTheSelectedBlock')],
+      ['↑  ↓', L('ui.selectThePreviousNextBlock')], ['Alt+↑  Alt+↓', L('ui.moveTheSelectedBlockUpDown')],
     ]],
-    ['Aggiungi un blocco (dopo quello selezionato o in fondo; anche nel menu «Aggiungi un blocco»)', [
-      ['D  K  A', 'Dichiara, Costante, Assegna'], ['I  O  C', 'Input, Output, Chiama'], ['S  M  P  F', 'Se, Mentre, Per, Fai-mentre'], ['/  B', 'Commento, Interruzione'],
-      ['Maiusc+A  L  S  C', 'Apri file, Leggi da file, Scrivi su file, Chiudi file'],
-      ['T  ·  Maiusc+T', 'Try (con Catch e Finally), Throw'],
+    [L('ui.addABlockAfterTheSelected'), [
+      [keysOf('declare', 'const', 'assign'), L('ui.declareConstantAssign')], [keysOf('input', 'output', 'call'), L('ui.inputOutputCall')], [keysOf('if', 'while', 'for', 'do'), L('ui.ifWhileForDoWhile')], [keysOf('comment', 'breakpoint'), L('ui.commentBreakpoint')],
+      [keysOf('open', 'read', 'write', 'close'), L('ui.openFileReadFromFileWrite')],
+      [keysOf('try', 'throw'), L('ui.tryWithCatchAndFinallyThrow')],
     ]],
-    ['Funzioni, metodi e classi', [
-      ['N', 'Nuova funzione o nuovo metodo (nel diagramma delle classi: nuova classe)'], ['Maiusc+E', 'Nel diagramma delle classi: nuova eccezione'], ['F2', 'Modifica la funzione o il metodo (nel diagramma delle classi: l\'elemento selezionato)'],
-      ['Maiusc+Canc', 'Elimina la funzione o il metodo'], ['Pag↑  Pag↓', 'Diagramma precedente, successivo'], ['U', 'Diagramma delle classi'],
-      ['A  M  C', 'Diagramma delle classi: nuovo attributo, metodo, costruttore della classe selezionata'],
-      ['Invio  ·  Canc', 'Diagramma delle classi: apri o modifica, elimina l\'elemento selezionato'],
-      ['Maiusc+M', 'Diagramma delle classi: condensa o espandi i moduli importati'],
+    [L('ui.functionsMethodsAndClasses'), [
+      ['N', L('ui.newFunctionOrNewMethodIn')], ['Shift+E', L('ui.inTheClassDiagramNewException')], ['F2', L('ui.editTheFunctionOrMethodIn')],
+      ['Shift+Canc', L('ui.deleteTheFunctionOrMethod')], ['PgUp  PgDn', L('ui.previousNextDiagram')], ['U', L('ui.classDiagram')],
+      ['A  M  C', L('ui.classDiagramNewAttributeMethodConstructor')],
+      [L('ui.enterDel'), L('ui.classDiagramOpenOrEditDelete')],
+      ['Shift+M', L('ui.classDiagramCollapseOrExpandThe')],
     ]],
-    ['Vista', [
-      ['Ctrl+Alt+F  ·  Ctrl+Alt+O', 'Vista Funzioni, vista Oggetti'], ['Alt+1  2  3  4', 'Schede Console, Variabili, Codice, File'], ['Ctrl+B', 'Mostra o nascondi il pannello'],
-      ['Ctrl++  Ctrl+-  Ctrl+0', 'Zoom avanti, indietro, 100%'], ['Maiusc+1', 'Adatta alla finestra'], ['Maiusc+K', 'Vista compatta del diagramma di flusso (i blocchi in sequenza si toccano) / vista estesa'], ['Ctrl+Alt+V', 'Nuova vista: un\'altra finestra sul programma (con «Continua» mostra il seguito del foglio principale)'], ['Ctrl+rotella', 'Zoom'],
-      ['F1', 'Guida rapida'], ['Esc', 'Chiudi finestre e menu'],
+    [L('ui.view3'), [
+      ['Ctrl+Alt+F  ·  Ctrl+Alt+O', L('ui.functionsViewObjectsView')], ['Alt+1  2  3  4', L('ui.consoleVariablesCodeFilesTabs')], ['Ctrl+B', L('ui.showOrHideThePanel')],
+      ['Ctrl++  Ctrl+-  Ctrl+0', L('ui.zoomInOut100')], ['Shift+1', L('ui.fitToWindow')], ['Shift+K', L('ui.compactViewOfTheFlowchartBlocks')], ['Ctrl+Alt+V', L('ui.newViewAnotherWindowOnThe2')], [L('ui.ctrlWheel'), 'Zoom'],
+      ['F1', L('ui.quickGuide')], ['Esc', L('ui.closeWindowsAndMenus')],
     ]],
   ];
-  /* diagramma precedente o successivo nel selettore */
+  /* previous or next diagram in the selector */
   function navDiagram(dir) {
     const sel = V.main ? $('#funcSel') : V.sel, n = sel.options.length;
     if (sel.disabled) return;
@@ -3486,7 +3511,7 @@
         if (drag && drag.on) { drag.ghost.remove(); drag = null; document.body.classList.remove('dragging'); }
         return;
       }
-      // menu «Aggiungi un blocco» aperto: il tasto sceglie il blocco
+      // «Add a block» menu open: the key chooses the block
       const insBox = !$('#pop').hidden && $('#pop .insmenu');
       if (insBox) {
         const kind = KEY_KIND[keyLabel(e)];
@@ -3495,8 +3520,8 @@
         return;
       }
       if (modalStack.length || !$('#pop').hidden) return;
-      const busy = () => { if (isRunning()) { toast('Ferma il programma per modificare il diagramma', 'warn'); return true; } return false; };
-      // esecuzione
+      const busy = () => { if (isRunning()) { toast(L('ui.stopTheProgramToEditThe'), 'warn'); return true; } return false; };
+      // execution
       if (e.key === 'F1') return go(helpDialog);
       if (e.key === 'F5' && shift) return go(() => { if (!$('#stopBtn').disabled) stopRun(); });
       if (e.key === 'F5' || (ctrl && e.key === 'Enter')) return go(onRunBtn);
@@ -3516,7 +3541,7 @@
       }
       if (alt && !ctrl && e.key === 'Enter') return go(() => { if (!busy()) editProgram(); });
       if (typing) return;
-      // vista
+      // view
       if (ctrl && alt) {
         if (e.code === 'KeyN') return go(newProgram);
         if (e.code === 'KeyF') return go(() => setView('functions'));
@@ -3529,35 +3554,35 @@
       if (ctrl && !alt && e.key === '-') return go(() => setZoom(st.zoom / 1.15));
       if (ctrl && !alt && e.key === '0') return go(() => setZoom(1));
       if (shift && !ctrl && !alt && e.code === 'Digit1') return go(fitZoom);
-      // modifica
+      // edit
       if (ctrl && k === 'z' && !shift) return go(undo);
       if (ctrl && (k === 'y' || (k === 'z' && shift))) return go(redo);
       if (ctrl && !shift && k === 'c') { if (st.sel) go(() => copySel(false)); return; }
       if (ctrl && !shift && k === 'x') { if (st.sel) go(() => copySel(true)); return; }
       if (ctrl && !shift && k === 'v') { if (st.clip) go(() => paste()); return; }
       if (ctrl && !shift && k === 'd') { if (st.sel) go(duplicate); return; }
-      // funzioni, metodi e classi
+      // functions, methods and classes
       if (e.key === 'PageDown' || e.key === 'PageUp') { if (!ctrl && !alt) go(() => navDiagram(e.key === 'PageDown' ? 1 : -1)); return; }
       if (e.key === 'F2') return go(() => $('#funcEdit').click());
       if (shift && (e.key === 'Delete' || e.key === 'Backspace') && !isUml()) return go(() => $('#funcDel').click());
       const lab = keyLabel(e);
       if (lab === 'N') return go(() => $('#funcAdd').click());
-      if (lab === 'Maiusc+E' && isUml()) return go(() => { if (isRunning()) toast('Ferma il programma per modificare il diagramma', 'warn'); else classDialog(null, null, true); });
+      if (lab === 'Shift+E' && isUml()) return go(() => { if (isRunning()) toast(L('ui.stopTheProgramToEditThe'), 'warn'); else classDialog(null, null, true); });
       if (lab === 'U' && isOO() && !isUml()) return go(showUml);
-      if (lab === 'Maiusc+K' && !isUml()) return go(toggleCompact);
+      if (lab === 'Shift+K' && !isUml()) return go(toggleCompact);
       if (isUml()) {
         if ((e.key === 'Delete' || e.key === 'Backspace') && st.usel && !isRunning()) { e.preventDefault(); deleteUmlSel(); }
         else if (e.key === 'Enter' && st.usel) { e.preventDefault(); if (st.usel.kind === 'method') openMethod(st.usel.fid); else if (!isRunning()) editUmlSel(); }
-        else if (lab === 'Maiusc+M') { e.preventDefault(); toggleAllModules(); }
+        else if (lab === 'Shift+M') { e.preventDefault(); toggleAllModules(); }
         else if (lab === 'A' || lab === 'M' || lab === 'C') {
           e.preventDefault();
           if (busy()) return;
-          const c = uselClass(); if (!c) { toast('Seleziona prima una classe', 'warn'); return; }
+          const c = uselClass(); if (!c) { toast(L('ui.selectAClassFirst'), 'warn'); return; }
           if (lab === 'A') attrDialog(c, null); else editFunction(null, { cls: c, ctor: lab === 'C' });
         }
         return;
       }
-      // diagramma di flusso
+      // flowchart
       if ((e.key === 'Delete' || e.key === 'Backspace') && st.sel) return go(deleteSel);
       if (e.key === 'Enter' && st.sel) return go(() => editStmt(st.sel));
       if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && st.sel) {
@@ -3572,7 +3597,7 @@
     });
   }
 
-  /* ----------------------------- Avvio ----------------------------------- */
+  /* ----------------------------- Startup ----------------------------------- */
   function bindUi() {
     $('#fileBtn').addEventListener('click', (e) => fileMenu(e.currentTarget));
     $('#exBtn').addEventListener('click', (e) => examplesMenu(e.currentTarget));
@@ -3583,10 +3608,10 @@
     $('#undoBtn').addEventListener('click', undo);
     $('#redoBtn').addEventListener('click', redo);
     $('#helpBtn').addEventListener('click', helpDialog);
-    $('#progName').addEventListener('click', () => { if (isRunning()) { toast('Ferma il programma per modificare il diagramma', 'warn'); return; } editProgram(); });
+    $('#progName').addEventListener('click', () => { if (isRunning()) { toast(L('ui.stopTheProgramToEditThe'), 'warn'); return; } editProgram(); });
     $('#fileInput').addEventListener('change', (e) => { readFileObj(e.target.files[0]); e.target.value = ''; });
     $('#funcSel').addEventListener('change', (e) => { focusView(MAIN); if (e.target.value === 'uml') showUml(); else showFunc(+e.target.value); });
-    const busy = () => { if (isRunning()) { toast('Ferma il programma per modificare il diagramma', 'warn'); return true; } return false; };
+    const busy = () => { if (isRunning()) { toast(L('ui.stopTheProgramToEditThe'), 'warn'); return true; } return false; };
     $('#funcAdd').addEventListener('click', () => { if (busy()) return; if (!isOO()) editFunction(null); else if (st.uml) classDialog(null); else editFunction(null, { cls: M.classOf(st.prog, func()), ctor: false }); });
     $('#funcEdit').addEventListener('click', () => { if (busy()) return; if (isUml()) editUmlSel(); else if (st.fi === 0) editProgram(); else editFunction(st.fi); });
     $('#funcDel').addEventListener('click', () => { if (busy()) return; if (isUml()) deleteUmlSel(); else deleteFunction(); });
@@ -3612,7 +3637,7 @@
       const tabs = $$('#tabs [role=tab]'); const i = tabs.findIndex((t) => t.dataset.tab === st.tab);
       const n = tabs[(i + (e.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length]; setTab(n.dataset.tab); n.focus();
     });
-    // niente invio del modulo: nelle pagine in sandbox l'evento submit non arriva
+    // no form submit: in sandboxed pages the submit event does not arrive
     $('#conForm').addEventListener('submit', (e) => e.preventDefault());
     $('#conSend').addEventListener('click', () => submitInput($('#conInput').value));
     $('#conInput').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); submitInput($('#conInput').value); } });
@@ -3621,8 +3646,8 @@
     for (const [k, L] of Object.entries(CodeGen.LANGS)) ls.append(h('option', { value: k, selected: k === st.lang }, L.label));
     ls.addEventListener('change', () => { st.lang = ls.value; store.set('lang', st.lang); renderCode(); });
     $('#codeCopy').addEventListener('click', async () => {
-      try { await navigator.clipboard.writeText($('#codeOut').dataset.raw || ''); toast('Codice copiato', 'ok'); }
-      catch (e) { const r = document.createRange(); r.selectNodeContents($('#codeOut')); const s = getSelection(); s.removeAllRanges(); s.addRange(r); toast('Premi Ctrl+C per copiare il testo selezionato'); }
+      try { await navigator.clipboard.writeText($('#codeOut').dataset.raw || ''); toast(L('ui.codeCopied'), 'ok'); }
+      catch (e) { const r = document.createRange(); r.selectNodeContents($('#codeOut')); const s = getSelection(); s.removeAllRanges(); s.addRange(r); toast(L('ui.pressCtrlCToCopyThe')); }
     });
     $('#fileNew').addEventListener('click', () => editFile(null));
     $('#fileUpload').addEventListener('click', () => $('#txtInput').click());
@@ -3630,11 +3655,11 @@
     document.addEventListener('mousedown', (e) => { const p = $('#pop'); if (!p.hidden && !p.contains(e.target)) closePop(); });
     window.addEventListener('resize', closePop);
     $('#canvasWrap').addEventListener('scroll', () => { closePop(); scheduleSync(); });
-    // trascina e rilascia file
+    // drag and drop files
     document.addEventListener('dragover', (e) => { if (e.dataTransfer && [...e.dataTransfer.types].includes('Files')) { e.preventDefault(); document.body.classList.add('filedrag'); } });
     document.addEventListener('dragleave', (e) => { if (e.target === document.documentElement || !e.relatedTarget) document.body.classList.remove('filedrag'); });
     document.addEventListener('drop', (e) => { if (!e.dataTransfer || !e.dataTransfer.files.length) return; e.preventDefault(); document.body.classList.remove('filedrag'); readFileObj(e.dataTransfer.files[0]); });
-    // divisore pannelli
+    // panel divider
     const grip = $('#grip');
     const sideW = store.get('sideW', null); if (sideW) document.documentElement.style.setProperty('--side-w', sideW + 'px');
     $('#sideToggle').addEventListener('pointerdown', (e) => e.stopPropagation());
@@ -3652,7 +3677,7 @@
       const cur = $('#side').getBoundingClientRect().width; const w = Math.max(280, cur + (e.key === 'ArrowLeft' ? 30 : -30));
       document.documentElement.style.setProperty('--side-w', w + 'px'); store.set('sideW', w);
     });
-    // tema
+    // theme
     const theme = store.get('theme', null);
     if (theme) document.documentElement.dataset.theme = theme;
     $('#themeBtn').addEventListener('click', () => {
@@ -3663,8 +3688,8 @@
     window.addEventListener('beforeunload', (e) => { if (st.dirty && window.self === window.top) { e.preventDefault(); e.returnValue = ''; } });
   }
 
-  /* all'apertura: vista Funzioni sul Main (Inizio); la vista Oggetti solo se il programma
-     ha più classi o membri che le funzioni non possono mostrare, e comunque sul Main */
+  /* at opening: Functions view on the Main; the Objects view only if the program
+     has several classes or members that the functions cannot show, and anyway on the Main */
   function startView() {
     st.view = M.hasClasses(st.prog) && !M.isTrivialOO(st.prog) ? 'objects' : 'functions';
     store.set('view', st.view);
@@ -3672,6 +3697,7 @@
   }
   function init() {
     ArrayView.configure({ host: () => $('#floatLayer'), nextZ: () => ++zTop });
+    I18n.translateDom(document.body); // fixed texts of the page in the chosen language
     MAIN.chart = $('#chart'); MAIN.wrap = $('#canvasWrap');
     bindUi(); bindChart(MAIN); bindDrag(); bindKeys(); setupPwa(); bindViews();
     const saved = store.get('autosave', null);
@@ -3679,23 +3705,23 @@
     if (saved && saved.xml) {
       try { st.prog = M.parseFprg(saved.xml); st.fi = Math.min(saved.fi || 0, st.prog.functions.length - 1); st.fileName = saved.fileName || null; ok = true; } catch (e) { ok = false; }
     }
-    if (!ok) st.prog = Examples.get('media').make();
+    if (!ok) st.prog = Examples.get('grade_average').make();
     startView();
-    render(); initLayout(); renderVars(); renderFiles(); setStatus('idle', 'Pronto');
-    // le viste ausiliarie del programma aperto
+    render(); initLayout(); renderVars(); renderFiles(); setStatus('idle', L('ui.ready'));
+    // the auxiliary views of the open program
     if (ok && Array.isArray(saved.views)) { for (const o of saved.views) openView(Object.assign({}, o, { restore: true })); focusView(MAIN); }
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { render(); fitIfLarge(); });
     setTimeout(fitIfLarge, 0);
-    // ?url=…: apre il programma indicato; poi il parametro si toglie dalla barra degli indirizzi,
-    // così ricaricando la pagina si ritrova il lavoro (salvato in automatico) e non il file originale
+    // ?url=…: opens the given program; then the parameter is removed from the address bar,
+    // so reloading the page the work is found again (saved automatically) and not the original file
     let q = null;
     try { const sp = new URLSearchParams(location.search); q = sp.get('url') || sp.get('fprg'); } catch (e) { q = null; }
     if (q) openUrl(q, ok).then((done) => {
       if (!done) return;
       startView(); render();
-      try { const u = new URL(location.href); u.searchParams.delete('url'); u.searchParams.delete('fprg'); history.replaceState(null, '', u.href); } catch (e) { /* ignora */ }
+      try { const u = new URL(location.href); u.searchParams.delete('url'); u.searchParams.delete('fprg'); history.replaceState(null, '', u.href); } catch (e) { /* ignore */ }
     });
-    // API minima per i test automatici
+    // minimal API for the automatic tests
     window.FlowLab = { get state() { return st; }, run, loadText, serialize: () => M.serializeFprg(st.prog), render, setTab, submitInput, setView, showUml, showFunc, openView, get views() { return views; }, focusView, openUrl, rawUrl, loadExample: (id) => { st.dirty = false; loadExample(id); } };
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();

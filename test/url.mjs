@@ -4,16 +4,16 @@ import fs from 'fs';
 import { spawn } from 'child_process';
 const fprg = fs.readFileSync('test/out/web.fprg', 'utf8');
 const browser = await chromium.launch();
-const ctx = await browser.newContext({ viewport: { width: 1366, height: 820 } });
+const ctx = await browser.newContext({ locale: 'it-IT', viewport: { width: 1366, height: 820 } });
 // un finto GitHub: il link «blob» deve diventare raw.githubusercontent.com
 let asked = [];
 await ctx.route('https://raw.githubusercontent.com/**', (r) => { asked.push(r.request().url()); r.fulfill({ status: 200, headers: { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'text/plain' }, body: fprg }); });
 await ctx.route('https://esempio.invalid/**', (r) => r.abort());
-const page = await ctx.newPage();
+const page = await ctx.newPage({ locale: 'it-IT' });
 const errs = []; page.on('pageerror', (e) => errs.push(e.message));
 const base = 'file://' + process.cwd() + '/dist/FlowLab.html';
 await page.goto(base); await page.waitForTimeout(300);
-await page.evaluate(() => { localStorage.setItem('flowlab:speed', '0'); FlowLab.loadExample('tabellina'); }); await page.waitForTimeout(300); // lavoro precedente (salvato in automatico)
+await page.evaluate(() => { localStorage.setItem('flowlab:speed', '0'); FlowLab.loadExample('times_table'); }); await page.waitForTimeout(300); // lavoro precedente (salvato in automatico)
 await page.goto(base + '?url=' + encodeURIComponent('https://github.com/prof/esercizi/blob/main/cap1/web.fprg')); await page.waitForTimeout(800);
 console.log('richiesto:', asked.join(', '));
 console.log('aperto:', await page.innerText('#progName'), '· indirizzo ora:', page.url().includes('url=') ? 'con parametro' : 'senza parametro', '· avviso:', await page.innerText('#toast'));

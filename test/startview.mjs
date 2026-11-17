@@ -1,19 +1,19 @@
 // All'apertura: vista Funzioni sul Main (vista Oggetti solo se serve, comunque sul Main)
 import { chromium } from '/opt/npm-tools/node_modules/playwright/index.mjs';
 const browser = await chromium.launch();
-const page = await browser.newPage({ viewport: { width: 1366, height: 820 } });
+const page = await browser.newPage({ locale: 'it-IT', viewport: { width: 1366, height: 820 } });
 const errs = []; page.on('pageerror', (e) => errs.push(e.message));
 const base = 'file://' + process.cwd() + '/dist/FlowLab.html';
 const where = () => page.evaluate(() => `${FlowLab.state.view} · ${FlowLab.state.uml ? 'diagramma delle classi' : 'diagramma di ' + (FlowLab.state.fi === 0 ? 'Main' : FlowLab.state.prog.functions[FlowLab.state.fi].name)}`);
 await page.goto(base); await page.waitForTimeout(300);
 // programma a funzioni lasciato su un'altra funzione in vista Oggetti
-await page.evaluate(() => { FlowLab.loadExample('fattoriale'); FlowLab.setView('objects'); FlowLab.showFunc(1); });
+await page.evaluate(() => { FlowLab.loadExample('factorial'); FlowLab.setView('objects'); FlowLab.showFunc(1); });
 await page.waitForTimeout(300);
 console.log('prima di ricaricare:', await where());
 await page.reload(); await page.waitForTimeout(400);
 console.log('dopo:', await where());
 // programma con più classi
-await page.evaluate(() => FlowLab.loadExample('forme')); await page.waitForTimeout(300);
+await page.evaluate(() => FlowLab.loadExample('shapes')); await page.waitForTimeout(300);
 console.log('prima di ricaricare:', await where());
 await page.reload(); await page.waitForTimeout(400);
 console.log('dopo:', await where());

@@ -1,0 +1,96 @@
+<?xml version="1.0"?>
+<flowgorithm fileversion="4.2">
+    <attributes>
+        <attribute name="name" value="Account withdrawals"/>
+        <attribute name="authors" value="FlowLab examples"/>
+        <attribute name="about" value="InsufficientFunds inherits from Exception and has its own attribute (how much is missing). The withdraw method throws the exceptions; Main catches them by type: first the most specific one, then Exception, which also catches the subclasses."/>
+        <attribute name="saved" value="2026-11-17 08:00:00 PM"/>
+        <attribute name="created" value="Zmxvd2xhYjtleGFtcGxlczsyMDI2LTExLTE3IDA4OjAwOjAwIFBNOzE="/>
+        <attribute name="edited" value="Zmxvd2xhYjtleGFtcGxlczsyMDI2LTExLTE3IDA4OjAwOjAwIFBNOzE="/>
+    </attributes>
+    <flowlab-classes>
+        <class name="AccountWithdrawals" parent="" x="40" y="60"/>
+        <class name="Account" parent="" x="360" y="40">
+            <attribute name="balance" type="Integer" array="False" size="" visibility="public" static="False" init=""/>
+        </class>
+        <class name="InsufficientFunds" parent="Exception" x="360" y="260">
+            <attribute name="missing" type="Integer" array="False" size="" visibility="public" static="False" init=""/>
+        </class>
+    </flowlab-classes>
+    <function name="Main" type="None" variable="" flowlab-class="AccountWithdrawals" flowlab-visibility="public" flowlab-static="True">
+        <parameters/>
+        <body>
+            <declare name="c" type="Account" array="False" size=""/>
+            <assign variable="c" expression="new Account(100)"/>
+            <try>
+                <body>
+                    <call expression="c.withdraw(30)"/>
+                    <call expression="c.withdraw(500)"/>
+                    <output expression="&quot;no&quot;" newline="True"/>
+                </body>
+                <catch type="InsufficientFunds" variable="e">
+                    <output expression="&quot;insufficient funds: missing &quot; &amp; e.missing &amp; &quot; (&quot; &amp; e.message &amp; &quot;)&quot;" newline="True"/>
+                </catch>
+                <finally>
+                    <output expression="&quot;balance: &quot; &amp; c.balance" newline="True"/>
+                </finally>
+            </try>
+            <try>
+                <body>
+                    <call expression="c.withdraw(-1)"/>
+                </body>
+                <catch type="InsufficientFunds" variable="e">
+                    <output expression="&quot;no&quot;" newline="True"/>
+                </catch>
+                <catch type="Exception" variable="e">
+                    <output expression="&quot;generic: &quot; &amp; e.message" newline="True"/>
+                </catch>
+            </try>
+            <try>
+                <body>
+                    <call expression="c.withdraw(1000)"/>
+                </body>
+                <catch type="Exception" variable="e">
+                    <output expression="&quot;also as Exception: &quot; &amp; e.message" newline="True"/>
+                </catch>
+            </try>
+        </body>
+    </function>
+    <function name="Account" type="None" variable="" flowlab-class="Account" flowlab-visibility="public" flowlab-static="False" flowlab-ctor="True">
+        <parameters>
+            <parameter name="s" type="Integer" array="False"/>
+        </parameters>
+        <body>
+            <assign variable="balance" expression="s"/>
+        </body>
+    </function>
+    <function name="withdraw" type="None" variable="" flowlab-class="Account" flowlab-visibility="public" flowlab-static="False">
+        <parameters>
+            <parameter name="x" type="Integer" array="False"/>
+        </parameters>
+        <body>
+            <if expression="x &lt; 0">
+                <then>
+                    <throw expression="new Exception(&quot;negative amount&quot;)"/>
+                </then>
+                <else/>
+            </if>
+            <if expression="x &gt; balance">
+                <then>
+                    <throw expression="new InsufficientFunds(x - balance)"/>
+                </then>
+                <else/>
+            </if>
+            <assign variable="balance" expression="balance - x"/>
+        </body>
+    </function>
+    <function name="InsufficientFunds" type="None" variable="" flowlab-class="InsufficientFunds" flowlab-visibility="public" flowlab-static="False" flowlab-ctor="True">
+        <parameters>
+            <parameter name="m" type="Integer" array="False"/>
+        </parameters>
+        <body>
+            <call expression="super(&quot;withdrawal too large&quot;)"/>
+            <assign variable="missing" expression="m"/>
+        </body>
+    </function>
+</flowgorithm>

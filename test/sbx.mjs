@@ -1,9 +1,9 @@
 import { chromium } from '/opt/npm-tools/node_modules/playwright/index.mjs';
 const browser = await chromium.launch();
-const page = await browser.newPage({ viewport: { width: 1320, height: 820 } });
+const page = await browser.newPage({ locale: 'it-IT', viewport: { width: 1320, height: 820 } });
 await page.goto('file://' + process.cwd() + '/test/sbx/host.html'); await page.waitForTimeout(800);
 const f = page.frame({ url: /inner/ });
-await f.evaluate(() => { localStorage.clear(); FlowLab.loadExample('parita'); const s=document.querySelector('#speed'); s.value=0; s.dispatchEvent(new Event('input')); });
+await f.evaluate(() => { localStorage.clear(); FlowLab.loadExample('even_odd'); const s=document.querySelector('#speed'); s.value=0; s.dispatchEvent(new Event('input')); });
 await f.click('#runBtn'); await f.waitForSelector('#conInput:not([disabled])');
 await f.fill('#conInput', '8'); await f.click('#conSend'); await page.waitForTimeout(300);
 console.log('click Invia →', await f.evaluate(() => FlowLab.run.state), '|', (await f.innerText('#conOut')).replace(/\n/g,' / '));

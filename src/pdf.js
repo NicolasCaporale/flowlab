@@ -1,19 +1,19 @@
 /* ==========================================================================
-   FlowLab — scrittura di file PDF (senza librerie esterne)
-   Pagine A4 (o di dimensioni a piacere, modulo continuo) con testo nei font standard (Helvetica, Courier: codifica
-   WinAnsi, che comprende le lettere accentate italiane) e immagini JPEG.
-   Le coordinate passate ai metodi partono dall'angolo in alto a sinistra.
+   FlowLab — writing PDF files (without external libraries)
+   A4 pages (or of any size, continuous form) with text in the standard fonts (Helvetica, Courier: WinAnsi
+   encoding, which includes the accented letters of Western European languages) and JPEG images.
+   The coordinates passed to the methods start from the top left corner.
    ========================================================================== */
 'use strict';
 
 const PdfLib = (() => {
   const PW = 595.28, PH = 841.89; // A4 in punti
-  const MAXH = 14400; // altezza massima di una pagina PDF (200 pollici)
+  const MAXH = 14400; // maximum height of a PDF page (200 inches)
   const FONTS = { F1: 'Helvetica', F2: 'Helvetica-Bold', F3: 'Courier', F4: 'Helvetica-Oblique', F5: 'Courier-Bold', F6: 'Courier-Oblique' };
-  // caratteri fuori da WinAnsi: sostituzioni leggibili
+  // characters outside WinAnsi: readable replacements
   const SUBST = { '←': '<-', '→': '->', '≠': '!=', '≤': '<=', '≥': '>=', 'π': 'pi', '▦': '', '⋯': '...', '✖': 'x', '■': '', '▶': '>', '⏸': '||', '↺': '', '⚠': '!', '\t': '    ' };
   const CP1252 = { '€': 0x80, '‚': 0x82, 'ƒ': 0x83, '„': 0x84, '…': 0x85, '†': 0x86, '‡': 0x87, 'ˆ': 0x88, '‰': 0x89, 'Š': 0x8a, '‹': 0x8b, 'Œ': 0x8c, 'Ž': 0x8e, '‘': 0x91, '’': 0x92, '“': 0x93, '”': 0x94, '•': 0x95, '–': 0x96, '—': 0x97, '˜': 0x98, '™': 0x99, 'š': 0x9a, '›': 0x9b, 'œ': 0x9c, 'ž': 0x9e, 'Ÿ': 0x9f };
-  /* testo → byte WinAnsi, già scritto come stringa PDF tra parentesi */
+  /* text → WinAnsi bytes, already written as a PDF string in parentheses */
   function pdfStr(text) {
     let out = '(';
     for (const ch of String(text)) {
@@ -36,7 +36,7 @@ const PdfLib = (() => {
     constructor() { this.pages = []; this.images = []; }
     get W() { return PW; }
     get H() { return PH; }
-    /* nuova pagina A4; con h (e w), alta h punti e larga w punti, o come un A4 (modulo continuo) */
+    /* new A4 page; with h (and w), h points tall and w points wide, or as wide as an A4 (continuous form) */
     page(h, w) {
       const p = { ops: [], imgs: new Set(), h: Math.min(MAXH, Math.max(72, h || PH)), w: Math.min(MAXH, Math.max(PW, w || PW)) };
       this.pages.push(p); return p;
@@ -57,7 +57,7 @@ const PdfLib = (() => {
       if (stroke) s += `${rgb(stroke)} RG ${num(o.width || 0.8)} w `;
       p.ops.push(`${s}${num(x)} ${num(p.h - y - h)} ${num(w)} ${num(h)} re ${fill && stroke ? 'B' : fill ? 'f' : 'S'}`);
     }
-    /* immagine JPEG (data URL) di pw × ph pixel */
+    /* JPEG image (data URL) of pw × ph pixels */
     addJpeg(dataUrl, pw, ph) {
       const bin = atob(dataUrl.split(',')[1]);
       const img = { name: 'Im' + (this.images.length + 1), w: pw, h: ph, bin };
@@ -68,7 +68,7 @@ const PdfLib = (() => {
       p.imgs.add(img);
       p.ops.push(`q ${num(w)} 0 0 ${num(h)} ${num(x)} ${num(p.h - y - h)} cm /${img.name} Do Q`);
     }
-    /* file PDF come Blob */
+    /* PDF file as a Blob */
     build(info) {
       const chunks = []; let off = 0; const offsets = [];
       const put = (s) => { chunks.push(s); off += s.length; };
@@ -108,7 +108,7 @@ const PdfLib = (() => {
       return new Blob([bytes], { type: 'application/pdf' });
     }
   }
-  /* larghezza approssimata del testo in punti (Helvetica ≈ Arial; Courier: 0,6 em) */
+  /* approximate width of the text in points (Helvetica ≈ Arial; Courier: 0.6 em) */
   const _cv = (() => { try { return document.createElement('canvas').getContext('2d'); } catch (e) { return null; } })();
   function textWidth(str, font, size) {
     if (font === 'F3' || font === 'F5' || font === 'F6') return [...String(str)].length * 0.6 * size;
@@ -116,7 +116,7 @@ const PdfLib = (() => {
     _cv.font = `${font === 'F2' ? 'bold ' : font === 'F4' ? 'italic ' : ''}${size}px Helvetica, Arial, sans-serif`;
     return _cv.measureText(String(str)).width;
   }
-  /* spezza il testo in righe larghe al massimo maxW punti */
+  /* splits the text into lines at most maxW points wide */
   function wrap(str, font, size, maxW) {
     const out = [];
     for (const para of String(str).split('\n')) {

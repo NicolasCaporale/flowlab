@@ -1,0 +1,82 @@
+[
+ {
+  "id": "grade_average",
+  "title": "Grade average",
+  "tags": "For · If"
+ },
+ {
+  "id": "even_odd",
+  "title": "Even or odd",
+  "tags": "If · mod"
+ },
+ {
+  "id": "times_table",
+  "title": "Times table",
+  "tags": "For"
+ },
+ {
+  "id": "gcd",
+  "title": "Euclid's GCD",
+  "tags": "While"
+ },
+ {
+  "id": "guess_number",
+  "title": "Guess the number",
+  "tags": "Do-while · Random"
+ },
+ {
+  "id": "factorial",
+  "title": "Recursive factorial",
+  "tags": "Function · recursion"
+ },
+ {
+  "id": "bubble_sort",
+  "title": "Bubble sort",
+  "tags": "Array · procedure"
+ },
+ {
+  "id": "min_max",
+  "title": "Minimum and maximum (several return values)",
+  "tags": "Function · several values"
+ },
+ {
+  "id": "matrices",
+  "title": "Matrices and cubes (multi-dimensional arrays)",
+  "tags": "Array 2D · 3D · 4D"
+ },
+ {
+  "id": "bank_account",
+  "title": "Bank account (classes and encapsulation)",
+  "tags": "Objects · private · constructors"
+ },
+ {
+  "id": "shapes",
+  "title": "Geometric shapes (inheritance and polymorphism)",
+  "tags": "Objects · abstract · super"
+ },
+ {
+  "id": "animals",
+  "title": "Animals (abstract classes and methods)",
+  "tags": "Objects · abstract · override"
+ },
+ {
+  "id": "linked_list",
+  "title": "Linked list (objects pointing to other objects)",
+  "tags": "Objects · null · association"
+ },
+ {
+  "id": "files",
+  "title": "Writing and reading a file",
+  "tags": "File"
+ },
+ {
+  "id": "exceptions",
+  "title": "Exceptions (Try, Catch, Finally, Throw)",
+  "tags": "Exceptions · functions"
+ },
+ {
+  "id": "withdrawals",
+  "title": "Account withdrawals (user exceptions)",
+  "tags": "Objects · exceptions · inheritance"
+ }
+]

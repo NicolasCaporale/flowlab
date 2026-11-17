@@ -1,0 +1,119 @@
+<?xml version="1.0"?>
+<flowgorithm fileversion="4.2">
+    <attributes>
+        <attribute name="name" value="Exceptions"/>
+        <attribute name="authors" value="FlowLab examples"/>
+        <attribute name="about" value="Errors during execution (index outside the array, invalid conversion) become exceptions that a Try can catch; Throw throws an exception, which goes up from the functions to the Catch that handles it. The Finally always runs. Try it step by step: the red arrow shows where execution jumps."/>
+        <attribute name="saved" value="2026-11-17 08:00:00 PM"/>
+        <attribute name="created" value="Zmxvd2xhYjtleGFtcGxlczsyMDI2LTExLTE3IDA4OjAwOjAwIFBNOzE="/>
+        <attribute name="edited" value="Zmxvd2xhYjtleGFtcGxlczsyMDI2LTExLTE3IDA4OjAwOjAwIFBNOzE="/>
+    </attributes>
+    <function name="Main" type="None" variable="">
+        <parameters/>
+        <body>
+            <declare name="v" type="Integer" array="True" size="3"/>
+            <declare name="i, x" type="Integer" array="False" size=""/>
+            <declare name="r" type="Real" array="False" size=""/>
+            <comment text="An index outside the array: the next block does not run"/>
+            <try>
+                <body>
+                    <assign variable="i" expression="5"/>
+                    <assign variable="v[i]" expression="1"/>
+                    <output expression="&quot;does not get here&quot;" newline="True"/>
+                </body>
+                <catch type="IndexOutOfRange" variable="e">
+                    <output expression="&quot;invalid index&quot;" newline="True"/>
+                </catch>
+            </try>
+            <comment text="&quot;12a&quot; is not a number: the right Catch runs, then the Finally"/>
+            <try>
+                <body>
+                    <assign variable="x" expression="ToInteger(&quot;12a&quot;)"/>
+                </body>
+                <catch type="DivisionByZero" variable="e">
+                    <output expression="&quot;no&quot;" newline="True"/>
+                </catch>
+                <catch type="InvalidConversion" variable="e">
+                    <output expression="&quot;invalid conversion&quot;" newline="True"/>
+                </catch>
+                <finally>
+                    <output expression="&quot;finally 1&quot;" newline="True"/>
+                </finally>
+            </try>
+            <comment text="The exception thrown inside average goes up to here: r does not change"/>
+            <assign variable="r" expression="1.5"/>
+            <try>
+                <body>
+                    <assign variable="r" expression="average(0)"/>
+                </body>
+                <catch type="Exception" variable="e">
+                    <output expression="&quot;caught: &quot; &amp; e.message" newline="True"/>
+                </catch>
+            </try>
+            <output expression="&quot;r stays &quot; &amp; r" newline="True"/>
+            <try>
+                <body>
+                    <assign variable="x" expression="check(-3)"/>
+                    <output expression="&quot;no&quot;" newline="True"/>
+                </body>
+                <catch type="Exception" variable="err">
+                    <output expression="&quot;check: &quot; &amp; err.message" newline="True"/>
+                </catch>
+                <finally>
+                    <output expression="&quot;finally 2&quot;" newline="True"/>
+                </finally>
+            </try>
+            <comment text="The inner Try does not catch DivisionByZero: it runs its Finally and the exception continues up to the outer Try"/>
+            <try>
+                <body>
+                    <try>
+                        <body>
+                            <throw expression="new DivisionByZero(&quot;inner&quot;)"/>
+                        </body>
+                        <catch type="IndexOutOfRange" variable="e">
+                            <output expression="&quot;no&quot;" newline="True"/>
+                        </catch>
+                        <finally>
+                            <output expression="&quot;inner finally&quot;" newline="True"/>
+                        </finally>
+                    </try>
+                </body>
+                <catch type="DivisionByZero" variable="e">
+                    <output expression="&quot;outer: &quot; &amp; e.message" newline="True"/>
+                </catch>
+            </try>
+            <assign variable="x" expression="check(7)"/>
+            <output expression="&quot;ok &quot; &amp; x" newline="True"/>
+        </body>
+    </function>
+    <function name="average" type="Real" variable="m">
+        <parameters>
+            <parameter name="n" type="Integer" array="False"/>
+        </parameters>
+        <body>
+            <declare name="m" type="Real" array="False" size=""/>
+            <if expression="n = 0">
+                <then>
+                    <throw expression="new Exception(&quot;no grades&quot;)"/>
+                </then>
+                <else/>
+            </if>
+            <assign variable="m" expression="10 / n"/>
+        </body>
+    </function>
+    <function name="check" type="Integer" variable="k">
+        <parameters>
+            <parameter name="n" type="Integer" array="False"/>
+        </parameters>
+        <body>
+            <declare name="k" type="Integer" array="False" size=""/>
+            <if expression="n &lt; 0">
+                <then>
+                    <throw expression="new Exception(&quot;negative: &quot; &amp; n)"/>
+                </then>
+                <else/>
+            </if>
+            <assign variable="k" expression="n * 2"/>
+        </body>
+    </function>
+</flowgorithm>

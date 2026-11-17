@@ -1,13 +1,13 @@
 // Autocompletamento dopo il punto: metodi e attributi dell'oggetto o della classe
 import { chromium } from '/opt/npm-tools/node_modules/playwright/index.mjs';
 const browser = await chromium.launch();
-const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+const page = await browser.newPage({ locale: 'it-IT', viewport: { width: 1440, height: 900 } });
 const errs = []; page.on('pageerror', (e) => errs.push(e.message));
 await page.goto('file://' + process.cwd() + '/dist/FlowLab.html'); await page.waitForTimeout(300);
 const wait = (ms = 120) => page.waitForTimeout(ms);
 const ok = (n, c) => console.log(`${c ? 'ok  ' : 'FAIL'} ${n}`);
 const items = () => page.locator('#acPop .aclabel').allTextContents();
-await page.evaluate(() => { localStorage.clear(); FlowLab.loadExample('forme'); FlowLab.showFunc(0); }); await wait(200);
+await page.evaluate(() => { localStorage.clear(); FlowLab.loadExample('shapes'); FlowLab.showFunc(0); }); await wait(200);
 // Main: d è un Disegno
 await page.locator('#chart .ins').last().click(); await wait(80); await page.click('#pop .insbtn[title="Output"]'); await wait(150);
 await page.locator('#f_expression').pressSequentially('d.', { delay: 20 }); await wait(150);

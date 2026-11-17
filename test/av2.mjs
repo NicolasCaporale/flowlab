@@ -1,5 +1,5 @@
 import { chromium } from '/opt/npm-tools/node_modules/playwright/index.mjs';
-const browser = await chromium.launch(); const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+const browser = await chromium.launch(); const page = await browser.newPage({ locale: 'it-IT', viewport: { width: 1440, height: 900 } });
 const errs=[]; page.on('pageerror', e => errs.push(e.message));
 await page.goto('file://' + process.cwd() + '/dist/FlowLab.html'); await page.waitForTimeout(300);
 await page.evaluate(() => { localStorage.clear(); });
@@ -23,7 +23,7 @@ await page.evaluate(() => { document.querySelector('.avwin').style.width = '1100
 console.log('celle visibili dopo allargamento:', await page.$$eval('.avwin .av-c', c => c.length));
 // matrici: tavola e cubo aperti a programma finito
 await page.click('#stopBtn').catch(() => {});
-await page.evaluate(() => { document.querySelectorAll('.avwin').forEach((w) => w.remove()); FlowLab.loadExample('matrici'); const s=document.querySelector('#speed'); s.value=0; s.dispatchEvent(new Event('input')); });
+await page.evaluate(() => { document.querySelectorAll('.avwin').forEach((w) => w.remove()); FlowLab.loadExample('matrices'); const s=document.querySelector('#speed'); s.value=0; s.dispatchEvent(new Event('input')); });
 await page.click('#runBtn'); await page.waitForTimeout(800);
 const btns = await page.$$('#varsBody .avopen'); for (const b of btns) await b.click();
 await page.evaluate(() => { const ws = [...document.querySelectorAll('.avwin')]; const pos = [[20, 60, 520, 380], [560, 60, 560, 400], [560, 480, 620, 390]]; ws.forEach((w, i) => { const p = pos[i]; Object.assign(w.style, { left: p[0] + 'px', top: p[1] + 'px', width: p[2] + 'px', height: p[3] + 'px' }); }); });

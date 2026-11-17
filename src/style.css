@@ -1,4 +1,4 @@
-/* Layout: barra strumenti in alto · foglio quadrettato al centro · pannello laterale a schede (console, variabili, codice, file) */
+/* Layout: toolbar at the top · squared sheet in the middle · side panel with tabs (console, variables, code, files) */
 :root {
   --bg: #e9edf1; --panel: #f7f9fb; --paper: #fdfefe; --grid: rgba(44, 92, 132, 0.075); --grid-strong: rgba(44, 92, 132, 0.13);
   --ink: #17222d; --muted: #5a6875; --faint: #8693a0; --line: #cfd8e1; --line-soft: #e1e7ed;
@@ -109,7 +109,7 @@ body.side-hidden #grip { cursor: default; }
 body.side-hidden #sideToggle svg { transform: rotate(180deg); }
 body.side-hidden #sideToggle { left: auto; right: 3px; transform: translateY(-50%); }
 
-/* ---------- Foglio del diagramma ---------- */
+/* ---------- Diagram sheet ---------- */
 .canvas-col { position: relative; min-width: 0; min-height: 0; display: grid; grid-template-rows: 1fr auto; }
 #canvasWrap, .vwrap {
   overflow: auto; min-height: 0; position: relative;
@@ -136,7 +136,7 @@ body.side-hidden #sideToggle { left: auto; right: 3px; transform: translateY(-50
 #stepCount { font-variant-numeric: tabular-nums; }
 .hint-add { margin-left: auto; color: var(--faint); }
 
-/* Forme SVG */
+/* SVG shapes */
 .chart text { font: 700 12.5px var(--font-ui); fill: var(--sh-text); pointer-events: none; }
 .chart .shape text { text-anchor: middle; }
 .chart .badge { font: 700 11px var(--font-ui); letter-spacing: 0.02em; }
@@ -183,7 +183,7 @@ body.side-hidden #sideToggle { left: auto; right: 3px; transform: translateY(-50
 .chart .trail { pointer-events: none; }
 .chart .trail-path { fill: none; stroke: var(--exec); stroke-width: 4.5; stroke-linecap: round; stroke-linejoin: round; opacity: 0.75; }
 .chart .trail-cursor { fill: var(--exec); stroke: var(--paper); stroke-width: 2.5; filter: drop-shadow(0 0 5px var(--exec)); }
-/* eccezione durante l'esecuzione: freccia rossa tratteggiata verso il Catch, blocco di partenza cerchiato */
+/* exception during execution: dashed red arrow towards the Catch, starting block circled */
 .chart .trail-path.exc { stroke: var(--err); stroke-dasharray: 7 6; stroke-width: 3.5; opacity: 0.9; }
 .chart .trail-cursor.exc { fill: var(--err); filter: drop-shadow(0 0 5px var(--err)); }
 .chart .exc-src { fill: none; stroke: var(--err); stroke-width: 2.5; stroke-dasharray: 5 4; }
@@ -202,7 +202,7 @@ body.dragging, body.dragging * { cursor: grabbing !important; }
 body[data-run="running"] .chart .ins, body[data-run="paused"] .chart .ins, body[data-run="input"] .chart .ins { cursor: not-allowed; }
 .ghost { position: fixed; z-index: 60; pointer-events: none; background: var(--panel); border: 1px solid var(--accent); color: var(--ink); padding: 4px 10px; border-radius: 6px; font-size: 12.5px; box-shadow: var(--shadow); max-width: 280px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-/* ---------- Pannello laterale ---------- */
+/* ---------- Side panel ---------- */
 #side { display: grid; grid-template-rows: auto 1fr; min-width: 0; min-height: 0; background: var(--panel); }
 #tabs { display: flex; gap: 2px; padding: 6px 8px 0; border-bottom: 1px solid var(--line); overflow-x: auto; scrollbar-width: none; }
 #tabs { align-items: stretch; }
@@ -221,7 +221,7 @@ body.side-empty main.work { grid-template-columns: minmax(0, 1fr); }
 body.side-empty #side, body.side-empty #grip { display: none; }
 body.panedrag #canvasWrap { outline: 2px dashed var(--accent); outline-offset: -8px; }
 
-/* Finestre mobili sopra l'area del diagramma */
+/* Floating windows above the diagram area */
 .fwin { position: absolute; z-index: 30; pointer-events: auto; display: grid; grid-template-rows: auto minmax(0, 1fr); background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); overflow: hidden; resize: both; min-width: 260px; min-height: 160px; }
 .fwin.active { border-color: var(--accent); }
 .fwin-head { display: flex; align-items: center; gap: 6px; padding: 3px 4px 3px 12px; cursor: move; user-select: none; touch-action: none; background: var(--bg); border-bottom: 1px solid var(--line); font-weight: 700; font-size: 13px; }
@@ -269,7 +269,7 @@ body.panedrag #canvasWrap { outline: 2px dashed var(--accent); outline-offset: -
 #conSend { height: 34px; border-radius: 6px; border: 0; background: var(--con-echo); color: #08242b; font-weight: 700; padding: 0 12px; cursor: pointer; }
 #conSend:disabled { opacity: .35; cursor: default; }
 
-/* Variabili */
+/* Variables */
 #varsBody { overflow: auto; min-height: 0; }
 .crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; padding: 10px 12px 4px; font-size: 12.5px; }
 .crumbs button { border: 0; background: transparent; padding: 3px 7px; border-radius: 5px; cursor: pointer; color: var(--muted); font-weight: 700; }
@@ -287,7 +287,7 @@ table.vars tr.changed td { background: var(--exec-soft); }
 .v-Boolean { color: var(--s-call); }
 .ptag { font: 700 9.5px var(--font-ui); letter-spacing: .05em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; margin-left: 6px; vertical-align: 1px; }
 
-/* Codice */
+/* Code */
 #codeOut { margin: 0; overflow: auto; padding: 12px 0; font: 13px/1.6 var(--font-mono); background: var(--paper); min-height: 0; counter-reset: ln; tab-size: 4; }
 #codeOut .ln { counter-increment: ln; display: inline-block; width: 3.4em; padding-right: 1em; text-align: right; color: var(--faint); user-select: none; }
 #codeOut .ln::before { content: counter(ln); }
@@ -304,7 +304,7 @@ ul.files li { display: flex; align-items: center; gap: 10px; padding: 8px 12px; 
 .fname strong { font-family: var(--font-mono); font-size: 13px; word-break: break-all; }
 .factions { display: flex; gap: 6px; }
 
-/* ---------- Visualizzatore di array ---------- */
+/* ---------- Array viewer ---------- */
 :root { --av-paper: #fffef8; --av-grid: #cfe0ee; --av-paper-edge: #f3f1e6; --av-paper-line: #d6d2bf; --av-odd: rgba(12, 108, 128, 0.055); }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --av-paper: #1d252c; --av-grid: #2f4252; --av-paper-edge: #232c34; --av-paper-line: #3a4752; --av-odd: rgba(76, 193, 214, 0.07); } }
 :root[data-theme="dark"] { --av-paper: #1d252c; --av-grid: #2f4252; --av-paper-edge: #232c34; --av-paper-line: #3a4752; --av-odd: rgba(76, 193, 214, 0.07); }
@@ -333,7 +333,7 @@ ul.files li { display: flex; align-items: center; gap: 10px; padding: 8px 12px; 
 .avwin[data-mode="book"] .av-page { background-color: var(--av-paper); background-image: linear-gradient(var(--av-grid) 1px, transparent 1px), linear-gradient(90deg, var(--av-grid) 1px, transparent 1px); background-size: 10px 10px; }
 .av-page.turn-next { animation: av-turn-next 0.42s cubic-bezier(.2,.7,.2,1); transform-origin: right center; }
 .av-page.turn-prev { animation: av-turn-prev 0.42s cubic-bezier(.2,.7,.2,1); transform-origin: left center; }
-/* avanti: la pagina entra da destra verso sinistra; indietro: da sinistra verso destra */
+/* forward: the page enters from right to left; back: from left to right */
 @keyframes av-turn-next { from { transform: rotateY(62deg); opacity: 0.35; } to { transform: none; opacity: 1; } }
 @keyframes av-turn-prev { from { transform: rotateY(-62deg); opacity: 0.35; } to { transform: none; opacity: 1; } }
 .av-grid { position: relative; min-height: 0; display: grid; grid-template-columns: 46px minmax(0, 1fr); grid-template-rows: 24px minmax(0, 1fr); }
@@ -345,7 +345,7 @@ ul.files li { display: flex; align-items: center; gap: 10px; padding: 8px 12px; 
 .av-body { position: relative; overflow: auto; min-height: 0; outline: none; scrollbar-width: thin; }
 .av-spacer { position: absolute; left: 0; top: 0; pointer-events: none; }
 .av-cells { position: absolute; left: 0; top: 0; }
-/* sfumatura verso la trasparenza dove ci sono altre celle oltre il bordo */
+/* fade to transparency where there are other cells beyond the edge */
 .av-body, .av-colhead, .av-rowhead {
   --fl: 0px; --fr: 0px; --ft: 0px; --fb: 0px;
   -webkit-mask-image: linear-gradient(to right, transparent 0, #000 var(--fl), #000 calc(100% - var(--fr)), transparent 100%), linear-gradient(to bottom, transparent 0, #000 var(--ft), #000 calc(100% - var(--fb)), transparent 100%);
@@ -378,7 +378,7 @@ table.vars td .avopen svg { width: 15px; height: 15px; }
 table.vars .avlink { border: 0; background: none; padding: 0; color: var(--accent); font: 600 12.5px var(--font-ui); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
 table.vars .avlink:hover, table.vars .avlink:focus-visible { color: var(--ink); }
 
-/* ---------- Popover e menu ---------- */
+/* ---------- Popovers and menus ---------- */
 #pop { position: fixed; z-index: 50; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); padding: 6px; max-height: calc(100vh - 16px); overflow: auto; }
 .pophead { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); padding: 6px 8px 4px; }
 .insmenu { width: min(460px, calc(100vw - 32px)); }
@@ -396,7 +396,7 @@ table.vars .avlink:hover, table.vars .avlink:focus-visible { color: var(--ink); 
 .ctxmenu button { display: flex; align-items: center; justify-content: space-between; gap: 18px; border: 0; background: transparent; text-align: left; padding: 7px 10px; border-radius: 6px; cursor: pointer; }
 .ctxmenu button:hover, .ctxmenu button:focus-visible { background: var(--accent-soft); outline: none; }
 .ctxmenu button.danger { color: var(--err); }
-/* voce «Installa FlowLab come app»: in evidenza rispetto alle altre */
+/* «Install FlowLab as an app» item: highlighted compared to the others */
 .ctxmenu button.install { background: var(--accent); color: var(--accent-ink); font-weight: 700; }
 .ctxmenu button.install:hover, .ctxmenu button.install:focus-visible { background: var(--accent); filter: brightness(1.12); }
 .ctxmenu kbd { font: 11px var(--font-mono); color: var(--faint); }
@@ -404,7 +404,7 @@ table.vars .avlink:hover, table.vars .avlink:focus-visible { color: var(--ink); 
 .ctxmenu.examples { min-width: 290px; }
 .ctxmenu .tag { font-size: 11.5px; color: var(--faint); }
 
-/* ---------- Finestre modali ---------- */
+/* ---------- Modal windows ---------- */
 .modal-back { position: fixed; inset: 0; z-index: 40; background: rgba(10, 20, 30, 0.42); display: grid; place-items: center; padding: 16px; }
 .modal { width: min(460px, 100%); max-height: calc(100vh - 32px); display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); }
 .modal.wide { width: min(640px, 100%); }
@@ -447,7 +447,7 @@ table.ref { width: 100%; border-collapse: collapse; }
 table.ref td { padding: 5px 8px; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
 table.ref td:first-child { white-space: nowrap; width: 1%; padding-right: 18px; }
 
-/* ---------- Avvisi ---------- */
+/* ---------- Notices ---------- */
 .toast { position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); transform: translate(-50%, 20px); opacity: 0; pointer-events: none; z-index: 70; background: var(--ink); color: var(--panel); padding: 9px 16px; border-radius: 8px; font-size: 13.5px; box-shadow: var(--shadow); transition: opacity .2s, transform .2s; max-width: calc(100vw - 32px); }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
 .toast.warn { background: var(--exec); color: #2a1c00; }
@@ -455,7 +455,7 @@ table.ref td:first-child { white-space: nowrap; width: 1%; padding-right: 18px; 
 .toast.ok { background: var(--ok); color: #fff; }
 body.filedrag #canvasWrap { outline: 3px dashed var(--accent); outline-offset: -10px; }
 
-/* ---------- Schermi stretti ---------- */
+/* ---------- Narrow screens ---------- */
 @media (max-width: 1700px) {
   .funcbox label, .speed .lbl, #exBtn .lbl, #modBtn .lbl { display: none; }
   select.fsel { max-width: 170px; }
@@ -507,7 +507,7 @@ body.filedrag #canvasWrap { outline: 3px dashed var(--accent); outline-offset: -
   .chart .ins { display: none; }
 }
 
-/* ---------- Vista Funzioni / Oggetti ---------- */
+/* ---------- Functions / Objects view ---------- */
 .viewsw { display: inline-flex; padding: 2px; gap: 2px; border: 1px solid var(--line); border-radius: 9px; background: var(--paper); }
 .viewsw .vbtn { display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 9px; border: 0; border-radius: 7px; background: transparent; color: var(--muted); cursor: pointer; font-weight: 700; font-size: 13px; }
 .viewsw .vbtn svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
@@ -521,7 +521,7 @@ body.filedrag #canvasWrap { outline: 3px dashed var(--accent); outline-offset: -
 #crumbWhere { font-family: var(--font-mono); font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 body.oo:not(.umlmode) #canvasWrap { padding-top: 34px; }
 
-/* ---------- Diagramma delle classi ---------- */
+/* ---------- Class diagram ---------- */
 svg.uml { display: block; }
 svg.uml text { pointer-events: none; }
 .uml .ubox { cursor: grab; }
@@ -560,14 +560,14 @@ body.udragging, body.udragging .uml .ubox { cursor: grabbing; }
 .uml .ulab { font: 600 11.5px var(--font-mono); fill: var(--muted); paint-order: stroke; stroke: var(--paper); stroke-width: 4px; stroke-linejoin: round; }
 @media (prefers-reduced-motion: reduce) { .uml .uadd { opacity: 1; } }
 
-/* ---------- Oggetti nella scheda Variabili ---------- */
+/* ---------- Objects in the Variables tab ---------- */
 table.vars .caret-sp { display: inline-block; width: 18px; margin: 0 2px 0 -6px; }
 .v-Object { color: var(--s-call); font-weight: 600; }
 table.vars tr.statrow td { font-family: var(--font-ui); font-weight: 700; font-size: 12px; color: var(--muted); background: var(--panel); }
 .ptag.vis { font-family: var(--font-mono); font-size: 11px; text-transform: none; }
 body.umlmode #chart, .vwrap.uml .vchart { justify-content: flex-start; }
 
-/* ---------- Ispettore degli oggetti ---------- */
+/* ---------- Object inspector ---------- */
 .ovwin { min-width: 260px; min-height: 130px; display: grid; grid-template-rows: auto minmax(0, 1fr); }
 .ov-body { overflow: auto; min-height: 0; background: var(--panel); }
 .ov-table td:first-child { white-space: nowrap; }
@@ -579,7 +579,7 @@ button.ov-link:hover, button.ov-link:focus-visible { text-decoration-style: soli
 .av-c.obj { cursor: pointer; color: var(--s-call); font-weight: 600; }
 .av-c.obj:hover { background: var(--accent-soft) !important; text-decoration: underline; }
 
-/* ---------- Connettori tra elemento cliccato e finestra ---------- */
+/* ---------- Connectors between clicked element and window ---------- */
 svg.wlinks { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 100000; pointer-events: none; overflow: visible; }
 .wlink { --wl: var(--s-call); opacity: 0.55; transition: opacity .15s; }
 .wlink.arr { --wl: var(--accent); }
@@ -593,32 +593,32 @@ svg.wlinks { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 1
 .wl-line { paint-order: stroke; }
 .wlink .wl-halo { fill: none; stroke: var(--paper); stroke-width: 6; stroke-linecap: round; opacity: .85; }
 
-/* metodo astratto: al posto del diagramma di flusso */
+/* abstract method: in place of the flowchart */
 .abscard { margin: 70px auto 0; max-width: 460px; padding: 22px 24px; background: var(--panel); border: 1.5px dashed var(--s-call); border-radius: 12px; box-shadow: var(--shadow); text-align: center; }
 .abscard h3 { margin: 0 0 4px; font: italic 700 17px var(--font-mono); color: var(--s-call); }
 .abscard .tag { display: inline-block; font: 700 11px var(--font-ui); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
 .abscard p { margin: 8px 0; color: var(--ink); }
 .abscard .impls { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 12px; }
 
-/* valore restituito che è un attributo della classe */
+/* return value that is an attribute of the class */
 .prow .rname { position: relative; min-width: 0; display: grid; }
 .prow .rname input { width: 100%; }
 .prow .rtag { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font: 700 10px var(--font-ui); letter-spacing: .05em; text-transform: uppercase; color: var(--s-call); background: var(--f-call); border-radius: 4px; padding: 1px 5px; pointer-events: none; }
 .prow .rtag[hidden] { display: none; }
 
-/* scorciatoie: tasto nel menu «Aggiungi un blocco» e gruppi nella Guida */
+/* shortcuts: key in the «Add a block» menu and groups in the Guide */
 .insbtn .ikey { font: 600 10px var(--font-mono); color: var(--faint); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; line-height: 1.5; }
 .insbtn:hover .ikey, .insbtn:focus-visible .ikey { color: var(--ink); border-color: var(--accent); }
 table.ref tr.kgroup td { font-weight: 700; color: var(--muted); padding-top: 12px; border-bottom-color: var(--line); }
 
-/* ---------- Moduli importati ---------- */
+/* ---------- Imported modules ---------- */
 .uml .umodbg { fill: var(--f-inc); fill-opacity: 0.45; stroke: var(--s-inc); stroke-width: 1.4; stroke-dasharray: 7 4; }
 .uml .umodtab { fill: var(--s-inc); }
 .uml .umodlab { font: 700 11.5px var(--font-ui); fill: var(--paper); letter-spacing: 0.02em; pointer-events: none; }
 .uml .ubox.mod .ubg { stroke: var(--s-inc); }
 .uml .ubox.mod .uheadbg { fill: var(--f-inc); }
 .uml .ubox.mod .usep { stroke: var(--s-inc); }
-/* eccezioni: colori dei blocchi Try/Throw; quelle predefinite tratteggiate e in sola lettura */
+/* exceptions: colours of the Try/Throw blocks; the predefined ones dashed and read-only */
 .uml .ubox.exc .ubg { stroke: var(--s-exc); }
 .uml .ubox.exc .uheadbg { fill: var(--f-exc); }
 .uml .ubox.exc .usep { stroke: var(--s-exc); }
@@ -648,7 +648,7 @@ body.readonly #crumbWhere { color: var(--s-inc); }
 .modadd .field { align-self: stretch; }
 #crumbBar button[hidden] { display: none; }
 
-/* scelta del tipo: i parametri delle classi generiche sotto, rientrati (ad albero) */
+/* type choice: the parameters of the generic classes below, indented (as a tree) */
 .tpick { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 5px; min-width: 0; }
 .tpargs { display: flex; flex-direction: column; gap: 5px; margin-left: 8px; padding-left: 10px; border-left: 2px solid var(--line); }
 .tpargs:empty { display: none; }
@@ -659,7 +659,7 @@ body.readonly #crumbWhere { color: var(--s-inc); }
 .prow .tpname { padding-top: 8px; }
 .prow { align-items: start; }
 
-/* moduli condensati e pulsante per condensarli/espanderli */
+/* collapsed modules and button to collapse/expand them */
 .uml .umodtog { cursor: pointer; }
 .uml .umodtog circle { fill: var(--paper); stroke: var(--paper); }
 .uml .umodtog path { stroke: var(--s-inc); stroke-width: 1.8; stroke-linecap: round; fill: none; }
@@ -674,7 +674,7 @@ body.readonly #crumbWhere { color: var(--s-inc); }
 #modBar button:hover { border-color: var(--accent); color: var(--accent); }
 body.umlmode.hasmods #canvasWrap { padding-top: 34px; }
 
-/* libreria dei moduli ad albero: ogni livello è una barra cliccabile con freccia, icona e conteggio */
+/* module library as a tree: each level is a clickable bar with arrow, icon and count */
 details.modsrc { border: 0; padding: 0; background: none; }
 details.modsrc + details.modsrc { margin-top: 10px; }
 .modbar { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); cursor: pointer; list-style: none; user-select: none; transition: background .12s, border-color .12s; }
@@ -701,7 +701,7 @@ details.modtopic > .modbar { padding: 6px 10px; }
 .uml .umod { cursor: grab; }
 body.udragging .uml .umod { cursor: grabbing; }
 .modtopicbody > .modrow + .modrow { margin-top: 0; }
-/* schermi da 1280 px: la barra resta su una riga */
+/* 1280 px screens: the bar stays on one line */
 @media (max-width: 1340px) {
   .bar { gap: 2px; }
   .sep { margin: 2px 2px; }
@@ -713,7 +713,7 @@ body.udragging .uml .umod { cursor: grabbing; }
   .tb.icon { padding: 0 6px; }
 }
 
-/* autocompletamento dopo il punto */
+/* autocompletion after the dot */
 .acpop { position: fixed; z-index: 80; min-width: 240px; max-width: min(560px, calc(100vw - 16px)); max-height: 300px; overflow: auto; background: var(--panel); border: 1px solid var(--accent); border-radius: 9px; box-shadow: var(--shadow); padding: 4px; font-size: 13px; }
 .acpop[hidden] { display: none; }
 .achead, .acfoot { font-size: 11.5px; color: var(--muted); padding: 4px 8px; }
@@ -727,7 +727,7 @@ body.udragging .uml .umod { cursor: grabbing; }
 .aclabel { font-family: var(--font-mono); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .acowner { margin-left: auto; font-size: 11px; color: var(--faint); white-space: nowrap; }
 
-/* vista compatta del diagramma: pulsante in alto a sinistra, prima della barra della classe */
+/* compact view of the diagram: button at the top left, before the class bar */
 #chartTools { position: absolute; left: 12px; top: 10px; z-index: 3; display: flex; align-items: center; gap: 8px; max-width: calc(100% - 24px); pointer-events: none; }
 #chartTools > * { pointer-events: auto; }
 #chartTools #crumbBar { position: static; max-width: none; min-width: 0; }
@@ -737,7 +737,7 @@ body.udragging .uml .umod { cursor: grabbing; }
 #compactBtn svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; }
 #compactBtn[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 
-/* ---------- Viste ausiliarie ---------- */
+/* ---------- Auxiliary views ---------- */
 .zoombar .zsep { width: 1px; margin: 4px 3px; background: var(--line); }
 #viewAdd { position: relative; display: inline-flex; align-items: center; gap: 5px; padding: 0 8px 0 6px; font-size: 12px; font-weight: 600; }
 #viewAdd svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; }
@@ -763,22 +763,27 @@ body.udragging .uml .umod { cursor: grabbing; }
 .vclose svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
 .auxwin .minbtn, .auxwin .vclose { width: 26px; height: 26px; }
 .vwrap { height: 100%; }
-/* «Continua»: la vista non ha barre di scorrimento e può scorrere oltre la fine del disegno */
+/* «Continue»: the view has no scrollbars and can scroll beyond the end of the drawing */
 .auxwin.sync .vwrap { overflow: hidden; }
 .auxwin.sync .vsync[aria-pressed="true"] { background: var(--lc, var(--accent)); border-color: var(--lc, var(--accent)); color: #fff; }
 .auxwin.sync .fwin-head { box-shadow: inset 4px 0 0 var(--lc, var(--accent)); }
-/* punto in comune tra il foglio e una vista «Continua» */
+/* point in common between the sheet and a «Continue» view */
 .vlink { position: absolute; height: 0; border-top: 2px dashed var(--lc); z-index: 4; pointer-events: none; }
 .vlink[hidden] { display: none; }
 .vlink.bottom { transform: translateY(-2px); }
 .vlink-b { position: absolute; right: 8px; top: -1px; transform: translateY(-50%); background: var(--lc); color: #fff; border-radius: 10px; padding: 1px 8px; font-size: 11px; font-weight: 700; line-height: 16px; white-space: nowrap; box-shadow: 0 1px 4px rgba(0,0,0,.2); }
 .vlink.top .vlink-b { transform: translateY(0); top: 2px; }
 .vlink.bottom .vlink-b { transform: translateY(-100%); top: -2px; }
-/* nel foglio principale il numero sta a sinistra, accanto ai pulsanti (a destra finirebbe sotto la vista) */
+/* in the main sheet the number is on the left, next to the buttons (on the right it would end up under the view) */
 .canvas-col > .vlink .vlink-b { right: auto; }
-/* pallino: una parte del diagramma non si vede */
+/* dot: a part of the diagram is not visible */
 #viewAdd.notify::after { content: ''; position: absolute; top: 1px; right: 1px; width: 9px; height: 9px; border-radius: 50%; background: #e5484d; box-shadow: 0 0 0 2px var(--panel); }
 .vdone { position: absolute; left: 50%; top: 30%; transform: translateX(-50%); max-width: 80%; padding: 8px 14px; border-radius: 9px; background: var(--panel); border: 1px solid var(--line); color: var(--muted); font-size: 12.5px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,.08); pointer-events: none; }
 .vdone[hidden] { display: none; }
-/* con più viste si vede quale riceve i comandi */
+/* with several views it shows which one receives the commands */
 body.hasviews:not(.auxactive) #canvasWrap { box-shadow: inset 0 0 0 2px var(--accent-soft); }
+
+/* ---------- Language ---------- */
+.langlist { display: grid; gap: 6px; }
+.langitem { display: flex; justify-content: space-between; align-items: center; gap: 12px; text-align: left; }
+.langitem.on { border-color: var(--accent); background: var(--accent-soft); }

@@ -1,11 +1,14 @@
 /* ==========================================================================
-   FlowLab — generatori di codice sorgente
-   Pseudocodice (italiano), Python, C++, Java, C#, JavaScript.
-   Tutti partono dall'albero sintattico delle espressioni e da un'inferenza
-   statica dei tipi, così divisioni, concatenazioni e confronti tra stringhe
-   vengono tradotti correttamente in ogni linguaggio.
+   FlowLab — source code generators
+   Pseudocode (in the chosen language), Python, C++, Java, C#, JavaScript.
+   All start from the syntax tree of the expressions and from a static
+   type inference, so divisions, concatenations and string comparisons
+   are translated correctly in every language.
    ========================================================================== */
 'use strict';
+if (typeof I18n === 'undefined' && typeof require !== 'undefined') require('./i18n.js');
+/* texts of the generated code (comments, messages, pseudocode words) from the language file */
+const C = (id, p) => I18n.code(id, p);
 
 const _CE = (typeof module !== 'undefined') ? require('./expr.js') : ExprLib;
 const _CM = (typeof module !== 'undefined') ? require('./model.js') : ModelLib;
@@ -13,10 +16,10 @@ const _CM = (typeof module !== 'undefined') ? require('./model.js') : ModelLib;
 const P = { or: 1, and: 2, notLow: 3, rel: 4, add: 5, mul: 6, un: 7, pow: 8, atom: 10 };
 const REL = ['==', '!=', '<', '<=', '>', '>='];
 
-/* ------------------- Generici e classi native dei moduli -------------------
-   GEN si imposta a ogni generazione: le classi dei moduli della libreria che
-   hanno un equivalente nel linguaggio (native) non si scrivono nel codice, si
-   usano quelle del linguaggio; i parametri di tipo (T) restano tipi. */
+/* ------------------- Generics and native classes of the modules -------------------
+   GEN is set at every generation: the classes of the library modules that
+   have an equivalent in the language (native) are not written in the code, the
+   language's own are used; the type parameters (T) stay types. */
 let GEN = { native: new Map(), skip: new Set(), tparams: new Set(), helpers: new Set() };
 const isTP = (t) => GEN.tparams.has(String(t).toLowerCase());
 const nativeOf = (base) => GEN.native.get(String(base).toLowerCase()) || null;
@@ -24,12 +27,12 @@ const need = (h) => GEN.helpers.add(h);
 const Wp = (x) => (x.p < P.atom ? `(${x.s})` : x.s);
 /* *altra in C++ (l'oggetto puntato) */
 const deref = (a) => (/^[\w.>-]+$/.test(a) ? '*' + a : `*(${a})`);
-/* costruttore con un intero: capacità iniziale; con un oggetto: copia */
+/* constructor with an integer: initial capacity; with an object: copy */
 const isCap = (ty) => ty[0] === 'Integer';
 const rel = (s) => ({ s, p: P.rel });
-/* per ogni modulo: tipo, costruttore e metodi nei vari linguaggi (o = oggetto, a = argomenti {s, p}) */
+/* for each module: type, constructor and methods in the various languages (o = object, a = arguments {s, p}) */
 const NATIVE = {
-  'strutture_dati/ArrayList': {
+  'data_structures/ArrayList': {
     cls: 'ArrayList',
     java: { type: (t) => `ArrayList<${t[0]}>`, ctor: (t, a) => `new ArrayList<>(${a})` },
     python: { ctor: (t, a, ty) => (!a || isCap(ty) ? '[]' : `list(${a})`), m: {
@@ -39,12 +42,12 @@ const NATIVE = {
       indexOf: (o, a) => `(${o}.index(${Wp(a[0])}) if ${Wp(a[0])} in ${o} else -1)`, contains: (o, a) => rel(`${Wp(a[0])} in ${o}`) } },
     cpp: { type: (t) => `vector<${t[0]}>*`, ctor: (t, a, ty) => `new vector<${t ? t[0] : 'int'}>(${!a || isCap(ty) ? '' : deref(a)})`, m: {
       add: (o, a) => (a.length === 2 ? `${o}->insert(${o}->begin() + ${Wp(a[0])}, ${a[1].s})` : `${o}->push_back(${a[0].s})`),
-      get: (o, a) => `(*${o})[${a[0].s}]`, set: (o, a) => `(*${o})[${a[0].s}] = ${a[1].s}`, remove: (o, a) => { need('rimuoviIn'); return `rimuoviIn(${o}, ${a[0].s})`; },
+      get: (o, a) => `(*${o})[${a[0].s}]`, set: (o, a) => `(*${o})[${a[0].s}] = ${a[1].s}`, remove: (o, a) => { need('removeAt'); return `removeAt(${o}, ${a[0].s})`; },
       size: (o) => ({ s: `(int) ${o}->size()`, p: P.un }), isEmpty: (o) => `${o}->empty()`, clear: (o) => `${o}->clear()`,
-      indexOf: (o, a) => { need('indiceDi'); return `indiceDi(${o}, ${a[0].s})`; }, contains: (o, a) => { need('indiceDi'); return rel(`indiceDi(${o}, ${a[0].s}) >= 0`); } } },
+      indexOf: (o, a) => { need('indexOfItem'); return `indexOfItem(${o}, ${a[0].s})`; }, contains: (o, a) => { need('indexOfItem'); return rel(`indexOfItem(${o}, ${a[0].s}) >= 0`); } } },
     csharp: { type: (t) => `List<${t[0]}>`, ctor: (t, a) => `new List<${t ? t[0] : 'int'}>(${a})`, m: {
       add: (o, a) => (a.length === 2 ? `${o}.Insert(${a[0].s}, ${a[1].s})` : `${o}.Add(${a[0].s})`),
-      get: (o, a) => `${o}[${a[0].s}]`, set: (o, a) => `${o}[${a[0].s}] = ${a[1].s}`, remove: (o, a) => { need('Aiuti'); return `Aiuti.RimuoviIn(${o}, ${a[0].s})`; },
+      get: (o, a) => `${o}[${a[0].s}]`, set: (o, a) => `${o}[${a[0].s}] = ${a[1].s}`, remove: (o, a) => { need('Helpers'); return `Helpers.RemoveAt(${o}, ${a[0].s})`; },
       size: (o) => `${o}.Count`, isEmpty: (o) => rel(`${o}.Count == 0`), clear: (o) => `${o}.Clear()`,
       indexOf: (o, a) => `${o}.IndexOf(${a[0].s})`, contains: (o, a) => `${o}.Contains(${a[0].s})` } },
     javascript: { ctor: (t, a, ty) => (!a || isCap(ty) ? '[]' : `[...${a}]`), m: {
@@ -53,28 +56,28 @@ const NATIVE = {
       size: (o) => `${o}.length`, isEmpty: (o) => rel(`${o}.length === 0`), clear: (o) => `${o}.length = 0`,
       indexOf: (o, a) => `${o}.indexOf(${a[0].s})`, contains: (o, a) => `${o}.includes(${a[0].s})` } },
   },
-  'strutture_dati/Stack': {
+  'data_structures/Stack': {
     cls: 'Stack',
     java: { type: (t) => `Stack<${t[0]}>`, ctor: () => 'new Stack<>()' },
     python: { ctor: () => '[]', m: { push: (o, a) => `${o}.append(${a[0].s})`, pop: (o) => `${o}.pop()`, peek: (o) => `${o}[-1]`, size: (o) => `len(${o})`, isEmpty: (o) => rel(`len(${o}) == 0`) } },
     cpp: { type: (t) => { need('stack'); return `stack<${t[0]}>*`; }, ctor: (t) => { need('stack'); return `new stack<${t ? t[0] : 'int'}>()`; }, m: {
-      push: (o, a) => `${o}->push(${a[0].s})`, pop: (o) => { need('togliCima'); return `togliCima(${o})`; }, peek: (o) => `${o}->top()`,
+      push: (o, a) => `${o}->push(${a[0].s})`, pop: (o) => { need('popTop'); return `popTop(${o})`; }, peek: (o) => `${o}->top()`,
       size: (o) => ({ s: `(int) ${o}->size()`, p: P.un }), isEmpty: (o) => `${o}->empty()` } },
     csharp: { type: (t) => `Stack<${t[0]}>`, ctor: (t) => `new Stack<${t ? t[0] : 'int'}>()`, m: { push: (o, a) => `${o}.Push(${a[0].s})`, pop: (o) => `${o}.Pop()`, peek: (o) => `${o}.Peek()`, size: (o) => `${o}.Count`, isEmpty: (o) => rel(`${o}.Count == 0`) } },
     javascript: { ctor: () => '[]', m: { push: (o, a) => `${o}.push(${a[0].s})`, pop: (o) => `${o}.pop()`, peek: (o) => `${o}[${o}.length - 1]`, size: (o) => `${o}.length`, isEmpty: (o) => rel(`${o}.length === 0`) } },
   },
-  'strutture_dati/Queue': {
+  'data_structures/Queue': {
     cls: 'Queue',
     java: { type: (t) => `Queue<${t[0]}>`, ctor: (t, a) => `new LinkedList<>(${a})` },
     python: { ctor: (t, a) => { need('deque'); return `deque(${a})`; }, m: { add: (o, a) => `${o}.append(${a[0].s})`, remove: (o) => `${o}.popleft()`, peek: (o) => `${o}[0]`, size: (o) => `len(${o})`, isEmpty: (o) => rel(`len(${o}) == 0`) } },
     cpp: { type: (t) => { need('queue'); return `queue<${t[0]}>*`; }, ctor: (t, a) => { need('queue'); return `new queue<${t ? t[0] : 'int'}>(${a ? deref(a) : ''})`; }, m: {
-      add: (o, a) => `${o}->push(${a[0].s})`, remove: (o) => { need('togliPrimo'); return `togliPrimo(${o})`; }, peek: (o) => `${o}->front()`,
+      add: (o, a) => `${o}->push(${a[0].s})`, remove: (o) => { need('popFront'); return `popFront(${o})`; }, peek: (o) => `${o}->front()`,
       size: (o) => ({ s: `(int) ${o}->size()`, p: P.un }), isEmpty: (o) => `${o}->empty()` } },
     csharp: { type: (t) => `Queue<${t[0]}>`, ctor: (t, a) => `new Queue<${t ? t[0] : 'int'}>(${a})`, m: { add: (o, a) => `${o}.Enqueue(${a[0].s})`, remove: (o) => `${o}.Dequeue()`, peek: (o) => `${o}.Peek()`, size: (o) => `${o}.Count`, isEmpty: (o) => rel(`${o}.Count == 0`) } },
     javascript: { ctor: (t, a) => (a ? `[...${a}]` : '[]'), m: { add: (o, a) => `${o}.push(${a[0].s})`, remove: (o) => `${o}.shift()`, peek: (o) => `${o}[0]`, size: (o) => `${o}.length`, isEmpty: (o) => rel(`${o}.length === 0`) } },
   },
 };
-/* prepara GEN per un programma e un linguaggio */
+/* prepares GEN for a program and a language */
 function setupGen(prog, lang) {
   const native = new Map(), skip = new Set();
   const cs = _CM.hasClasses(prog) ? prog.classes : [];
@@ -90,22 +93,22 @@ function setupGen(prog, lang) {
   if (tps.length) analyzeGenerics(prog, lang);
   if (lang === 'java' && GEN.exc.used) analyzeThrows(prog);
 }
-/* ------------------------------ Eccezioni ----------------------------------
-   Le eccezioni predefinite di FlowLab corrispondono a quelle dei linguaggi; dove il linguaggio
-   non lancia nulla (divisione tra reali per zero, indice fuori dall'array in JavaScript…) il codice
-   usa piccole funzioni di controllo, solo se il programma cattura quel tipo di eccezione. */
+/* ------------------------------ Exceptions ----------------------------------
+   The predefined exceptions of FlowLab correspond to those of the languages; where the language
+   throws nothing (division between reals by zero, checkIndex outside the array in JavaScript…) the code
+   uses small check functions, only if the program catches that type of exception. */
 const EXC_LANG = {
-  java: { Eccezione: 'Exception', DivisionePerZero: 'ArithmeticException', IndiceNonValido: 'IndexOutOfBoundsException', ConversioneNonValida: 'NumberFormatException', OggettoNullo: 'NullPointerException', ErroreFile: 'java.io.IOException' },
-  csharp: { Eccezione: 'Exception', DivisionePerZero: 'DivideByZeroException', IndiceNonValido: 'IndexOutOfRangeException', ConversioneNonValida: 'FormatException', OggettoNullo: 'NullReferenceException', ErroreFile: 'System.IO.IOException' },
-  python: { Eccezione: 'Exception', DivisionePerZero: 'ZeroDivisionError', IndiceNonValido: 'IndexError', ConversioneNonValida: 'ValueError', OggettoNullo: 'AttributeError', ErroreFile: 'OSError' },
-  cpp: { Eccezione: 'runtime_error', DivisionePerZero: 'DivisionePerZero', IndiceNonValido: 'out_of_range', ConversioneNonValida: 'invalid_argument', OggettoNullo: 'OggettoNullo', ErroreFile: 'ErroreFile' },
-  javascript: { Eccezione: 'Error', DivisionePerZero: 'DivisionePerZero', IndiceNonValido: 'IndiceNonValido', ConversioneNonValida: 'ConversioneNonValida', OggettoNullo: 'OggettoNullo', ErroreFile: 'ErroreFile' },
+  java: { Exception: 'Exception', DivisionByZero: 'ArithmeticException', IndexOutOfRange: 'IndexOutOfBoundsException', InvalidConversion: 'NumberFormatException', NullReference: 'NullPointerException', FileError: 'java.io.IOException' },
+  csharp: { Exception: 'Exception', DivisionByZero: 'DivideByZeroException', IndexOutOfRange: 'IndexOutOfRangeException', InvalidConversion: 'FormatException', NullReference: 'NullReferenceException', FileError: 'System.IO.IOException' },
+  python: { Exception: 'Exception', DivisionByZero: 'ZeroDivisionError', IndexOutOfRange: 'IndexError', InvalidConversion: 'ValueError', NullReference: 'AttributeError', FileError: 'OSError' },
+  cpp: { Exception: 'runtime_error', DivisionByZero: 'DivisionByZero', IndexOutOfRange: 'out_of_range', InvalidConversion: 'invalid_argument', NullReference: 'NullReference', FileError: 'FileError' },
+  javascript: { Exception: 'Error', DivisionByZero: 'DivisionByZero', IndexOutOfRange: 'IndexOutOfRange', InvalidConversion: 'InvalidConversion', NullReference: 'NullReference', FileError: 'FileError' },
 };
-/* nome dell'eccezione nel linguaggio (le classi del programma restano come sono) */
+/* name of the exception in the language (the classes of the program stay as they are) */
 const excL = (lang, name) => { const b = _CM.excClass(name); if (!b) return name; if ((lang === 'cpp' || lang === 'javascript') && EXC_LANG[lang][b.name] === b.name) need('exc:' + b.name); return EXC_LANG[lang][b.name]; };
-/* classe madre nel linguaggio (una classe del programma può ereditare da un'eccezione predefinita) */
+/* parent class in the language (a class of the program can inherit from a predefined exception) */
 const parentL = (lang, c) => (c.parent && _CM.excClass(c.parent) ? excL(lang, c.parent) : c.parent);
-/* che cosa usa il programma: Try/Throw, e quali errori di esecuzione vengono catturati */
+/* what the program uses: Try/Throw, and which runtime errors are caught */
 function excInfo(prog) {
   const caught = new Set(); let used = false;
   for (const f of prog.functions) _CM.walk(f.body, (st) => {
@@ -114,17 +117,17 @@ function excInfo(prog) {
     used = true;
     for (const c of st.catches || []) { const k = _CM.classByName(prog, c.type); for (const b of _CM.EXC_CLASSES) if (k && _CM.isSubclass(prog, b, k)) caught.add(b.name); }
   });
-  return { used, div: caught.has('DivisionePerZero'), idx: caught.has('IndiceNonValido'), conv: caught.has('ConversioneNonValida') };
+  return { used, div: caught.has('DivisionByZero'), idx: caught.has('IndexOutOfRange'), conv: caught.has('InvalidConversion') };
 }
-/* tipo dell'eccezione lanciata: new X(...) oppure il tipo della variabile */
+/* type of the thrown exception: new X(...) or the type of the variable */
 function thrownType(node, sc) { const n = strip(node); if (!n) return null; if (n.k === 'new') return n.cls; const t = _CE.inferType(n, sc); return t && t !== 'Unknown' ? _CE.splitType(t).base : null; }
-/* Java: eccezioni controllate (vanno dichiarate con throws): Eccezione, ErroreFile e le classi del programma che ne derivano */
+/* Java: checked exceptions (must be declared with throws): Exception, FileError and the classes of the program derived from them */
 function jChecked(prog, name) {
   const k = _CM.classByName(prog, name); if (!k) return false;
   const b = _CM.chainOf(prog, k).find((x) => x.builtin);
-  return !!b && (b.name === 'Eccezione' || b.name === 'ErroreFile');
+  return !!b && (b.name === 'Exception' || b.name === 'FileError');
 }
-/* Java: per ogni funzione, le eccezioni controllate che possono uscire (non catturate da un Try) */
+/* Java: for each function, the checked exceptions that can escape (not caught by a Try) */
 function analyzeThrows(prog) {
   const oo = _CM.hasClasses(prog);
   const fl = prog.functions.filter((f) => !(oo && GEN.skip.has(f.cls)));
@@ -150,9 +153,9 @@ function analyzeThrows(prog) {
         }
       };
       visit(f.body, []);
-      // un costruttore senza super(...) chiama quello della classe madre
+      // a constructor without super(...) calls the one of the parent class
     }
-    // un metodo ridefinito dichiara le stesse eccezioni in tutta la gerarchia (in Java la ridefinizione non può aggiungerne)
+    // an overridden method declares the same exceptions in the whole hierarchy (in Java an override cannot add any)
     if (oo) {
       const groups = new Map();
       for (const f of fl) {
@@ -172,16 +175,16 @@ function analyzeThrows(prog) {
   }
   GEN.jthrows = out;
 }
-/* Java: " throws …" della funzione (con i file c'è già throws Exception) */
+/* Java: " throws …" of the function (with files there is already throws Exception) */
 const jThrows = (f, files) => {
   if (files) return ' throws Exception';
   const set = GEN.jthrows.get(f);
   if (!set || !set.size) return '';
-  if (set.has('Eccezione')) return ' throws Exception';
+  if (set.has('Exception')) return ' throws Exception';
   return ' throws ' + [...set].map((n) => excL('java', n)).join(', ');
 };
 
-/* ---- generici: chi possiede un parametro di tipo (la funzione o la classe) ---- */
+/* ---- generics: who owns a type parameter (the function or the class) ---- */
 const FKEY = (f, t) => 'f:' + f.id + ':' + String(t).toLowerCase();
 const CKEY = (c, t) => 'c:' + c.id + ':' + String(t).toLowerCase();
 function tpKey(t, f, c) {
@@ -194,7 +197,7 @@ function tpKey(t, f, c) {
 /* T deve essere confrontabile (< > su T): Comparable in Java, IComparable in C# */
 const isBound = (t, f, c) => { const k = tpKey(t, f, c); return !!k && GEN.bound.has(k); };
 const boundHere = (t) => !!GEN.cur && isBound(t, GEN.cur.f, GEN.cur.c);
-/* testi delle espressioni di un blocco */
+/* texts of the expressions of a block */
 function exprSources(s) {
   switch (s.kind) {
     case 'declare': return [..._CE.splitTop(s.array ? s.size || '' : ''), s.init || ''];
@@ -212,7 +215,7 @@ function walkNodes(n, fn) {
   if (n.k) fn(n);
   for (const v of Object.values(n)) if (v && typeof v === 'object') walkNodes(v, fn);
 }
-/* funzione o metodo chiamato da un nodo (call, mcall, new) */
+/* function or method called by a node (call, mcall, new) */
 function calleeNode(n, sc, prog) {
   const low = String(n.name || '').toLowerCase();
   if (n.k === 'call') { const e = sc.funcs.get(low); return e ? e.f : null; }
@@ -220,7 +223,7 @@ function calleeNode(n, sc, prog) {
   if (n.k === 'new' && sc.classNamed) { const c = sc.classNamed(n.cls); return c ? OO.ctors(prog, c).find((f) => f.params.length === n.args.length) || null : null; }
   return null;
 }
-/* analisi del programma: quali T devono essere confrontabili e (Java) quali array di tipi base passano a parametri T[] */
+/* analysis of the program: which T must be comparable and (Java) which arrays of base types are passed to T[] parameters */
 function analyzeGenerics(prog, lang) {
   const oo = _CM.hasClasses(prog), cs = oo ? prog.classes.filter((c) => !GEN.skip.has(c.id)) : [];
   const info = prog.functions.filter((f) => !(oo && GEN.skip.has(f.cls))).map((f) => {
@@ -233,12 +236,12 @@ function analyzeGenerics(prog, lang) {
     return it;
   });
   const bound = GEN.bound;
-  // confronti < <= > >= tra valori di tipo T
+  // comparisons < <= > >= between values of type T
   for (const it of info) for (const n of it.nodes) {
     if (n.k !== 'bin' || !['<', '<=', '>', '>='].includes(n.op)) continue;
     for (const x of [n.l, n.r]) { const k = tpKey(_CE.inferType(x, it.sc), it.f, it.c); if (k) bound.add(k); }
   }
-  // il vincolo si propaga: Coppia<T> con T confrontabile, chiamate a funzioni generiche con T confrontabile
+  // the constraint propagates: Pair<T> with comparable T, calls to generic functions with comparable T
   for (let changed = true, guard = 0; changed && guard < 20; guard++) {
     changed = false;
     const add = (k) => { if (k && !bound.has(k)) { bound.add(k); changed = true; } };
@@ -257,7 +260,7 @@ function analyzeGenerics(prog, lang) {
   }
   if (lang === 'java') analyzeBoxing(prog, info, cs);
 }
-/* Java: un array di int non si può passare a un parametro T[]; quegli array diventano Integer[] (e quelli collegati a loro) */
+/* Java: an int array cannot be passed to a T[] parameter; those arrays become Integer[] (and those linked to them) */
 function analyzeBoxing(prog, info, cs) {
   const parent = new Map();
   const find = (k) => { while (parent.has(k)) k = parent.get(k); return k; };
@@ -267,7 +270,7 @@ function analyzeBoxing(prog, info, cs) {
   for (const c of cs) for (const a of c.attributes) if (a.array) elem.set(akey(c, a), a.type);
   for (const it of info) {
     for (const p of it.f.params) if (p.array) { const k = it.f.id + ':' + p.name.toLowerCase(); elem.set(k, p.type); if (isTP(p.type)) sinks.push(k); }
-    // array restituiti: lo stesso array della variabile restituita
+    // returned arrays: the same array as the returned variable
     _CM.rets(it.f).forEach((r, i) => { if (!r.array) return; const k = 'ret:' + it.f.id + ':' + i; elem.set(k, r.type); if (isTP(r.type)) sinks.push(k); });
     for (const d of it.decls) if (d.array) for (const n of d.name.split(',').map((x) => x.trim()).filter(Boolean)) elem.set(it.f.id + ':' + n.toLowerCase(), d.type);
   }
@@ -287,7 +290,7 @@ function analyzeBoxing(prog, info, cs) {
       const g = calleeNode(n, it.sc, prog);
       if (g) g.params.forEach((p, i) => { if (p.array && n.args[i]) union(slot(n.args[i], it), g.id + ':' + p.name.toLowerCase()); });
     }
-    // a ← b tra array: lo stesso array; a ← f(...) con f che restituisce un array
+    // a ← b between arrays: the same array; a ← f(...) with f returning an array
     for (const st of it.assigns) {
       const tg = _CE.splitTop(st.variable).map(tryParse), r = tryParse(st.expression);
       if (!r) continue;
@@ -300,9 +303,9 @@ function analyzeBoxing(prog, info, cs) {
   const roots = new Set(sinks.map(find));
   for (const [k, t] of elem) if (BOX_J[t] && t !== 'String' && roots.has(find(k))) GEN.boxed.add(k);
 }
-/* Java: elemento di un array Integer[] (per == si usa equals) */
+/* Java: element of an Integer[] array (equals is used for ==) */
 const boxedElem = (n, sc) => { const x = strip(n); return !!x && x.k === 'var' && !!x.indices && !!sc.func && GEN.boxed.has(sc.func.id + ':' + x.name.toLowerCase()); };
-/* durante l'assegnazione il tipo atteso permette di scrivere new ArrayList<Integer>() anche se nel diagramma c'è new ArrayList() */
+/* during the assignment the expected type allows writing new ArrayList<Integer>() even if the diagram has new ArrayList() */
 function withExpect(sc, t, fn) { const old = sc.expect; sc.expect = t; try { return fn(); } finally { sc.expect = old; } }
 
 function buildScope(prog, func) {
@@ -311,26 +314,26 @@ function buildScope(prog, func) {
   _CM.walk(func.body, (s) => {
     if (s.kind === 'const' && s.name.trim() && !vars.has(s.name.trim().toLowerCase())) vars.set(s.name.trim().toLowerCase(), { type: s.type, array: false, name: s.name.trim(), constant: true });
     if (s.kind === 'declare') for (const n of s.name.split(',').map((x) => x.trim()).filter(Boolean)) if (!vars.has(n.toLowerCase())) vars.set(n.toLowerCase(), { type: s.type, array: s.array, dims: s.array ? _CE.splitTop(s.size).length : 0, name: n });
-    // variabile di un Catch: l'eccezione catturata
+    // variable of a Catch: the caught exception
     if (s.kind === 'try') for (const c of s.catches || []) if (c.variable && !vars.has(c.variable.toLowerCase())) vars.set(c.variable.toLowerCase(), { type: (_CM.classByName(prog, c.type) || { name: c.type }).name, array: false, dims: 0, name: c.variable, catchVar: true });
   });
   const funcs = new Map();
   const ooMode = _CM.hasClasses(prog);
   const cls = ooMode ? _CM.classOf(prog, func) : null;
   if (!ooMode) for (const f of prog.functions) funcs.set(f.name.toLowerCase(), { type: f.type, rets: _CM.rets(f), f, name: f.name });
-  // i metodi con il nome di una funzione integrata si chiamano solo con obj.nome() o this.nome()
+  // methods with the name of a built-in function are called only with obj.name() or this.name()
   else for (const k of _CM.chainOf(prog, cls)) for (const f of _CM.membersOf(prog, k)) if (!f.ctor && !funcs.has(f.name.toLowerCase()) && !_CE.BUILTINS[f.name.toLowerCase()]) funcs.set(f.name.toLowerCase(), { type: f.type, rets: _CM.rets(f), f, name: f.name, owner: k });
   const sc = { vars, funcs, func, prog, cls, ooMode };
   if (ooMode) ooScope(prog, sc);
-  // vista Funzioni: degli oggetti ci sono solo le eccezioni (new Eccezione("…"), e.messaggio)
-  else sc.oo = (node) => (node.k === 'new' ? node.cls : node.k === 'member' && node.name.toLowerCase() === 'messaggio' ? 'String' : undefined);
+  // Functions view: of the objects there are only the exceptions (new Exception("…"), e.message)
+  else sc.oo = (node) => (node.k === 'new' ? node.cls : node.k === 'member' && node.name.toLowerCase() === 'message' ? 'String' : undefined);
   return sc;
 }
 
-/* Strumenti per le classi: attributi e metodi ereditati, accessi statici, tipi delle espressioni */
+/* Tools for the classes: inherited attributes and methods, static accesses, types of the expressions */
 function ooScope(prog, sc) {
   const classNamed = (n) => _CM.classByName(prog, _CE.splitType(n).base);
-  // tipo di un membro di una classe generica: T sostituito con il tipo dell'oggetto (ArrayList<Integer> -> Integer)
+  // type of a member of a generic class: T replaced with the type of the object (ArrayList<Integer> -> Integer)
   const subst = (type, objNode, c) => {
     if (!(c.tparams || []).length) return type;
     const g = _CE.splitType(_CE.inferType(objNode, sc)); if (!g.args.length) return type;
@@ -364,25 +367,25 @@ function ooScope(prog, sc) {
 
 function tryParse(src) { try { return _CE.parseExpr(src); } catch (e) { return null; } }
 const strip = (n) => (n && n.k === 'par' ? strip(n.e) : n);
-/* destinazioni di un'assegnazione (più di una se la funzione restituisce più valori) */
+/* targets of an assignment (more than one if the function returns several values) */
 const targetsOf = (s) => _CE.splitTop(s.variable);
 function isLiteralExpr(src) {
   const ok = (n) => !!n && (['num', 'str', 'bool'].includes(n.k) || (n.k === 'par' && ok(n.e)) || (n.k === 'un' && ok(n.e)) || (n.k === 'bin' && n.op !== '&' && ok(n.l) && ok(n.r)));
   return ok(tryParse(src));
 }
-/* funzione chiamata a destra di un'assegnazione multipla */
+/* function called on the right of a multiple assignment */
 function calleeOf(s, sc) {
   const e = strip(tryParse(s.expression));
   if (e && e.k === 'mcall' && sc.objClass) { const c = sc.objClass(e.obj); const h = c && sc.methodHit(c, e.name.toLowerCase()); return h ? h.f : null; }
   const g = e && e.k === 'call' && sc.funcs.get(e.name.toLowerCase()); return g ? g.f : null;
 }
-/* nome come è stato dichiarato (il formato .fprg non distingue maiuscole e minuscole, i linguaggi sì) */
+/* name as it was declared (the .fprg format is case-insensitive, the languages are not) */
 const vname = (n, sc) => { const v = sc.vars.get(String(n).toLowerCase()); return v ? v.name : n; };
 const fname = (n, sc) => { const f = sc.funcs.get(String(n).toLowerCase()); return f ? f.name : n; };
 
-/* ------------------------------ Classi -------------------------------------- */
+/* ------------------------------ Classes -------------------------------------- */
 const OO = {
-  /* classi in ordine: la madre prima delle figlie; la principale il più tardi possibile (o per prima) */
+  /* classes in order: the parent before the children; the main one as late as possible (or first) */
   ordered(prog, mainFirst) {
     const main = _CM.mainClass(prog);
     const out = [], done = new Set();
@@ -395,19 +398,19 @@ const OO = {
   ctors: (prog, c) => _CM.membersOf(prog, c).filter((f) => f.ctor),
   isMain: (prog, f) => f === prog.functions[0],
   sig: (f) => f.params.map((p) => p.type.toLowerCase() + (p.array ? '[' + (p.dims || 1) : '')).join(','),
-  /* il metodo ridefinisce un metodo di una classe madre? */
+  /* does the method override a method of a parent class? */
   overrides(prog, f) {
     const c = _CM.classOf(prog, f);
     for (const k of _CM.chainOf(prog, c).slice(1)) if (OO.methods(prog, k).some((g) => !g.static && g.name.toLowerCase() === f.name.toLowerCase() && OO.sig(g) === OO.sig(f))) return true;
     return false;
   },
-  /* il metodo è ridefinito in una sottoclasse? */
+  /* is the method overridden in a subclass? */
   overridden(prog, f) {
     const c = _CM.classOf(prog, f);
     return prog.classes.some((k) => k !== c && _CM.isSubclass(prog, k, c) && OO.methods(prog, k).some((g) => !g.static && g.name.toLowerCase() === f.name.toLowerCase() && OO.sig(g) === OO.sig(f)));
   },
   hasChildren: (prog, c) => prog.classes.some((k) => k !== c && (k.parent || '').toLowerCase() === c.name.toLowerCase()),
-  /* super(...) come primo blocco del costruttore: { args, rest } */
+  /* super(...) as the first block of the constructor: { args, rest } */
   splitSuper(f) {
     const i = f.body.findIndex((s) => s.kind !== 'comment');
     const first = f.body[i];
@@ -415,25 +418,25 @@ const OO = {
     return { args: null, rest: f.body };
   },
   classScope: (prog, c, isStatic) => buildScope(prog, { params: [], body: [], cls: c.id, static: isStatic }),
-  /* gruppi di metodi con lo stesso nome (overloading) */
+  /* groups of methods with the same name (overloading) */
   groups(list) { const m = new Map(); for (const f of list) { const k = f.name.toLowerCase(); if (!m.has(k)) m.set(k, []); m.get(k).push(f); } return [...m.values()]; },
-  tag: (v) => ({ public: 'pubblico', private: 'privato', protected: 'protetto' }[v || 'public']),
+  tag: (v) => C('vis.' + (v || 'public')),
 };
-/* Python e JavaScript non hanno l'overloading: un solo metodo che sceglie la versione dagli argomenti */
+/* Python and JavaScript have no overloading: a single method that chooses the version from the arguments */
 function dispatchCond(f, group, n, test) {
   const conds = [test.len(f.params.length)];
   if (group.filter((g) => g.params.length === f.params.length).length > 1) f.params.forEach((p, i) => conds.push(test.type(p, i)));
   return conds.join(n);
 }
 
-/* --------------------------- Linguaggi ----------------------------------- */
+/* --------------------------- Languages ----------------------------------- */
 const LANGS = {};
 
 function escStr(s, q) { return q + s.replace(/\\/g, '\\\\').replace(new RegExp(q, 'g'), '\\' + q) + q; }
 
 const idxBrackets = (nm, ix) => nm + ix.map((i) => `[${i}]`).join('');
 const idxComma = (nm, ix) => `${nm}[${ix.join(', ')}]`;
-/* Size(a) e Size(m, d): dimensione richiesta (solo come numero scritto nel programma) e dimensioni dell'array */
+/* Size(a) and Size(m, d): requested dimension (only as a number written in the program) and dims of the array */
 function sizeInfo(n, sc) {
   const a = strip(n.args[0]); const dn = n.args[1] ? strip(n.args[1]) : null;
   let nd = 1;
@@ -449,7 +452,7 @@ function sizeInfo(n, sc) {
 }
 const dimsOf = (s, E, sc) => _CE.splitTop(s.size).map((x) => E(x, sc));
 
-/* Stampa generica di espressioni, con regole per linguaggio */
+/* Generic printing of expressions, with rules per language */
 function exprPrinter(L) {
   function pr(n, sc) {
     switch (n.k) {
@@ -460,7 +463,7 @@ function exprPrinter(L) {
       case 'pi': L.use && L.use('pi'); return { s: L.pi, p: P.atom };
       case 'var': {
         let nm = vname(n.name, sc);
-        // attributo usato con il solo nome dentro un metodo
+        // attribute used with its name alone inside a method
         const h = sc.implicitField && sc.implicitField(n.name);
         if (h) nm = L.field ? L.field(h, sc) : h.attr.name;
         return { s: n.indices ? (L.idx || idxBrackets)(nm, n.indices.map((ix) => pr(ix, sc).s)) : nm, p: P.atom };
@@ -470,9 +473,9 @@ function exprPrinter(L) {
       case 'new': {
         const c = sc.classNamed ? sc.classNamed(n.cls) : null; const nm = c ? c.name : n.cls;
         const a = n.args.map((x) => pr(x, sc).s).join(', ');
-        // eccezione predefinita: la classe del linguaggio
+        // predefined exception: the class of the language
         if (_CM.excClass(n.cls) && EXC_LANG[L.lang]) { const t = excL(L.lang, n.cls); return { s: L.newObj ? L.newObj(t, a) : `new ${t}(${a})`, p: P.atom }; }
-        // argomenti di tipo: quelli scritti, altrimenti quelli della variabile a cui si assegna
+        // type arguments: those written, otherwise those of the variable being assigned
         let targs = n.targs && n.targs.length ? n.targs : null;
         const gen = c && (c.tparams || []).length;
         if (!targs && gen && sc.expect) { const g = _CE.splitType(sc.expect); if (g.base.toLowerCase() === c.name.toLowerCase() && g.args.length) targs = g.args; }
@@ -483,8 +486,8 @@ function exprPrinter(L) {
       }
       case 'supercall': { const a = n.args.map((x) => pr(x, sc).s).join(', '); return { s: L.superCtor ? L.superCtor(a, sc) : `super(${a})`, p: P.atom }; }
       case 'member': {
-        // messaggio di un'eccezione: getMessage(), Message, str(e), what()…
-        if (n.name.toLowerCase() === 'messaggio' && L.excMsg && !n.indices) {
+        // message of an exception: getMessage(), Message, str(e), what()…
+        if (n.name.toLowerCase() === 'message' && L.excMsg && !n.indices) {
           const t = _CE.inferType(n.obj, sc);
           if (t && _CM.isExcClass(sc.prog, _CE.splitType(t).base)) { const o = pr(n.obj, sc); return { s: L.excMsg(o.p < P.atom ? `(${o.s})` : o.s), p: P.atom }; }
         }
@@ -506,7 +509,7 @@ function exprPrinter(L) {
         }
         const ref = objRef(n.obj, sc);
         const c = ref.cls || (sc.objClass && sc.objClass(n.obj));
-        // metodo di una classe nativa: si usa quello del linguaggio
+        // method of a native class: the language's own is used
         const nat = c && !ref.cls && L.lang && nativeOf(c.name);
         const nm0 = nat && nat[L.lang] && nat[L.lang].m && (sc.methodHit(c, n.name.toLowerCase()) || {}).f;
         if (nm0 && nat[L.lang].m[nm0.name]) { const r = nat[L.lang].m[nm0.name](ref.s, n.args.map((x) => pr(x, sc))); return typeof r === 'string' ? { s: r, p: P.atom } : r; }
@@ -523,7 +526,7 @@ function exprPrinter(L) {
     }
     return { s: '?', p: P.atom };
   }
-  /* oggetto a sinistra del punto: una classe (accesso statico) oppure un'espressione */
+  /* object to the left of the dot: a class (static access) or an expression */
   function objRef(objNode, sc) {
     const c = sc.classRef && sc.classRef(objNode);
     if (c) return { cls: c };
@@ -555,8 +558,8 @@ function exprPrinter(L) {
   return pr;
 }
 
-/* Python e JavaScript: i metodi della classe si chiamano con self./this. oppure Classe. (statici) */
-/* nome da restituire: una variabile, oppure un attributo (self.x / this.x / Classe.x) */
+/* Python and JavaScript: the methods of the class are called with self./this. or Class. (static) */
+/* name to return: a variable, or an attribute (self.x / this.x / Class.x) */
 function retName(name, sc, self) {
   const h = sc.implicitField && sc.implicitField(name);
   if (!h || !self) return h ? h.attr.name : name;
@@ -566,8 +569,8 @@ function ucall(entry, sc, self) {
   if (!sc.ooMode || !entry || !entry.owner) return '';
   return entry.f.static ? entry.owner.name + '.' : self + '.';
 }
-/* dichiarazione seguita subito dall'assegnazione della stessa variabile: diventa una
-   dichiarazione con valore iniziale (double a = 0.0;). Restituisce l'espressione o null. */
+/* declaration followed at once by the assignment of the same variable: it becomes a
+   declaration with an initial value (double a = 0.0;). Returns the expression or null. */
 function initOf(s, next) {
   if (!next || next.kind !== 'assign' || s.array) return null;
   const names = s.name.split(',').map((x) => x.trim()).filter(Boolean);
@@ -577,12 +580,12 @@ function initOf(s, next) {
   const low = names[0].toLowerCase();
   if (!lv || lv.k !== 'var' || lv.indices || lv.name.toLowerCase() !== low) return null;
   const e = tryParse(next.expression); if (!e) return null;
-  let uses = false; // a ← a + 1 non si può unire
+  let uses = false; // a ← a + 1 cannot be merged
   const visit = (n) => { if (!n || typeof n !== 'object' || uses) return; if (n.k === 'var' && n.name.toLowerCase() === low) uses = true; Object.values(n).forEach(visit); };
   visit(e);
   return uses ? null : next.expression;
 }
-/* valore per una variabile reale: un intero scritto (0, -3) diventa 0.0, -3.0 */
+/* value for a real variable: a written integer (0, -3) becomes 0.0, -3.0 */
 function asReal(src, type, E, sc) {
   const s = E(src, sc);
   if (type !== 'Real') return s;
@@ -591,17 +594,17 @@ function asReal(src, type, E, sc) {
   return n && (intLit(n) || (n.k === 'un' && n.op === 'neg' && intLit(strip(n.e)))) ? s + '.0' : s;
 }
 
-/* tipo di un riferimento modificabile (variabile, elemento, attributo) */
+/* type of a modifiable reference (variable, element, attribute) */
 function lvTypeOf(v, sc) { const t = tryParse(v); const x = t && strip(t); return x ? _CE.inferType(x, sc) : 'String'; }
 
-/* Elenco piatto degli operandi di una catena di & */
+/* Flat list of the operands of a chain of & */
 function concatParts(n) {
   n = strip(n);
   if (n.k === 'bin' && n.op === '&') return [...concatParts(n.l), ...concatParts(n.r)];
   return [n];
 }
 
-/* ------------------------------ Emettitore ------------------------------- */
+/* ------------------------------ Emitter ------------------------------- */
 class Out {
   constructor(ind) { this.lines = []; this.lvl = 0; this.ind = ind || '    '; }
   line(s) { this.lines.push(s === '' ? '' : this.ind.repeat(this.lvl) + s); }
@@ -609,74 +612,78 @@ class Out {
   text() { return this.lines.join('\n') + '\n'; }
 }
 
-/* ============================ PSEUDOCODICE =============================== */
-const TIPO = { Integer: 'intero', Real: 'reale', String: 'stringa', Boolean: 'booleano' };
+/* ============================ PSEUDOCODE =============================== */
+/* the words of the pseudocode come from the language file (code → pseudo.*) */
+const PS = (id, p) => C('pseudo.' + id, p);
 LANGS.pseudo = {
-  label: 'Pseudocodice', ext: 'txt', comment: '//',
-  keywords: ['ALGORITMO', 'FINE', 'FUNZIONE', 'PROCEDURA', 'VARIABILI', 'SE', 'ALLORA', 'ALTRIMENTI', 'MENTRE', 'ESEGUI', 'PER', 'DA', 'A', 'PASSO', 'RIPETI', 'LEGGI', 'SCRIVI', 'CHIAMA', 'RESTITUISCI', 'AND', 'OR', 'NOT', 'MOD', 'VERO', 'FALSO', 'DICHIARA', 'ARRAY', 'DI', 'INDIETRO', 'APRI', 'CHIUDI', 'IN', 'LETTURA', 'SCRITTURA', 'CLASSE', 'EREDITA', 'ATTRIBUTI', 'METODO', 'STATICO', 'COSTRUTTORE', 'NUOVO', 'QUESTO', 'NULLO', 'SUPER', 'ASTRATTA', 'ASTRATTO'],
+  label: PS('label'), ext: 'txt', comment: '//',
+  // keywords to highlight: the uppercase words of the pseudocode texts
+  get keywords() { return [...new Set(Object.keys((I18n.packs.en || {}).code || {}).filter((k) => k.startsWith('pseudo.')).flatMap((k) => (C(k).match(/\b[A-ZÀ-Ý]{2,}\b/g) || [])))].concat(['AND', 'OR', 'NOT', 'MOD']); },
   generate(prog) {
+    const TIPO = { Integer: PS('type.Integer'), Real: PS('type.Real'), String: PS('type.String'), Boolean: PS('type.Boolean') };
     const L = {
-      idx: idxComma, str: (s) => '"' + s + '"', T: 'VERO', F: 'FALSO', pi: 'π', not: 'NOT ', notPrec: P.un, or: 'OR', and: 'AND', mod: 'MOD', pow: '^',
+      idx: idxComma, str: (s) => '"' + s + '"', T: PS('true'), F: PS('false'), pi: 'π', not: 'NOT ', notPrec: P.un, or: 'OR', and: 'AND', mod: 'MOD', pow: '^',
       rel: { '==': '=', '!=': '≠', '<': '<', '<=': '≤', '>': '>', '>=': '≥' },
       call: (n, sc, pr) => ({ s: `${_CE.BUILTIN_NAMES[n.name.toLowerCase()] && !sc.funcs.has(n.name.toLowerCase()) ? _CE.BUILTIN_NAMES[n.name.toLowerCase()] : fname(n.name, sc)}(${n.args.map((a) => pr(a, sc).s).join(', ')})`, p: P.atom }),
-      nul: 'NULLO', self: 'QUESTO', newObj: (c, a) => `NUOVO ${c}(${a})`, superCtor: (a) => `SUPER(${a})`, superMethod: (m, a) => `SUPER.${m}(${a})`,
+      nul: PS('null'), self: PS('this'), newObj: (c, a) => PS('new', { cls: c, args: a }), superCtor: (a) => `SUPER(${a})`, superMethod: (m, a) => `SUPER.${m}(${a})`,
       bin: (n, sc, pr, generic) => (n.op === '&' ? generic(n, sc, '&', P.add - 0.5, 'left') : null),
     };
     const pr = exprPrinter(L);
     const o = new Out('   ');
     const TP = (t) => { const g = _CE.splitType(t); const b = TIPO[g.base] || g.base; return g.args.length ? `${b}<${g.args.map(TP).join(', ')}>` : b; };
-    // valore restituito: tipo, oppure array di tipo
-    const RT = (r) => (r.array ? ((r.dims || 1) > 1 ? `array a ${r.dims} dimensioni di ` : 'array di ') + TP(r.type) : TP(r.type));
+    // array shape of a parameter or a return value
+    const shape = (x) => (x.array ? ((x.dims || 1) > 1 ? PS('arrayDims', { n: x.dims }) : PS('arrayOf')) + ' ' : '');
+    const RT = (r) => shape(r) + TP(r.type);
     const E = (src, sc) => { const t = tryParse(src); return t ? pr(t, sc).s : src; };
     const block = (stmts, sc) => {
       for (const s of stmts) {
         switch (s.kind) {
-          case 'const': o.line(`COSTANTE ${s.name} : ${TP(s.type)} = ${E(s.expression, sc)}`); break;
-          case 'declare': o.line(`DICHIARA ${s.array ? `ARRAY ${s.name.split(',').map((x) => x.trim() + '[' + dimsOf(s, E, sc).join(', ') + ']').join(', ')} DI ${TP(s.type)}` : `${s.name} : ${TP(s.type)}${String(s.init || '').trim() ? ' = ' + E(s.init, sc) : ''}`}`); break;
+          case 'const': o.line(`${PS('const')} ${s.name} : ${TP(s.type)} = ${E(s.expression, sc)}`); break;
+          case 'declare': o.line(`${PS('declare')} ${s.array ? PS('declareArray', { names: s.name.split(',').map((x) => x.trim() + '[' + dimsOf(s, E, sc).join(', ') + ']').join(', '), type: TP(s.type) }) : `${s.name} : ${TP(s.type)}${String(s.init || '').trim() ? ' = ' + E(s.init, sc) : ''}`}`); break;
           case 'assign': o.line(`${targetsOf(s).map((x) => E(x, sc)).join(', ')} ← ${E(s.expression, sc)}`); break;
-          case 'input': o.line(`LEGGI ${E(s.variable, sc)}`); break;
-          case 'output': o.line(`SCRIVI ${E(s.expression, sc)}${s.newline ? '' : '   // senza a capo'}`); break;
+          case 'input': o.line(`${PS('read')} ${E(s.variable, sc)}`); break;
+          case 'output': o.line(`${PS('write')} ${E(s.expression, sc)}${s.newline ? '' : '   // ' + PS('noNewline')}`); break;
           case 'if':
-            o.line(`SE ${E(s.expression, sc)} ALLORA`); o.in(); block(s.then, sc); o.out();
-            if (s.else.length) { o.line('ALTRIMENTI'); o.in(); block(s.else, sc); o.out(); }
-            o.line('FINE SE'); break;
-          case 'while': o.line(`MENTRE ${E(s.expression, sc)} ESEGUI`); o.in(); block(s.body, sc); o.out(); o.line('FINE MENTRE'); break;
-          case 'do': o.line('RIPETI'); o.in(); block(s.body, sc); o.out(); o.line(`MENTRE ${E(s.expression, sc)}`); break;
+            o.line(PS('if', { cond: E(s.expression, sc) })); o.in(); block(s.then, sc); o.out();
+            if (s.else.length) { o.line(PS('else')); o.in(); block(s.else, sc); o.out(); }
+            o.line(PS('endIf')); break;
+          case 'while': o.line(PS('while', { cond: E(s.expression, sc) })); o.in(); block(s.body, sc); o.out(); o.line(PS('endWhile')); break;
+          case 'do': o.line(PS('repeat')); o.in(); block(s.body, sc); o.out(); o.line(PS('doWhile', { cond: E(s.expression, sc) })); break;
           case 'for': {
             const st = String(s.step).trim();
-            o.line(`PER ${E(s.variable, sc)} DA ${E(s.start, sc)} A ${E(s.end, sc)}${s.direction === 'dec' ? ' INDIETRO' : ''}${st && st !== '1' ? ' PASSO ' + E(st, sc) : ''} ESEGUI`);
-            o.in(); block(s.body, sc); o.out(); o.line('FINE PER'); break;
+            o.line(PS('for', { v: E(s.variable, sc), from: E(s.start, sc), to: E(s.end, sc), back: s.direction === 'dec' ? ' ' + PS('backwards') : '', step: st && st !== '1' ? ' ' + PS('step') + ' ' + E(st, sc) : '' }));
+            o.in(); block(s.body, sc); o.out(); o.line(PS('endFor')); break;
           }
-          case 'call': o.line(`CHIAMA ${/\(/.test(s.expression) ? E(s.expression, sc) : fname(s.expression.trim(), sc) + '()'}`); break;
+          case 'call': o.line(`${PS('call')} ${/\(/.test(s.expression) ? E(s.expression, sc) : fname(s.expression.trim(), sc) + '()'}`); break;
           case 'comment': for (const l of String(s.text).split('\n')) o.line('// ' + l); break;
-          case 'breakpoint': o.line(`// punto di interruzione${s.always ? '' : ' se ' + s.expression}`); break;
-          case 'open': o.line(`APRI ${E(s.expression, sc)} IN ${s.mode === 'read' ? 'LETTURA' : 'SCRITTURA'}`); break;
-          case 'close': o.line(`CHIUDI FILE IN ${s.mode === 'read' ? 'LETTURA' : 'SCRITTURA'}`); break;
-          case 'read': o.line(`LEGGI ${E(s.variable, sc)} DAL FILE`); break;
-          case 'write': o.line(`SCRIVI ${E(s.expression, sc)} NEL FILE`); break;
+          case 'breakpoint': o.line(`// ${C('breakpoint')}${s.always ? '' : ' ' + PS('if', { cond: s.expression })}`); break;
+          case 'open': o.line(PS('open', { file: E(s.expression, sc), mode: PS(s.mode === 'read' ? 'reading' : 'writing') })); break;
+          case 'close': o.line(PS('close', { mode: PS(s.mode === 'read' ? 'reading' : 'writing') })); break;
+          case 'read': o.line(PS('readFile', { v: E(s.variable, sc) })); break;
+          case 'write': o.line(PS('writeFile', { e: E(s.expression, sc) })); break;
           case 'throw': o.line(`THROW ${E(s.expression, sc)}`); break;
           case 'try':
             o.line('TRY'); o.in(); block(s.body, sc); o.out();
             for (const c of s.catches || []) { o.line(`CATCH ${c.type} ${c.variable}`); o.in(); block(c.body, sc); o.out(); }
             if (s.hasFinally) { o.line('FINALLY'); o.in(); block(s.finally || [], sc); o.out(); }
-            o.line('FINE TRY'); break;
+            o.line(PS('endTry')); break;
         }
       }
     };
     const T = TP;
-    const psig = (f) => f.params.map((p) => `${p.name} : ${p.array ? ((p.dims || 1) > 1 ? `array a ${p.dims} dimensioni di ` : 'array di ') : ''}${T(p.type)}`).join(', ');
+    const psig = (f) => f.params.map((p) => `${p.name} : ${shape(p)}${T(p.type)}`).join(', ');
     if (_CM.hasClasses(prog)) {
       const main = _CM.mainClass(prog);
       const V = (v) => _CM.VISIBILITY[v || 'public'];
       OO.ordered(prog, true).forEach((c, ci) => {
         if (ci) o.line('');
-        o.line(`${c.abstract ? 'CLASSE ASTRATTA' : 'CLASSE'} ${_CM.classTitle(c)}${c.module ? '   // dal modulo ' + c.module.name : ''}${c.parent ? ' EREDITA DA ' + c.parent : ''}${c === main ? '   // classe principale: il programma parte da Main' : ''}`);
+        o.line(`${PS(c.abstract ? 'abstractClass' : 'class')} ${_CM.classTitle(c)}${c.module ? '   // ' + C('fromModule', { name: c.module.name }) : ''}${c.parent ? ' ' + PS('inherits', { parent: c.parent }) : ''}${c === main ? '   // ' + C('mainClass') : ''}`);
         o.in();
         if (c.attributes.length) {
-          o.line('ATTRIBUTI'); o.in();
+          o.line(PS('attributes')); o.in();
           for (const a of c.attributes) {
             const sc = OO.classScope(prog, c, a.static);
-            o.line(`${V(a.visibility)} ${a.name}${a.array ? '[' + _CE.splitTop(a.size).map((x) => E(x, sc)).join(', ') + ']' : ''} : ${T(a.type)}${a.static ? ' STATICO' : ''}${String(a.init || '').trim() ? ' = ' + E(a.init, sc) : ''}`);
+            o.line(`${V(a.visibility)} ${a.name}${a.array ? '[' + _CE.splitTop(a.size).map((x) => E(x, sc)).join(', ') + ']' : ''} : ${T(a.type)}${a.static ? ' ' + PS('static') : ''}${String(a.init || '').trim() ? ' = ' + E(a.init, sc) : ''}`);
           }
           o.out();
         }
@@ -684,32 +691,32 @@ LANGS.pseudo = {
           const sc = buildScope(prog, f);
           const rl = _CM.rets(f);
           o.line('');
-          const kw = f.ctor ? 'COSTRUTTORE' : (f.static ? 'METODO STATICO' : f.abstract ? 'METODO ASTRATTO' : 'METODO');
+          const kw = PS(f.ctor ? 'constructor' : (f.static ? 'staticMethod' : f.abstract ? 'abstractMethod' : 'method'));
           const fnm = f.name + ((f.tparams || []).length ? `<${f.tparams.join(', ')}>` : '');
-          if (f.abstract) { o.line(`${kw} ${V(f.visibility)} ${fnm}(${psig(f)})${rl.length ? ' : ' + rl.map(RT).join(', ') : ''}   // senza corpo: lo definiscono le sottoclassi`); continue; }
+          if (f.abstract) { o.line(`${kw} ${V(f.visibility)} ${fnm}(${psig(f)})${rl.length ? ' : ' + rl.map(RT).join(', ') : ''}   // ${C('noBody')}`); continue; }
           o.line(`${kw} ${V(f.visibility)} ${fnm}(${psig(f)})${rl.length ? ' : ' + rl.map(RT).join(', ') : ''}`);
           o.in(); block(f.body, sc);
-          if (rl.length) o.line(`RESTITUISCI ${rl.map((r) => r.name).join(', ')}`);
-          o.out(); o.line(f.ctor ? 'FINE COSTRUTTORE' : 'FINE METODO');
+          if (rl.length) o.line(`${PS('return')} ${rl.map((r) => r.name).join(', ')}`);
+          o.out(); o.line(PS(f.ctor ? 'endConstructor' : 'endMethod'));
         }
-        o.out(); o.line('FINE CLASSE');
+        o.out(); o.line(PS('endClass'));
       });
       return o.text();
     }
     prog.functions.forEach((f, i) => {
       const sc = buildScope(prog, f);
       if (i > 0) o.line('');
-      if (i === 0) o.line(`ALGORITMO ${prog.attrs.name ? prog.attrs.name.replace(/\s+/g, '_') : 'Main'}`);
+      if (i === 0) o.line(`${PS('algorithm')} ${prog.attrs.name ? prog.attrs.name.replace(/\s+/g, '_') : 'Main'}`);
       else {
-        const ps = f.params.map((p) => `${p.name} : ${p.array ? ((p.dims || 1) > 1 ? `array a ${p.dims} dimensioni di ` : 'array di ') : ''}${TP(p.type)}`).join(', ');
+        const ps = f.params.map((p) => `${p.name} : ${shape(p)}${TP(p.type)}`).join(', ');
         const rl = _CM.rets(f);
         const nm = f.name + ((f.tparams || []).length ? `<${f.tparams.join(', ')}>` : '');
-        o.line(!rl.length ? `PROCEDURA ${nm}(${ps})` : `FUNZIONE ${nm}(${ps}) : ${rl.map(RT).join(', ')}`);
+        o.line(!rl.length ? `${PS('procedure')} ${nm}(${ps})` : `${PS('function')} ${nm}(${ps}) : ${rl.map(RT).join(', ')}`);
       }
       o.in(); block(f.body, sc);
-      if (i > 0 && _CM.rets(f).length) o.line(`RESTITUISCI ${_CM.rets(f).map((r) => r.name).join(', ')}`);
+      if (i > 0 && _CM.rets(f).length) o.line(`${PS('return')} ${_CM.rets(f).map((r) => r.name).join(', ')}`);
       o.out();
-      o.line(i === 0 ? 'FINE' : (!_CM.rets(f).length ? 'FINE PROCEDURA' : 'FINE FUNZIONE'));
+      o.line(i === 0 ? PS('end') : PS(!_CM.rets(f).length ? 'endProcedure' : 'endFunction'));
     });
     return o.text();
   },
@@ -726,11 +733,11 @@ LANGS.python = {
       rel: { '==': '==', '!=': '!=', '<': '<', '<=': '<=', '>': '>', '>=': '>=' },
       lang: 'python', nul: 'None', self: 'self', newObj: (c, a) => `${c}(${a})`, superCtor: (a) => `super().__init__(${a})`, superMethod: (m, a) => `super().${m}(${a})`,
       excMsg: (o) => `str(${o})`,
-      // indici controllati (Python accetterebbe gli indici negativi): solo se il programma cattura IndiceNonValido
-      idx: GEN.exc.idx ? (nm, ix) => { used.add('indice'); return ix.reduce((c, i) => `${c}[indice(${c}, ${i})]`, nm); } : undefined,
+      // checked indices (Python would accept negative indices): only if the program catches IndexOutOfRange
+      idx: GEN.exc.idx ? (nm, ix) => { used.add('checkIndex'); return ix.reduce((c, i) => `${c}[checkIndex(${c}, ${i})]`, nm); } : undefined,
       field: (h, sc) => (h.attr.static ? `${h.owner.name}.${h.attr.name}` : `self.${h.attr.name}`),
       bin(n, sc, pr, generic) {
-        // confronto con None: is / is not
+        // comparison with None: is / is not
         if ((n.op === '==' || n.op === '!=') && (strip(n.l).k === 'null' || strip(n.r).k === 'null')) return generic(n, sc, n.op === '==' ? 'is' : 'is not', P.rel, 'none');
         if (n.op === '&') {
           const parts = concatParts(n).map((x) => { const t = _CE.inferType(x, sc); const e = pr(x, sc); return t === 'String' ? (e.p <= P.add ? `(${e.s})` : e.s) : `str(${e.s})`; });
@@ -763,7 +770,7 @@ LANGS.python = {
           case 'tointeger': return { s: `int(${A(0)})`, p: P.atom };
           case 'toreal': return { s: `float(${A(0)})`, p: P.atom };
           case 'tostring': return { s: `str(${A(0)})`, p: P.atom };
-          case 'eof': used.add('eof'); return { s: 'fine_file()', p: P.atom };
+          case 'eof': used.add('eof'); return { s: 'end_of_file()', p: P.atom };
         }
         return { s: `${n.name}(${a.map((x) => x.s).join(', ')})`, p: P.atom };
       },
@@ -800,7 +807,7 @@ LANGS.python = {
           case 'if': {
             o.line(`if ${E(s.expression, sc)}:`); o.in(); block(s.then, sc, o); o.out();
             if (s.else.length === 1 && s.else[0].kind === 'if') {
-              // catena elif
+              // elif chain
               let cur = s.else[0];
               for (;;) {
                 o.line(`elif ${E(cur.expression, sc)}:`); o.in(); block(cur.then, sc, o); o.out();
@@ -837,16 +844,16 @@ LANGS.python = {
           }
           case 'call': o.line(/\(/.test(s.expression) ? E(s.expression, sc) : fname(s.expression.trim(), sc) + '()'); break;
           case 'comment': for (const l of String(s.text).split('\n')) o.line('# ' + l); break;
-          case 'breakpoint': o.line(`# punto di interruzione${s.always ? '' : ': ' + s.expression}`); break;
-          case 'open': used.add('files'); o.line(s.mode === 'read' ? `file_lettura = open(${E(s.expression, sc)}, "r")` : `file_scrittura = open(${E(s.expression, sc)}, "w")`); break;
-          case 'close': used.add('files'); o.line(s.mode === 'read' ? 'file_lettura.close()' : 'file_scrittura.close()'); break;
+          case 'breakpoint': o.line(`# ${C('breakpoint')}${s.always ? '' : ': ' + s.expression}`); break;
+          case 'open': used.add('files'); o.line(s.mode === 'read' ? `file_in = open(${E(s.expression, sc)}, "r")` : `file_out = open(${E(s.expression, sc)}, "w")`); break;
+          case 'close': used.add('files'); o.line(s.mode === 'read' ? 'file_in.close()' : 'file_out.close()'); break;
           case 'read': {
             used.add('files'); const t = lvType(s.variable, sc);
-            const raw = 'file_lettura.readline().rstrip("\\n")';
+            const raw = 'file_in.readline().rstrip("\\n")';
             o.line(`${E(s.variable, sc)} = ${t === 'Integer' ? `int(${raw})` : t === 'Real' ? `float(${raw})` : t === 'Boolean' ? `${raw}.lower() == "true"` : raw}`);
             break;
           }
-          case 'write': used.add('files'); o.line(`file_scrittura.write(str(${E(s.expression, sc)}) + "\\n")`); break;
+          case 'write': used.add('files'); o.line(`file_out.write(str(${E(s.expression, sc)}) + "\\n")`); break;
           case 'throw': o.line(`raise ${E(s.expression, sc)}`); break;
           case 'try':
             o.line('try:'); o.in(); block(s.body, sc, o); o.out();
@@ -866,8 +873,8 @@ LANGS.python = {
       if (used.has('abc')) hd.push('from abc import ABC, abstractmethod');
       if (GEN.helpers.has('deque')) hd.push('from collections import deque');
       if (hd.length) hd.push('');
-      if (used.has('indice')) hd.push('def indice(v, i):', '    # come in FlowLab: un indice negativo o troppo grande è un errore', '    if i < 0 or i >= len(v):', '        raise IndexError("Indice " + str(i) + " fuori dai limiti")', '    return i', '', '');
-      if (used.has('eof')) hd.push('def fine_file():', '    pos = file_lettura.tell()', '    riga = file_lettura.readline()', '    file_lettura.seek(pos)', '    return riga == ""', '', '');
+      if (used.has('checkIndex')) hd.push('def checkIndex(v, i):', `    # ${C('indexCheckComment')}`, '    if i < 0 or i >= len(v):', `        raise IndexError("${C('index')}" + str(i) + "${C('outOfBounds')}")`, '    return i', '', '');
+      if (used.has('eof')) hd.push('def end_of_file():', '    pos = file_in.tell()', '    line = file_in.readline()', '    file_in.seek(pos)', '    return line == ""', '', '');
       return hd.join('\n') + (hd.length ? '\n' : '');
     };
     if (_CM.hasClasses(prog)) {
@@ -878,16 +885,16 @@ LANGS.python = {
       const pyType = { Integer: (x) => `type(${x}) is int`, Real: (x) => `isinstance(${x}, (int, float))`, String: (x) => `isinstance(${x}, str)`, Boolean: (x) => `isinstance(${x}, bool)` };
       const test = { len: (n) => `len(args) == ${n}`, type: (p, i) => (p.array ? `isinstance(args[${i}], list)` : isTP(p.type) ? 'True' : (pyType[p.type] || ((x) => `isinstance(${x}, ${_CE.splitType(p.type).base})`))(`args[${i}]`)) };
       for (const c of OO.ordered(prog, false)) {
-        // classe astratta: deriva da ABC (se la madre non lo è già)
+        // abstract class: derives from ABC (if the parent does not already)
         const par = _CM.classByName(prog, c.parent);
         const bases = [...(c.parent ? [parentL('python', c)] : []), ...(c.abstract && !(par && _CM.chainOf(prog, par).some((k) => k.abstract)) ? ['ABC'] : [])];
         if (c.abstract) used.add('abc');
         o.line(`class ${c.name}${bases.length ? `(${bases.join(', ')})` : ''}:`); o.in();
         const start = o.lines.length;
-        for (const a of c.attributes.filter((x) => x.static)) o.line(`${a.name} = ${attrInit(a, OO.classScope(prog, c, true))}  # statico, ${OO.tag(a.visibility)}`);
+        for (const a of c.attributes.filter((x) => x.static)) o.line(`${a.name} = ${attrInit(a, OO.classScope(prog, c, true))}  # ${C('static')}, ${OO.tag(a.visibility)}`);
         const inst = c.attributes.filter((x) => !x.static);
         const fieldLines = (out) => { const sc = OO.classScope(prog, c, false); for (const a of inst) out.line(`self.${a.name} = ${attrInit(a, sc)}${a.visibility !== 'public' ? '  # ' + OO.tag(a.visibility) : ''}`); };
-        // corpo di un costruttore: super, attributi, blocchi
+        // body of a constructor: super, attributes, blocks
         const ctorBody = (f, out) => {
           const sp = OO.splitSuper(f); const sc = buildScope(prog, f);
           if (sp.args) out.line(`super().__init__(${sp.args.map((x) => pr(x, sc).s).join(', ')})`);
@@ -931,14 +938,14 @@ LANGS.python = {
             o.in(); (isCtor ? ctorBody : methodBody)(f0, o); o.out();
             return;
           }
-          // overloading: si sceglie la versione dal numero e dal tipo degli argomenti
-          o.line(`def ${name}(${isStatic ? '' : 'self, '}*args):  # ${group.length} versioni${note(f0)}`); o.in();
+          // overloading: the version is chosen from the number and type of the arguments
+          o.line(`def ${name}(${isStatic ? '' : 'self, '}*args):  # ${C('versions', { count: group.length })}${note(f0)}`); o.in();
           group.forEach((f, k) => {
             o.line(`${k ? 'elif' : 'if'} ${dispatchCond(f, group, ' and ', test)}:`); o.in();
             if (f.params.length) o.line(`${f.params.map((x) => x.name).join(', ')}${f.params.length === 1 ? ',' : ''} = args`);
             (isCtor ? ctorBody : methodBody)(f, o); o.out();
           });
-          o.line('else:'); o.in(); o.line(`raise TypeError("${isCtor ? c.name : f0.name}: nessuna versione accetta questi argomenti")`); o.out();
+          o.line('else:'); o.in(); o.line(`raise TypeError("${C('noVersion', { name: isCtor ? c.name : f0.name })}")`); o.out();
           o.out();
         };
         if (ctors.length) emitGroup(ctors, true);
@@ -969,14 +976,14 @@ LANGS.python = {
   },
 };
 
-/* ======================== Famiglia C (C++, Java, C#, JS) ================= */
+/* ======================== C family (C++, Java, C#, JS) ================= */
 function cFamily(cfg) {
   return {
     label: cfg.label, ext: cfg.ext, comment: '//', keywords: cfg.keywords,
     generate(prog) {
       const used = new Set();
       const L = {
-        // indici controllati solo se il programma cattura IndiceNonValido (C++ .at(), JavaScript indice())
+        // indices checked only if the program catches IndexOutOfRange (C++ .at(), JavaScript checkIndex())
         idx: GEN.exc.idx && cfg.idxChk ? (nm, ix) => cfg.idxChk(nm, ix, used) : cfg.idx, str: (s) => cfg.strLit(s), T: 'true', F: 'false', pi: cfg.pi, use: () => used.add('pi'),
         not: '!', notPrec: P.un, or: '||', and: '&&', pow: '**',
         rel: { '==': cfg.eq || '==', '!=': cfg.neq || '!=', '<': '<', '<=': '<=', '>': '>', '>=': '>=' },
@@ -989,7 +996,7 @@ function cFamily(cfg) {
             if (cfg.concatPrefix && _CE.inferType(concatParts(n)[0], sc) !== 'String') parts.unshift(cfg.concatPrefix);
             return { s: parts.join(' + '), p: P.add };
           }
-          // divisione e resto per zero: dove il linguaggio non lancia un'eccezione, una funzione di controllo
+          // division and remainder by zero: where the language does not throw an exception, a check function
           if (GEN.exc.div && n.op === '/' && cfg.divFn) return { s: cfg.divFn(pr(n.l, sc).s, pr(n.r, sc).s, used), p: P.atom };
           if (GEN.exc.div && n.op === '%' && cfg.modFn && lt !== 'Real' && rt !== 'Real') return { s: cfg.modFn(pr(n.l, sc).s, pr(n.r, sc).s, used), p: P.atom };
           if (n.op === '/' && cfg.intDiv && lt !== 'Real' && rt !== 'Real') {
@@ -1005,7 +1012,7 @@ function cFamily(cfg) {
             const l = pr(n.l, sc), r = pr(n.r, sc);
             return { s: `${l.p <= P.pow ? '(' + l.s + ')' : l.s} ** ${r.p < P.pow ? '(' + r.s + ')' : r.s}`, p: P.pow };
           }
-          // confronti tra valori di tipo T: equals / compareTo
+          // comparisons between values of type T: equals / compareTo
           if (REL.includes(n.op) && cfg.cmpT && (isTP(lt) || isTP(rt) || (['==', '!='].includes(n.op) && boxedElem(n.l, sc) && boxedElem(n.r, sc)))) return cfg.cmpT(n.op, pr(n.l, sc), pr(n.r, sc));
           if (REL.includes(n.op) && lt === 'String' && rt === 'String' && cfg.strCmp) return cfg.strCmp(n.op, pr(n.l, sc), pr(n.r, sc));
           return null;
@@ -1025,7 +1032,7 @@ function cFamily(cfg) {
       const E = (src, sc) => { const t = tryParse(src); return t ? pr(t, sc).s : src; };
       const lvInfo = (v, sc) => ({ type: lvTypeOf(v, sc) });
       const blk = (o, stmts, sc) => { o.in(); block(o, stmts, sc); o.out(); };
-      const unsupported = (o, what) => o.line(`// [${what}: non disponibile in ${cfg.label}]`);
+      const unsupported = (o, what) => o.line(`// [${C('unsupported', { what, lang: cfg.label })}]`);
       function block(o, stmts, sc) {
         for (let si = 0; si < stmts.length; si++) {
           const s = stmts[si];
@@ -1046,7 +1053,7 @@ function cFamily(cfg) {
             }
             case 'input': cfg.input(o, E(s.variable, sc), lvInfo(s.variable, sc).type, used); break;
             case 'output': {
-              // in C++ << lega più dei confronti: cout << (a == b)
+              // in C++ << binds tighter than comparisons: cout << (a == b)
               const x = tryParse(s.expression); const ex = x ? pr(x, sc) : { s: s.expression, p: P.atom };
               o.line(cfg.output(cfg.wrapOut && ex.p <= P.rel ? `(${ex.s})` : ex.s, s.newline) + ';');
               break;
@@ -1072,7 +1079,7 @@ function cFamily(cfg) {
             }
             case 'call': o.line((/\(/.test(s.expression) ? E(s.expression, sc) : fname(s.expression.trim(), sc) + '()') + ';'); break;
             case 'comment': for (const l of String(s.text).split('\n')) o.line('// ' + l); break;
-            case 'breakpoint': o.line(`// punto di interruzione${s.always ? '' : ': ' + s.expression}`); break;
+            case 'breakpoint': o.line(`// ${C('breakpoint')}${s.always ? '' : ': ' + s.expression}`); break;
             case 'open': case 'close': case 'read': case 'write':
               if (cfg.files) cfg.files(o, s, E, sc, lvInfo, used); else unsupported(o, `file: ${s.kind} ${s.expression || s.variable || s.mode}`);
               break;
@@ -1096,7 +1103,7 @@ function cFamily(cfg) {
 }
 
 const T_CPP = { Integer: 'int', Real: 'double', String: 'string', Boolean: 'bool', None: 'void' };
-/* gli oggetti in C++ sono puntatori (creati con new); T resta T; ArrayList<int> nativo diventa vector<int>* */
+/* objects in C++ are pointers (created with new); T stays T; native ArrayList<int> becomes vector<int>* */
 const tCpp = (t) => {
   const g = _CE.splitType(t);
   if (!g.args.length) return T_CPP[t] || (isTP(t) ? t : (_CM.excClass(t) ? excL('cpp', t) : t) + '*');
@@ -1104,59 +1111,59 @@ const tCpp = (t) => {
   return n && n.cpp ? n.cpp.type(a) : `${g.base}<${a.join(', ')}>*`;
 };
 const tplOf = (c) => ((c.tparams || []).length ? `template <${c.tparams.map((t) => 'typename ' + t).join(', ')}>` : '');
-/* valore restituito: un array diventa un vector (annidato per più dimensioni) */
+/* returned value: an array becomes a vector (nested for more dims) */
 const cppRetT = (r) => (r.array ? 'vector<'.repeat(r.dims || 1) + tCpp(r.type) + '>'.repeat(r.dims || 1) : tCpp(r.type));
-/* funzione generica: template <typename T> davanti alla firma */
+/* generic function: template <typename T> before the signature */
 const tplF = (f) => ((f.tparams || []).length ? `template <${f.tparams.map((t) => 'typename ' + t).join(', ')}> ` : '');
 const qualOf = (c) => ((c.tparams || []).length ? `${c.name}<${c.tparams.join(', ')}>` : c.name);
 const CPP_HELPERS = {
-  rimuoviIn: ['// toglie l\'elemento in posizione i e lo restituisce', 'template <typename T> T rimuoviIn(vector<T>* v, int i) { T x = (*v)[i]; v->erase(v->begin() + i); return x; }'],
-  indiceDi: ['// posizione di x nel vector, -1 se non c\'è', 'template <typename T, typename U> int indiceDi(vector<T>* v, const U& x) { for (int i = 0; i < (int) v->size(); i++) if ((*v)[i] == x) return i; return -1; }'],
-  togliCima: ['// toglie e restituisce l\'elemento in cima alla pila', 'template <typename T> T togliCima(stack<T>* s) { T x = s->top(); s->pop(); return x; }'],
-  togliPrimo: ['// toglie e restituisce il primo elemento della coda', 'template <typename T> T togliPrimo(queue<T>* q) { T x = q->front(); q->pop(); return x; }'],
+  removeAt: [() => '// ' + C('removeAtComment'), 'template <typename T> T removeAt(vector<T>* v, int i) { T x = (*v)[i]; v->erase(v->begin() + i); return x; }'],
+  indexOfItem: [() => '// ' + C('indexOfComment'), 'template <typename T, typename U> int indexOfItem(vector<T>* v, const U& x) { for (int i = 0; i < (int) v->size(); i++) if ((*v)[i] == x) return i; return -1; }'],
+  popTop: [() => '// ' + C('popTopComment'), 'template <typename T> T popTop(stack<T>* s) { T x = s->top(); s->pop(); return x; }'],
+  popFront: [() => '// ' + C('popFrontComment'), 'template <typename T> T popFront(queue<T>* q) { T x = q->front(); q->pop(); return x; }'],
 };
 function cppHeaderExtras(o) {
   if (GEN.helpers.has('stack')) o.line('#include <stack>');
   if (GEN.helpers.has('queue')) o.line('#include <queue>');
 }
-/* eccezioni in C++: include, classi delle eccezioni predefinite che il C++ non ha, funzioni di controllo */
+/* exceptions in C++: include, classes of the predefined exceptions that C++ does not have, check functions */
 function cppExcIncludes(o, u) {
-  if (!GEN.exc.used && !u.has('dividi') && !u.has('conv')) return;
+  if (!GEN.exc.used && !u.has('divide') && !u.has('conv')) return;
   o.line('#include <stdexcept>');
   if (u.has('excptr')) o.line('#include <exception>');
 }
 function cppExcHelpers(o, u) {
   const lines = [];
   for (const b of _CM.EXC_CLASSES) if (GEN.helpers.has('exc:' + b.name)) lines.push(`class ${b.name} : public runtime_error { public: using runtime_error::runtime_error; };`);
-  if (u.has('dividi')) lines.push('// divisione e resto che lanciano un\'eccezione se il divisore è zero (come in FlowLab)', 'double dividi(double a, double b) { if (b == 0) throw DivisionePerZero("Divisione per zero"); return a / b; }');
-  if (u.has('resto')) lines.push('int resto(int a, int b) { if (b == 0) throw DivisionePerZero("Modulo per zero"); return a % b; }');
-  if (u.has('conv')) lines.push('// conversioni che accettano solo un numero intero (stoi accetterebbe anche "12abc")',
-    'int aIntero(const string& s) { size_t n = 0; int v = stoi(s, &n); if (n != s.size()) throw invalid_argument("\\"" + s + "\\" non è un numero intero valido"); return v; }',
-    'double aReale(const string& s) { size_t n = 0; double v = stod(s, &n); if (n != s.size()) throw invalid_argument("\\"" + s + "\\" non è un numero reale valido"); return v; }');
+  if (u.has('divide')) lines.push('// ' + C('divRemComment'), `double divide(double a, double b) { if (b == 0) throw DivisionByZero("${C('divisionByZero')}"); return a / b; }`);
+  if (u.has('remainderOf')) lines.push(`int remainderOf(int a, int b) { if (b == 0) throw DivisionByZero("${C('moduloByZero')}"); return a % b; }`);
+  if (u.has('conv')) lines.push('// ' + C('convIntComment'),
+    `int toInt(const string& s) { size_t n = 0; int v = stoi(s, &n); if (n != s.size()) throw invalid_argument("\\"" + s + "\\"${C('notInteger')}"); return v; }`,
+    `double toReal(const string& s) { size_t n = 0; double v = stod(s, &n); if (n != s.size()) throw invalid_argument("\\"" + s + "\\"${C('notReal')}"); return v; }`);
   if (lines.length) { o.line(''); lines.forEach((l) => o.line(l)); }
 }
-/* JavaScript: classi delle eccezioni predefinite (tranne Eccezione = Error) e funzioni di controllo */
+/* JavaScript: classes of the predefined exceptions (except Exception = Error) and check functions */
 function jsExcHelpers(u) {
   const lines = [];
   const add = (...l) => { if (lines.length) lines.push(''); lines.push(...l); };
   for (const b of _CM.EXC_CLASSES) if (GEN.helpers.has('exc:' + b.name)) add(`class ${b.name} extends Error {}`);
-  if (u.has('dividi')) add('// divisione e resto che lanciano un\'eccezione se il divisore è zero (come in FlowLab)', 'function dividi(a, b) { if (b === 0) throw new DivisionePerZero("Divisione per zero"); return a / b; }');
-  if (u.has('resto')) add('function resto(a, b) { if (b === 0) throw new DivisionePerZero("Modulo per zero"); return a % b; }');
-  if (u.has('indice')) add('// indice controllato: fuori dai limiti è un errore (come in FlowLab)', 'function indice(v, i) { if (i < 0 || i >= v.length) throw new IndiceNonValido("Indice " + i + " fuori dai limiti"); return i; }');
-  if (u.has('conv')) add('// conversioni che accettano solo un numero', 'function aIntero(s) { if (!/^\\s*[-+]?\\d+\\s*$/.test(s)) throw new ConversioneNonValida(\'"\' + s + \'" non è un numero intero valido\'); return parseInt(s); }',
-    'function aReale(s) { const v = Number(s); if (String(s).trim() === "" || isNaN(v)) throw new ConversioneNonValida(\'"\' + s + \'" non è un numero reale valido\'); return v; }');
+  if (u.has('divide')) add('// ' + C('divRemComment'), `function divide(a, b) { if (b === 0) throw new DivisionByZero("${C('divisionByZero')}"); return a / b; }`);
+  if (u.has('remainderOf')) add(`function remainderOf(a, b) { if (b === 0) throw new DivisionByZero("${C('moduloByZero')}"); return a % b; }`);
+  if (u.has('checkIndex')) add('// ' + C('indexCheckComment'), `function checkIndex(v, i) { if (i < 0 || i >= v.length) throw new IndexOutOfRange("${C('index')}" + i + "${C('outOfBounds')}"); return i; }`);
+  if (u.has('conv')) add('// ' + C('convComment'), 'function toInt(s) { if (!/^\\s*[-+]?\\d+\\s*$/.test(s)) throw new InvalidConversion(\'"\' + s + \'"' + C('notInteger') + '\'); return parseInt(s); }',
+    'function toReal(s) { const v = Number(s); if (String(s).trim() === "" || isNaN(v)) throw new InvalidConversion(\'"\' + s + \'"' + C('notReal') + '\'); return v; }');
   return lines;
 }
 function cppHelpers(o) {
   const hs = Object.keys(CPP_HELPERS).filter((k) => GEN.helpers.has(k));
   if (!hs.length) return;
   o.line('');
-  for (const k of hs) CPP_HELPERS[k].forEach((l) => o.line(l));
+  for (const k of hs) CPP_HELPERS[k].forEach((l) => o.line(typeof l === 'function' ? l() : l));
 }
 const DEF_CPP = { Integer: '0', Real: '0.0', String: '""', Boolean: 'false' };
 const usesFiles = (prog) => prog.functions.some((f) => { let u = false; _CM.walk(f.body, (s) => { if (['open', 'close', 'read', 'write'].includes(s.kind)) u = true; }); return u; });
 const cap = (n) => n[0].toUpperCase() + n.slice(1);
-/* parti di una dichiarazione C++: tipo e inizializzazione (vector annidati per gli array) */
+/* parts of a C++ declaration: type and initialization (nested vectors for arrays) */
 function cppParts(t, arr, D) {
   if (!arr) return { ty: tCpp(t), init: null };
   const ty = (k) => 'vector<'.repeat(D.length - k) + tCpp(t) + '>'.repeat(D.length - k);
@@ -1166,25 +1173,25 @@ function cppParts(t, arr, D) {
 LANGS.cpp = cFamily({
   lang: 'cpp', targ: (t) => tCpp(t),
   excMsg: (o) => `string(${o}->what())`,
-  divFn: (a, b, used) => { used.add('dividi'); need('exc:DivisionePerZero'); return `dividi(${a}, ${b})`; },
-  modFn: (a, b, used) => { used.add('resto'); need('exc:DivisionePerZero'); return `resto(${a}, ${b})`; },
+  divFn: (a, b, used) => { used.add('divide'); need('exc:DivisionByZero'); return `divide(${a}, ${b})`; },
+  modFn: (a, b, used) => { used.add('remainderOf'); need('exc:DivisionByZero'); return `remainderOf(${a}, ${b})`; },
   idxChk: (nm, ix) => ix.reduce((c, i) => `${c}.at(${i})`, nm),
-  // Throw: si lancia l'oggetto (non il puntatore), come si fa in C++
+  // Throw: the object is thrown (not the pointer), as is done in C++
   throwStmt(s, E, sc, pr) {
     const n = strip(tryParse(s.expression));
     if (n && n.k === 'new') { const t = _CM.excClass(n.cls) ? excL('cpp', n.cls) : ((sc.classNamed && sc.classNamed(n.cls)) || { name: n.cls }).name; return `throw ${t}(${n.args.map((a) => pr(a, sc).s).join(', ')});`; }
     return `throw *${E(s.expression, sc)};`;
   },
-  // Catch: l'eccezione si cattura per riferimento e si usa tramite un puntatore (come gli altri oggetti);
-  // il Finally non esiste in C++: si cattura tutto, si esegue il Finally e poi l'eccezione prosegue
+  // Catch: the exception is caught by reference and used through a pointer (like the other objects);
+  // Finally does not exist in C++: everything is caught, the Finally runs and then the exception continues
   tryStmt(o, s, sc, blk, used) {
     const cats = s.catches || [];
     const inner = () => {
       o.line('try {'); blk(o, s.body, sc);
       for (const c of cats) {
-        const T = _CM.excClass(c.type) && _CM.excClass(c.type).name === 'Eccezione' ? 'exception' : excL('cpp', c.type);
-        o.line(`} catch (${T}& ecc_) {`);
-        if (new RegExp('\\b' + c.variable + '\\b', 'i').test(JSON.stringify(c.body))) { o.in(); o.line(`${T}* ${c.variable} = &ecc_;`); o.out(); }
+        const T = _CM.excClass(c.type) && _CM.excClass(c.type).name === 'Exception' ? 'exception' : excL('cpp', c.type);
+        o.line(`} catch (${T}& exc_) {`);
+        if (new RegExp('\\b' + c.variable + '\\b', 'i').test(JSON.stringify(c.body))) { o.in(); o.line(`${T}* ${c.variable} = &exc_;`); o.out(); }
         blk(o, c.body, sc);
       }
       o.line('}');
@@ -1192,14 +1199,14 @@ LANGS.cpp = cFamily({
     if (!s.hasFinally) { inner(); return; }
     used.add('excptr');
     o.line('{'); o.in();
-    o.line('exception_ptr pendente = nullptr; // Finally: si esegue sempre, poi l\'eccezione (se c\'è) prosegue');
+    o.line('exception_ptr pending = nullptr; // ' + C('finallyPending'));
     if (cats.length) { o.line('try {'); o.in(); inner(); o.out(); } else { o.line('try {'); blk(o, s.body, sc); }
-    o.line('} catch (...) {'); o.in(); o.line('pendente = current_exception();'); o.out(); o.line('}');
+    o.line('} catch (...) {'); o.in(); o.line('pending = current_exception();'); o.out(); o.line('}');
     o.line('// Finally'); o.out(); blk(o, s.finally || [], sc); o.in();
-    o.line('if (pendente) rethrow_exception(pendente);');
+    o.line('if (pending) rethrow_exception(pending);');
     o.out(); o.line('}');
   },
-  // funzioni generiche: "testo" è un const char*, con string("testo") T diventa string
+  // generic functions: "text" is a const char*, with string("text") T becomes string
   garg: (node, s) => (strip(node) && strip(node).k === 'str' ? `string(${s})` : s),
   label: 'C++', ext: 'cpp', intDiv: true, fmod: true, powFn: 'pow', intCast: '(int) ', wrapOut: true,
   keywords: ['int', 'double', 'string', 'bool', 'void', 'return', 'if', 'else', 'while', 'for', 'do', 'true', 'false', 'using', 'namespace', 'std', 'include', 'cout', 'cin', 'endl', 'vector', 'const', 'main', 'class', 'public', 'private', 'protected', 'static', 'virtual', 'new', 'this', 'nullptr'],
@@ -1208,7 +1215,7 @@ LANGS.cpp = cFamily({
   toStr(x, t, e, used) {
     if (t === 'String') return x.k === 'str' ? `string(${e.s})` : (e.p <= P.add ? `(${e.s})` : e.s);
     if (t === 'Boolean') return `string(${e.s} ? "true" : "false")`;
-    if (t === 'Real') { used.add('fmt'); return `formatta(${e.s})`; }
+    if (t === 'Real') { used.add('fmt'); return `formatNum(${e.s})`; }
     return `to_string(${e.s})`;
   },
   builtin(low, a, n, sc, used) {
@@ -1225,11 +1232,11 @@ LANGS.cpp = cFamily({
       case 'char': return `string(1, ${At(0)}[${A(1)}])`;
       case 'tochar': return `string(1, (char) ${At(0)})`;
       case 'tocode': return `(int) ${At(0)}[0]`;
-      case 'tofixed': used.add('fixed'); return `aDecimali(${A(0)}, ${A(1)})`;
-      case 'tointeger': if (GEN.exc.conv) { used.add('conv'); return `aIntero(${A(0)})`; } return `stoi(${A(0)})`;
-      case 'toreal': if (GEN.exc.conv) { used.add('conv'); return `aReale(${A(0)})`; } return `stod(${A(0)})`;
-      case 'tostring': { const t = _CE.inferType(n.args[0], sc); if (t === 'String') return A(0); if (t === 'Real') { used.add('fmt'); return `formatta(${A(0)})`; } if (t === 'Boolean') return `string(${A(0)} ? "true" : "false")`; return `to_string(${A(0)})`; }
-      case 'eof': return 'fileLettura.peek() == EOF';
+      case 'tofixed': used.add('fixed'); return `toDecimals(${A(0)}, ${A(1)})`;
+      case 'tointeger': if (GEN.exc.conv) { used.add('conv'); return `toInt(${A(0)})`; } return `stoi(${A(0)})`;
+      case 'toreal': if (GEN.exc.conv) { used.add('conv'); return `toReal(${A(0)})`; } return `stod(${A(0)})`;
+      case 'tostring': { const t = _CE.inferType(n.args[0], sc); if (t === 'String') return A(0); if (t === 'Real') { used.add('fmt'); return `formatNum(${A(0)})`; } if (t === 'Boolean') return `string(${A(0)} ? "true" : "false")`; return `to_string(${A(0)})`; }
+      case 'eof': return 'fileIn.peek() == EOF';
     }
     return null;
   },
@@ -1246,10 +1253,10 @@ LANGS.cpp = cFamily({
   output: (e, nl) => `cout << ${e}${nl ? ' << endl' : ''}`,
   files(o, s, E, sc, lvInfo, used) {
     used.add('fstream');
-    if (s.kind === 'open') o.line(s.mode === 'read' ? `fileLettura.open(${E(s.expression, sc)});` : `fileScrittura.open(${E(s.expression, sc)});`);
-    if (s.kind === 'close') o.line(s.mode === 'read' ? 'fileLettura.close();' : 'fileScrittura.close();');
-    if (s.kind === 'read') { const t = lvInfo(s.variable, sc).type; if (t === 'String') o.line(`getline(fileLettura, ${E(s.variable, sc)});`); else { o.line(`fileLettura >> ${E(s.variable, sc)};`); o.line('fileLettura >> ws;'); } }
-    if (s.kind === 'write') { const x = strip(tryParse(s.expression)); const low = x && x.k === 'bin' && (REL.includes(x.op) || x.op === 'and' || x.op === 'or'); o.line(`fileScrittura << ${low ? `(${E(s.expression, sc)})` : E(s.expression, sc)} << endl;`); }
+    if (s.kind === 'open') o.line(s.mode === 'read' ? `fileIn.open(${E(s.expression, sc)});` : `fileOut.open(${E(s.expression, sc)});`);
+    if (s.kind === 'close') o.line(s.mode === 'read' ? 'fileIn.close();' : 'fileOut.close();');
+    if (s.kind === 'read') { const t = lvInfo(s.variable, sc).type; if (t === 'String') o.line(`getline(fileIn, ${E(s.variable, sc)});`); else { o.line(`fileIn >> ${E(s.variable, sc)};`); o.line('fileIn >> ws;'); } }
+    if (s.kind === 'write') { const x = strip(tryParse(s.expression)); const low = x && x.k === 'bin' && (REL.includes(x.op) || x.op === 'and' || x.op === 'or'); o.line(`fileOut << ${low ? `(${E(s.expression, sc)})` : E(s.expression, sc)} << endl;`); }
   },
   multiAssign(o, tg, call, f, sc, used) { used.add('tuple'); o.line(`tie(${tg.join(', ')}) = ${call};`); },
   program(prog, g) {
@@ -1276,11 +1283,11 @@ LANGS.cpp = cFamily({
     if (u.has('tuple')) o.line('#include <tuple>');
     o.line(''); o.line('using namespace std;'); o.line('');
     if (u.has('pi')) o.line('const double PI = 3.14159265358979323846;');
-    if (u.has('fstream')) { o.line('ifstream fileLettura;'); o.line('ofstream fileScrittura;'); }
-    if (u.has('fmt')) { o.line(''); o.line('string formatta(double x) {'); o.line('    ostringstream s;'); o.line('    s << setprecision(15) << x;'); o.line('    return s.str();'); o.line('}'); }
-    if (u.has('fixed')) { o.line(''); o.line('string aDecimali(double x, int cifre) {'); o.line('    ostringstream s;'); o.line('    s << fixed << setprecision(cifre) << x;'); o.line('    return s.str();'); o.line('}'); }
+    if (u.has('fstream')) { o.line('ifstream fileIn;'); o.line('ofstream fileOut;'); }
+    if (u.has('fmt')) { o.line(''); o.line('string formatNum(double x) {'); o.line('    ostringstream s;'); o.line('    s << setprecision(15) << x;'); o.line('    return s.str();'); o.line('}'); }
+    if (u.has('fixed')) { o.line(''); o.line('string toDecimals(double x, int cifre) {'); o.line('    ostringstream s;'); o.line('    s << fixed << setprecision(cifre) << x;'); o.line('    return s.str();'); o.line('}'); }
     cppExcHelpers(o, u);
-    if (fns.length) { o.line(''); o.line('// Prototipi'); for (const f of fns) o.line(sig(f) + ';'); }
+    if (fns.length) { o.line(''); o.line('// ' + C('prototypes')); for (const f of fns) o.line(sig(f) + ';'); }
     o.line(''); o.line('int main() {');
     if (u.has('rand')) o.line('    srand(time(0));');
     o.line('    cout << boolalpha;');
@@ -1309,18 +1316,18 @@ LANGS.cpp = cFamily({
       }
       for (const f of OO.methods(prog, c)) {
         const nm = OO.isMain(prog, f) ? 'Main' : f.name;
-        // metodo astratto: virtuale puro, senza definizione
+        // abstract method: pure virtual, without definition
         vis(f.visibility).push(`${tplF(f)}${f.static ? 'static ' : (poly || f.abstract ? 'virtual ' : '')}${retT(f)} ${nm}(${params(f)})${f.abstract ? ' = 0' : ''};`);
       }
       decls.line('');
       if (tplOf(c)) decls.line(tplOf(c));
-      // eccezione del programma senza costruttori: il C++ vuole comunque il messaggio per runtime_error
+      // program exception without constructors: C++ still wants the message for runtime_error
       const excRoot = c.parent && _CM.excClass(c.parent);
       if (excRoot && !OO.ctors(prog, c).length) sec.public.unshift(`${c.name}() : ${parentL('cpp', c)}("") {}`);
-      decls.line(`class ${c.name}${c.parent ? ' : public ' + parentL('cpp', c) : ''} {${c.abstract ? ' // classe astratta' : ''}`);
+      decls.line(`class ${c.name}${c.parent ? ' : public ' + parentL('cpp', c) : ''} {${c.abstract ? ' // ' + C('abstractClass') : ''}`);
       for (const v of ['public', 'protected', 'private']) if (sec[v].length) { decls.line(v + ':'); decls.in(); sec[v].forEach((l) => decls.line(l)); decls.out(); }
       decls.line('};');
-      // definizioni di costruttori e metodi
+      // definitions of constructors and methods
       for (const f of [...OO.ctors(prog, c), ...OO.methods(prog, c)]) {
         if (f.abstract) continue;
         const sc = g.buildScope(f);
@@ -1348,14 +1355,14 @@ LANGS.cpp = cFamily({
     if (u.has('tuple')) o.line('#include <tuple>');
     o.line(''); o.line('using namespace std;'); o.line('');
     if (u.has('pi')) o.line('const double PI = 3.14159265358979323846;');
-    if (u.has('fstream')) { o.line('ifstream fileLettura;'); o.line('ofstream fileScrittura;'); }
-    if (u.has('fmt')) { o.line(''); o.line('string formatta(double x) {'); o.line('    ostringstream s;'); o.line('    s << setprecision(15) << x;'); o.line('    return s.str();'); o.line('}'); }
-    if (u.has('fixed')) { o.line(''); o.line('string aDecimali(double x, int cifre) {'); o.line('    ostringstream s;'); o.line('    s << fixed << setprecision(cifre) << x;'); o.line('    return s.str();'); o.line('}'); }
+    if (u.has('fstream')) { o.line('ifstream fileIn;'); o.line('ofstream fileOut;'); }
+    if (u.has('fmt')) { o.line(''); o.line('string formatNum(double x) {'); o.line('    ostringstream s;'); o.line('    s << setprecision(15) << x;'); o.line('    return s.str();'); o.line('}'); }
+    if (u.has('fixed')) { o.line(''); o.line('string toDecimals(double x, int cifre) {'); o.line('    ostringstream s;'); o.line('    s << fixed << setprecision(cifre) << x;'); o.line('    return s.str();'); o.line('}'); }
     cppHelpers(o); cppExcHelpers(o, u);
-    o.line(''); o.line('// Classi (gli oggetti si creano con new e si usano tramite puntatori)');
+    o.line(''); o.line('// ' + C('cppClasses'));
     o.line(ordered.map((c) => `${tplOf(c) ? tplOf(c) + ' ' : ''}class ${c.name};`).join(' '));
     o.lines.push(...decls.lines);
-    if (statics.length) { o.line(''); o.line('// Attributi statici'); statics.forEach((l) => o.line(l)); }
+    if (statics.length) { o.line(''); o.line('// ' + C('staticAttributes')); statics.forEach((l) => o.line(l)); }
     o.line(''); o.line('int main() {');
     if (u.has('rand')) o.line('    srand(time(0));');
     o.line('    cout << boolalpha;');
@@ -1368,18 +1375,18 @@ LANGS.cpp = cFamily({
 
 const T_JAVA = { Integer: 'int', Real: 'double', String: 'String', Boolean: 'boolean', None: 'void' };
 const BOX_J = { Integer: 'Integer', Real: 'Double', String: 'String', Boolean: 'Boolean' };
-/* tipi Java: ArrayList<Integer> con i tipi base "inscatolati"; i moduli nativi usano le classi di java.util */
+/* Java types: ArrayList<Integer> with the base types "boxed"; the native modules use the java.util classes */
 const tJava = (t) => {
   const g = _CE.splitType(t);
   if (!g.args.length) return T_JAVA[t] || (_CM.excClass(t) ? excL('java', t) : t);
   const a = g.args.map((x) => BOX_J[x] || tJava(x)), n = nativeOf(g.base);
   return n && n.java ? n.java.type(a) : `${g.base}<${a.join(', ')}>`;
 };
-/* array di T in Java: non si può scrivere new T[n] */
-/* (se T deve essere confrontabile l'array è di Comparable) */
+/* arrays of T in Java: new T[n] cannot be written */
+/* (if T must be comparable the array is of Comparable) */
 const newArrJava = (t, D, box) => {
   if (!isTP(t)) return `new ${box ? BOX_J[t] : tJava(t)}${D.map((d) => `[${d}]`).join('')}`;
-  // in una funzione generica il tipo vero degli elementi si prende da un parametro (così l'array si può restituire)
+  // in a generic function the real type of the elements is taken from a parameter (so the array can be returned)
   const f = GEN.cur && GEN.cur.f, low = String(t).toLowerCase();
   if (f && (f.tparams || []).some((x) => x.toLowerCase() === low)) {
     const pa = f.params.find((p) => p.array && (p.dims || 1) === 1 && p.type.toLowerCase() === low), ps = f.params.find((p) => !p.array && p.type.toLowerCase() === low);
@@ -1388,32 +1395,32 @@ const newArrJava = (t, D, box) => {
   }
   return `(${t}${'[]'.repeat(D.length)}) new ${boundHere(t) ? 'Comparable' : 'Object'}${D.map((d) => `[${d}]`).join('')}`;
 };
-/* array passato a una funzione generica: Integer[] invece di int[] */
+/* array passed to a generic function: Integer[] instead of int[] */
 const arrJ = (t, key) => (GEN.boxed.has(key) ? BOX_J[t] : tJava(t));
-/* <T> o <T extends Comparable<T>> */
+/* <T> or <T extends Comparable<T>> */
 const jTP = (list, key) => `<${list.map((t) => (GEN.bound.has(key(t)) ? `${t} extends Comparable<${t}>` : t)).join(', ')}>`;
 const jFunTP = (f) => ((f.tparams || []).length ? jTP(f.tparams, (t) => FKEY(f, t)) + ' ' : '');
 const jClassTitle = (c) => ((c.tparams || []).length ? c.name + jTP(c.tparams, (t) => CKEY(c, t)) : c.name);
-/* new T[n] non si può scrivere: (T[]) new Object[n] vuole @SuppressWarnings */
+/* new T[n] cannot be written: (T[]) new Object[n] wants @SuppressWarnings */
 const jUnchecked = (f) => { let u = false; if ((f.tparams || []).length) _CM.walk(f.body, (s) => { if (s.kind === 'declare' && s.array && tpKey(s.type, f, null)) u = true; }); return u; };
-/* valore restituito: int[], Integer[] se va a una funzione generica, T[] */
+/* returned value: int[], Integer[] if it goes to a generic function, T[] */
 const jRet = (f, r, i) => (r.array ? arrJ(r.type, 'ret:' + f.id + ':' + i) + '[]'.repeat(r.dims || 1) : tJava(r.type));
 const jRetT = (f) => { const rl = _CM.rets(f); return rl.length ? jRet(f, rl[0], 0) : 'void'; };
 const jParams = (f) => f.params.map((p) => `${p.array ? arrJ(p.type, f.id + ':' + p.name.toLowerCase()) : tJava(p.type)}${p.array ? '[]'.repeat(p.dims || 1) : ''} ${p.name}`).join(', ');
-let J_PFX = ''; // dalle altre classi lo Scanner e i file stanno nella classe principale
+let J_PFX = ''; // from the other classes the Scanner and the files are in the main class
 const DEF_C = { Integer: '0', Real: '0.0', String: '""', Boolean: 'false' };
 LANGS.java = cFamily({
   lang: 'java', targ: (t) => BOX_J[t] || tJava(t), diamond: '<>',
   excMsg: (o) => `${o}.getMessage()`,
-  // in Java la divisione tra reali per zero non lancia eccezioni: dividi() la controlla
-  divFn: (a, b, used) => { used.add('dividi'); return `${J_PFX}dividi(${a}, ${b})`; },
+  // in Java division between reals by zero throws no exception: divide() checks it
+  divFn: (a, b, used) => { used.add('divide'); return `${J_PFX}divide(${a}, ${b})`; },
   label: 'Java', ext: 'java', intDiv: true, powFn: 'Math.pow', intCast: '(int) ', concatPrefix: '""',
   keywords: ['public', 'static', 'void', 'class', 'int', 'double', 'String', 'boolean', 'return', 'if', 'else', 'while', 'for', 'do', 'true', 'false', 'new', 'import', 'Scanner', 'System', 'Math', 'private', 'protected', 'extends', 'this', 'super', 'null', 'final', 'record', 'throws', 'abstract'],
   pi: 'Math.PI',
   strLit: (s) => escStr(s, '"'),
   toStr: (x, t, e) => (e.p <= P.add ? `(${e.s})` : e.s),
-  // valori di tipo T (oggetti): metodi dell'oggetto, come per le Stringhe: a.equals(b), a.compareTo(b) < 0
-  // (il confronto con null resta == / !=)
+  // values of type T (objects): methods of the object, as for Strings: a.equals(b), a.compareTo(b) < 0
+  // (the comparison with null stays == / !=)
   cmpT(op, l, r) {
     if (l.s === 'null' || r.s === 'null') return null;
     const ls = l.p < P.atom ? `(${l.s})` : l.s;
@@ -1447,7 +1454,7 @@ LANGS.java = cFamily({
       case 'tointeger': return `Integer.parseInt(${A(0)})`;
       case 'toreal': return `Double.parseDouble(${A(0)})`;
       case 'tostring': return `String.valueOf(${A(0)})`;
-      case 'eof': return `!${J_PFX}fileLettura.hasNextLine()`;
+      case 'eof': return `!${J_PFX}fileIn.hasNextLine()`;
     }
     return null;
   },
@@ -1463,7 +1470,7 @@ LANGS.java = cFamily({
   output: (e, nl) => `System.out.${nl ? 'println' : 'print'}(${e})`,
   files(o, s, E, sc, lvInfo, used) {
     used.add('files');
-    const R = J_PFX + 'fileLettura', W = J_PFX + 'fileScrittura';
+    const R = J_PFX + 'fileIn', W = J_PFX + 'fileOut';
     if (s.kind === 'open') o.line(s.mode === 'read' ? `${R} = new Scanner(new java.io.File(${E(s.expression, sc)}));` : `${W} = new java.io.PrintWriter(${E(s.expression, sc)});`);
     if (s.kind === 'close') o.line(s.mode === 'read' ? `${R}.close();` : `${W}.close();`);
     if (s.kind === 'read') { const t = lvInfo(s.variable, sc).type; o.line(`${E(s.variable, sc)} = ${t === 'Integer' ? `Integer.parseInt(${R}.nextLine())` : t === 'Real' ? `Double.parseDouble(${R}.nextLine())` : t === 'Boolean' ? `Boolean.parseBoolean(${R}.nextLine())` : `${R}.nextLine()`};`); }
@@ -1497,17 +1504,17 @@ LANGS.java = cFamily({
       if (rl.length) { inner.line(rl.length > 1 ? `return new ${recName(f)}(${rl.map((r) => r.name).join(', ')});` : `return ${rl[0].name};`); }
       inner.out(); inner.line('}');
     }
-    if (records.length) o.line('// Richiede Java 16 o successivo: le funzioni con più valori restituiscono un record');
+    if (records.length) o.line('// ' + C('java16Functions'));
     o.line('import java.util.*;'); o.line('');
     o.line('public class Main {');
     o.line('    private static Scanner input = new Scanner(System.in);');
     for (const f of records) o.line(`    record ${recName(f)}(${_CM.rets(f).map((r, i) => `${jRet(f, r, i)} ${r.name}`).join(', ')}) {}`);
-    if (g.used.has('files')) { o.line('    private static Scanner fileLettura;'); o.line('    private static java.io.PrintWriter fileScrittura;'); }
+    if (g.used.has('files')) { o.line('    private static Scanner fileIn;'); o.line('    private static java.io.PrintWriter fileOut;'); }
     o.line('');
     o.line(`    public static void main(String[] args)${jThrows(prog.functions[0], g.used.has('files'))} {`);
     o.lines.push(...main.lines);
     o.line('    }');
-    if (g.used.has('dividi')) { o.line(''); o.line('    // divisione che lancia un\'eccezione se il divisore è zero (come in FlowLab)'); o.line('    static double dividi(double a, double b) { if (b == 0) throw new ArithmeticException("Divisione per zero"); return a / b; }'); }
+    if (g.used.has('divide')) { o.line(''); o.line('    // ' + C('divisionComment')); o.line(`    static double divide(double a, double b) { if (b == 0) throw new ArithmeticException("${C('divisionByZero')}"); return a / b; }`); }
     o.lines.push(...inner.lines);
     o.line('}');
     return o.text();
@@ -1526,7 +1533,7 @@ LANGS.java = cFamily({
       const o = new g.Out(); o.lvl = 1;
       if (c === main) {
         o.line('static Scanner input = new Scanner(System.in);');
-        if (files) { o.line('static Scanner fileLettura;'); o.line('static java.io.PrintWriter fileScrittura;'); }
+        if (files) { o.line('static Scanner fileIn;'); o.line('static java.io.PrintWriter fileOut;'); }
       }
       for (const f of OO.methods(prog, c)) if (_CM.rets(f).length > 1) { records = true; o.line(`record ${recName(f)}(${_CM.rets(f).map((r, i) => `${jRet(f, r, i)} ${r.name}`).join(', ')}) {}`); }
       for (const a of c.attributes) {
@@ -1556,14 +1563,14 @@ LANGS.java = cFamily({
     }
     J_PFX = ''; GEN.cur = null;
     const o = new g.Out();
-    if (records) o.line('// Richiede Java 16 o successivo: i metodi con più valori restituiscono un record');
+    if (records) o.line('// ' + C('java16Methods'));
     o.line('import java.util.*;');
     for (const { c, lines } of parts) {
       o.line('');
       if ((c.tparams || []).length) o.line('@SuppressWarnings("unchecked")');
       o.line(`${c === main ? 'public ' : ''}${c.abstract ? 'abstract ' : ''}class ${jClassTitle(c)}${c.parent ? ' extends ' + parentL('java', c) : ''} {`);
       o.lines.push(...lines);
-      if (c === main && g.used.has('dividi')) { o.line(''); o.line('    // divisione che lancia un\'eccezione se il divisore è zero (come in FlowLab)'); o.line('    static double dividi(double a, double b) { if (b == 0) throw new ArithmeticException("Divisione per zero"); return a / b; }'); }
+      if (c === main && g.used.has('divide')) { o.line(''); o.line('    // ' + C('divisionComment')); o.line(`    static double divide(double a, double b) { if (b == 0) throw new ArithmeticException("${C('divisionByZero')}"); return a / b; }`); }
       o.line('}');
     }
     return o.text();
@@ -1578,7 +1585,7 @@ const tCs = (t) => {
 };
 let CS_PFX = '';
 const csRetT = (r) => tCs(r.type) + (r.array ? `[${','.repeat((r.dims || 1) - 1)}]` : '');
-/* funzioni generiche: Nome<T>(...) where T : IComparable<T> */
+/* generic functions: Name<T>(...) where T : IComparable<T> */
 const csTP = (f) => ((f.tparams || []).length ? `<${f.tparams.join(', ')}>` : '');
 const csWhere = (list, key) => list.filter((t) => GEN.bound.has(key(t))).map((t) => ` where ${t} : IComparable<${t}>`).join('');
 const csWhereF = (f) => csWhere(f.tparams || [], (t) => FKEY(f, t));
@@ -1586,14 +1593,14 @@ const csWhereC = (c) => csWhere(c.tparams || [], (t) => CKEY(c, t));
 LANGS.csharp = cFamily({
   lang: 'csharp', targ: (t) => tCs(t),
   excMsg: (o) => `${o}.Message`,
-  divFn: (a, b, used) => { used.add('dividi'); return `${CS_PFX}Dividi(${a}, ${b})`; },
+  divFn: (a, b, used) => { used.add('divide'); return `${CS_PFX}Divide(${a}, ${b})`; },
   label: 'C#', ext: 'cs', intDiv: true, powFn: 'Math.Pow', intCast: '(int) ',
   keywords: ['using', 'class', 'static', 'void', 'int', 'double', 'string', 'bool', 'return', 'if', 'else', 'while', 'for', 'do', 'true', 'false', 'new', 'Console', 'Math', 'System', 'public', 'private', 'protected', 'this', 'base', 'null', 'virtual', 'override', 'const', 'abstract'],
   pi: 'Math.PI',
   strLit: (s) => escStr(s, '"'),
   concatPrefix: '""',
   toStr: (x, t, e) => (e.p <= P.add ? `(${e.s})` : e.s),
-  // valori di tipo T: metodi dell'oggetto, a.Equals(b), a.CompareTo(b) < 0 (il confronto con null resta == / !=)
+  // values of type T: methods of the object, a.Equals(b), a.CompareTo(b) < 0 (the comparison with null stays == / !=)
   cmpT(op, l, r) {
     if (l.s === 'null' || r.s === 'null') return null;
     const ls = l.p < P.atom ? `(${l.s})` : l.s;
@@ -1621,13 +1628,13 @@ LANGS.csharp = cFamily({
       case 'tointeger': return `int.Parse(${A(0)})`;
       case 'toreal': return `double.Parse(${A(0)}, System.Globalization.CultureInfo.InvariantCulture)`;
       case 'tostring': return `Convert.ToString(${A(0)})`;
-      case 'eof': return `${CS_PFX}fileLettura.EndOfStream`;
+      case 'eof': return `${CS_PFX}fileIn.EndOfStream`;
     }
     return null;
   },
   idx: idxComma,
   declare: (n, t, arr, D) => (arr ? `${tCs(t)}[${','.repeat(D.length - 1)}] ${n} = new ${tCs(t)}[${D.join(', ')}];` : `${tCs(t)} ${n} = ${DEF_C[t] || (isTP(t) ? `default(${t})` : 'null')};`),
-  // in C# const vuole un valore noto in compilazione; altrimenti una variabile normale
+  // in C# const wants a value known at compile time; otherwise a normal variable
   constDecl: (n, t, e, lit) => (lit ? `const ${tCs(t)} ${n} = ${e};` : `${tCs(t)} ${n} = ${e}; // costante`),
   declareInit: (n, t, e) => `${tCs(t)} ${n} = ${e};`,
   nul: 'null', self: 'this', superMethod: (m, a) => `base.${m}(${a})`,
@@ -1636,7 +1643,7 @@ LANGS.csharp = cFamily({
   multiAssign(o, tg, call) { o.line(`(${tg.join(', ')}) = ${call};`); },
   files(o, s, E, sc, lvInfo, used) {
     used.add('files');
-    const R = CS_PFX + 'fileLettura', W = CS_PFX + 'fileScrittura';
+    const R = CS_PFX + 'fileIn', W = CS_PFX + 'fileOut';
     if (s.kind === 'open') o.line(s.mode === 'read' ? `${R} = new System.IO.StreamReader(${E(s.expression, sc)});` : `${W} = new System.IO.StreamWriter(${E(s.expression, sc)});`);
     if (s.kind === 'close') o.line(s.mode === 'read' ? `${R}.Close();` : `${W}.Close();`);
     if (s.kind === 'read') { const t = lvInfo(s.variable, sc).type; o.line(`${E(s.variable, sc)} = ${t === 'Integer' ? `int.Parse(${R}.ReadLine())` : t === 'Real' ? `double.Parse(${R}.ReadLine())` : t === 'Boolean' ? `bool.Parse(${R}.ReadLine())` : `${R}.ReadLine()`};`); }
@@ -1659,9 +1666,9 @@ LANGS.csharp = cFamily({
     }
     o.line('using System;'); o.line('');
     o.line('class Program {');
-    if (g.used.has('dividi')) o.line('    static double Dividi(double a, double b) { if (b == 0) throw new DivideByZeroException("Divisione per zero"); return a / b; }');
+    if (g.used.has('divide')) o.line(`    static double Divide(double a, double b) { if (b == 0) throw new DivideByZeroException("${C('divisionByZero')}"); return a / b; }`);
     if (g.used.has('rnd')) o.line('    static Random rnd = new Random();');
-    if (g.used.has('files')) { o.line('    static System.IO.StreamReader fileLettura;'); o.line('    static System.IO.StreamWriter fileScrittura;'); }
+    if (g.used.has('files')) { o.line('    static System.IO.StreamReader fileIn;'); o.line('    static System.IO.StreamWriter fileOut;'); }
     o.line('    static void Main() {');
     o.lines.push(...main.lines);
     o.line('    }');
@@ -1694,7 +1701,7 @@ LANGS.csharp = cFamily({
           o.line(`${V(f.visibility)}${c.name}(${params(f)})${sp.args ? ` : base(${sp.args.map((x) => g.pr(x, sc).s).join(', ')})` : ''} {`);
         } else if (OO.isMain(prog, f)) o.line('public static void Main() {');
         else {
-          // polimorfismo: virtual nella classe madre, override nelle sottoclassi
+          // polymorphism: virtual in the parent class, override in the subclasses
           const vo = f.static ? 'static ' : OO.overrides(prog, f) ? 'override ' : OO.overridden(prog, f) ? 'virtual ' : '';
           const rt = rl.length > 1 ? `(${rl.map(csRetT).join(', ')})` : rl.length ? csRetT(rl[0]) : 'void';
           o.line(`${V(f.visibility)}${vo}${rt} ${f.name}${csTP(f)}(${params(f)})${csWhereF(f)} {`);
@@ -1709,19 +1716,19 @@ LANGS.csharp = cFamily({
     const o = new g.Out();
     o.line('using System;');
     if (GEN.native.size) o.line('using System.Collections.Generic;');
-    if (GEN.helpers.has('Aiuti')) {
-      o.line(''); o.line('static class Aiuti {');
-      o.line('    // toglie l\'elemento in posizione i e lo restituisce');
-      o.line('    public static T RimuoviIn<T>(List<T> lista, int i) { T x = lista[i]; lista.RemoveAt(i); return x; }');
+    if (GEN.helpers.has('Helpers')) {
+      o.line(''); o.line('static class Helpers {');
+      o.line('    // ' + C('removeAtComment'));
+      o.line('    public static T RemoveAt<T>(List<T> lista, int i) { T x = lista[i]; lista.RemoveAt(i); return x; }');
       o.line('}');
     }
     for (const { c, lines } of parts) {
       o.line('');
       o.line(`${c.abstract ? 'abstract ' : ''}class ${_CM.classTitle(c)}${c.parent ? ' : ' + parentL('csharp', c) : ''}${csWhereC(c)} {`);
       if (c === main) {
-        if (g.used.has('dividi')) o.line('    public static double Dividi(double a, double b) { if (b == 0) throw new DivideByZeroException("Divisione per zero"); return a / b; }');
+        if (g.used.has('divide')) o.line(`    public static double Divide(double a, double b) { if (b == 0) throw new DivideByZeroException("${C('divisionByZero')}"); return a / b; }`);
         if (g.used.has('rnd')) o.line('    public static Random rnd = new Random();');
-        if (g.used.has('files')) { o.line('    public static System.IO.StreamReader fileLettura;'); o.line('    public static System.IO.StreamWriter fileScrittura;'); }
+        if (g.used.has('files')) { o.line('    public static System.IO.StreamReader fileIn;'); o.line('    public static System.IO.StreamWriter fileOut;'); }
         if ((g.used.has('rnd') || g.used.has('files')) && lines.length) o.line('');
       }
       o.lines.push(...lines);
@@ -1734,17 +1741,17 @@ LANGS.csharp = cFamily({
 LANGS.javascript = cFamily({
   lang: 'javascript',
   excMsg: (o) => `${o}.message`,
-  divFn: (a, b, used) => { used.add('dividi'); need('exc:DivisionePerZero'); return `dividi(${a}, ${b})`; },
-  modFn: (a, b, used) => { used.add('resto'); need('exc:DivisionePerZero'); return `resto(${a}, ${b})`; },
-  idxChk: (nm, ix, used) => { used.add('indice'); need('exc:IndiceNonValido'); return ix.reduce((c, i) => `${c}[indice(${c}, ${i})]`, nm); },
-  // un solo catch: si sceglie il ramo con instanceof; se nessuno va bene l'eccezione prosegue
+  divFn: (a, b, used) => { used.add('divide'); need('exc:DivisionByZero'); return `divide(${a}, ${b})`; },
+  modFn: (a, b, used) => { used.add('remainderOf'); need('exc:DivisionByZero'); return `remainderOf(${a}, ${b})`; },
+  idxChk: (nm, ix, used) => { used.add('checkIndex'); need('exc:IndexOutOfRange'); return ix.reduce((c, i) => `${c}[checkIndex(${c}, ${i})]`, nm); },
+  // a single catch: the branch is chosen with instanceof; if none fits the exception continues
   tryStmt(o, s, sc, blk) {
     const cats = s.catches || [];
     o.line('try {'); blk(o, s.body, sc);
     if (cats.length) {
-      o.line('} catch (ecc_) {'); o.in();
-      cats.forEach((c, i) => { o.line(`${i ? '} else if' : 'if'} (ecc_ instanceof ${excL('javascript', c.type)}) {`); o.in(); o.line(`const ${c.variable} = ecc_;`); o.out(); blk(o, c.body, sc); });
-      o.line('} else {'); o.in(); o.line('throw ecc_;'); o.out(); o.line('}');
+      o.line('} catch (exc_) {'); o.in();
+      cats.forEach((c, i) => { o.line(`${i ? '} else if' : 'if'} (exc_ instanceof ${excL('javascript', c.type)}) {`); o.in(); o.line(`const ${c.variable} = exc_;`); o.out(); blk(o, c.body, sc); });
+      o.line('} else {'); o.in(); o.line('throw exc_;'); o.out(); o.line('}');
       o.out();
     }
     if (s.hasFinally) { o.line('} finally {'); blk(o, s.finally || [], sc); }
@@ -1767,13 +1774,13 @@ LANGS.javascript = cFamily({
       case 'tochar': return `String.fromCharCode(${A(0)})`;
       case 'tocode': return `${At(0)}.charCodeAt(0)`;
       case 'tofixed': return `${At(0)}.toFixed(${A(1)})`;
-      case 'tointeger': if (GEN.exc.conv) { used.add('conv'); need('exc:ConversioneNonValida'); return `aIntero(${A(0)})`; } return `parseInt(${A(0)})`;
-      case 'toreal': if (GEN.exc.conv) { used.add('conv'); need('exc:ConversioneNonValida'); return `aReale(${A(0)})`; } return `parseFloat(${A(0)})`;
+      case 'tointeger': if (GEN.exc.conv) { used.add('conv'); need('exc:InvalidConversion'); return `toInt(${A(0)})`; } return `parseInt(${A(0)})`;
+      case 'toreal': if (GEN.exc.conv) { used.add('conv'); need('exc:InvalidConversion'); return `toReal(${A(0)})`; } return `parseFloat(${A(0)})`;
       case 'tostring': return `String(${A(0)})`;
     }
     return null;
   },
-  declare: (n, t, arr, D, used) => { if (!arr) return `let ${n};`; if (D.length === 1) return `let ${n} = new Array(${D[0]});`; used.add('creaArray'); return `let ${n} = creaArray([${D.join(', ')}]);`; },
+  declare: (n, t, arr, D, used) => { if (!arr) return `let ${n};`; if (D.length === 1) return `let ${n} = new Array(${D[0]});`; used.add('createArray'); return `let ${n} = createArray([${D.join(', ')}]);`; },
   constDecl: (n, t, e) => `const ${n} = ${e};`,
   declareInit: (n, t, e) => `let ${n} = ${e};`,
   nul: 'null', self: 'this', qualifyCalls: true,
@@ -1783,11 +1790,11 @@ LANGS.javascript = cFamily({
   multiAssign(o, tg, call) { o.line(`[${tg.join(', ')}] = ${call};`); },
   program(prog, g) {
     const o = new g.Out();
-    o.line('// Funziona in un browser: input con prompt(), output nella console');
-    o.line('let rigaCorrente = "";');
-    o.line('function output(valore, aCapo) {');
-    o.line('    rigaCorrente += String(valore);');
-    o.line('    if (aCapo) { console.log(rigaCorrente); rigaCorrente = ""; }');
+    o.line('// ' + C('browserIO'));
+    o.line('let currentLine = "";');
+    o.line('function output(value, newLine) {');
+    o.line('    currentLine += String(value);');
+    o.line('    if (newLine) { console.log(currentLine); currentLine = ""; }');
     o.line('}');
     const helpAt = o.lines.length;
     for (const f of prog.functions.slice(1)) {
@@ -1801,14 +1808,14 @@ LANGS.javascript = cFamily({
     }
     o.line(''); o.line('// Main');
     g.block(o, prog.functions[0].body, g.buildScope(prog.functions[0]));
-    o.line('if (rigaCorrente) console.log(rigaCorrente);');
+    o.line('if (currentLine) console.log(currentLine);');
     { const hl = jsExcHelpers(g.used); if (hl.length) o.lines.splice(helpAt, 0, '', ...hl); }
-    if (g.used.has('creaArray')) {
+    if (g.used.has('createArray')) {
       o.line('');
-      o.line('// array a più dimensioni: creaArray([3, 4]) crea una matrice 3 × 4');
-      o.line('function creaArray(dimensioni) {');
-      o.line('    if (dimensioni.length === 1) return new Array(dimensioni[0]);');
-      o.line('    return Array.from({ length: dimensioni[0] }, () => creaArray(dimensioni.slice(1)));');
+      o.line('// ' + C('createArrayComment'));
+      o.line('function createArray(dims) {');
+      o.line('    if (dims.length === 1) return new Array(dims[0]);');
+      o.line('    return Array.from({ length: dims[0] }, () => createArray(dims.slice(1)));');
       o.line('}');
     }
     return o.text();
@@ -1817,11 +1824,11 @@ LANGS.javascript = cFamily({
     const main = _CM.mainClass(prog);
     const DEF_JS = { Integer: '0', Real: '0', String: '""', Boolean: 'false' };
     const o = new g.Out();
-    o.line('// Funziona in un browser: input con prompt(), output nella console');
-    o.line('let rigaCorrente = "";');
-    o.line('function output(valore, aCapo) {');
-    o.line('    rigaCorrente += String(valore);');
-    o.line('    if (aCapo) { console.log(rigaCorrente); rigaCorrente = ""; }');
+    o.line('// ' + C('browserIO'));
+    o.line('let currentLine = "";');
+    o.line('function output(value, newLine) {');
+    o.line('    currentLine += String(value);');
+    o.line('    if (newLine) { console.log(currentLine); currentLine = ""; }');
     o.line('}');
     const ooHelpAt = o.lines.length;
     const test = {
@@ -1831,31 +1838,31 @@ LANGS.javascript = cFamily({
     let multiDim = false;
     for (const c of OO.ordered(prog, false)) {
       o.line('');
-      o.line(`class ${c.name}${c.parent ? ' extends ' + parentL('javascript', c) : ''} {${c.abstract ? ' // classe astratta: non si creano oggetti' : ''}`); o.in();
+      o.line(`class ${c.name}${c.parent ? ' extends ' + parentL('javascript', c) : ''} {${c.abstract ? ' // ' + C('abstractClassNoObjects') : ''}`); o.in();
       const start = o.lines.length;
       for (const a of c.attributes) {
         const sc = OO.classScope(prog, c, a.static);
         let init;
-        if (a.array) { const D = _CE.splitTop(a.size).map((x) => g.E(x, sc)); if (D.length > 1) multiDim = true; init = D.length > 1 ? `creaArray([${D.join(', ')}], ${DEF_JS[a.type] || 'null'})` : `new Array(${D[0]}).fill(${DEF_JS[a.type] || 'null'})`; }
+        if (a.array) { const D = _CE.splitTop(a.size).map((x) => g.E(x, sc)); if (D.length > 1) multiDim = true; init = D.length > 1 ? `createArray([${D.join(', ')}], ${DEF_JS[a.type] || 'null'})` : `new Array(${D[0]}).fill(${DEF_JS[a.type] || 'null'})`; }
         else init = String(a.init || '').trim() ? g.E(a.init, sc) : (DEF_JS[a.type] || 'null');
         o.line(`${a.static ? 'static ' : ''}${a.name} = ${init};${a.visibility !== 'public' ? ' // ' + OO.tag(a.visibility) : ''}`);
       }
-      // corpo di un costruttore: in una sottoclasse super(...) va chiamato prima di usare this
+      // body of a constructor: in a subclass super(...) must be called before using this
       const ctorBody = (f) => { const sc = g.buildScope(f); const sp = OO.splitSuper(f); if (c.parent && !sp.args) o.line('super();'); g.block(o, f.body, sc); };
-      const methodBody = (f) => { if (f.abstract) { o.line(`throw new Error("${f.name}() è astratto: lo definiscono le sottoclassi");`); return; } const msc = g.buildScope(f); g.block(o, f.body, msc); const rl = _CM.rets(f); const rn = (r) => retName(r.name, msc, 'this'); if (rl.length) o.line(rl.length > 1 ? `return [${rl.map(rn).join(', ')}];` : `return ${rn(rl[0])};`); };
+      const methodBody = (f) => { if (f.abstract) { o.line(`throw new Error("${C('isAbstract', { name: f.name })}");`); return; } const msc = g.buildScope(f); g.block(o, f.body, msc); const rl = _CM.rets(f); const rn = (r) => retName(r.name, msc, 'this'); if (rl.length) o.line(rl.length > 1 ? `return [${rl.map(rn).join(', ')}];` : `return ${rn(rl[0])};`); };
       const emit = (group, isCtor) => {
         if (o.lines.length > start) o.line('');
         const f0 = group[0];
         const head = isCtor ? 'constructor' : `${f0.static ? 'static ' : ''}${OO.isMain(prog, f0) ? 'main' : f0.name}`;
-        const note = ((f0.visibility || 'public') !== 'public' ? ' // ' + OO.tag(f0.visibility) : '') + (group.length === 1 && f0.abstract ? ' // astratto' : '');
+        const note = ((f0.visibility || 'public') !== 'public' ? ' // ' + OO.tag(f0.visibility) : '') + (group.length === 1 && f0.abstract ? ' // ' + C('abstract') : '');
         if (group.length === 1) { o.line(`${head}(${f0.params.map((p) => p.name).join(', ')}) {${note}`); o.in(); (isCtor ? ctorBody : methodBody)(f0); o.out(); o.line('}'); return; }
-        o.line(`${head}(...args) { // ${group.length} versioni${note}`); o.in();
+        o.line(`${head}(...args) { // ${C('versions', { count: group.length })}${note}`); o.in();
         group.forEach((f, k) => {
           o.line(`${k ? '} else if' : 'if'} (${dispatchCond(f, group, ' && ', test)}) {`); o.in();
           if (f.params.length) o.line(`let [${f.params.map((p) => p.name).join(', ')}] = args;`);
           (isCtor ? ctorBody : methodBody)(f); o.out();
         });
-        o.line('} else {'); o.in(); o.line(`throw new Error("${isCtor ? c.name : f0.name}: nessuna versione accetta questi argomenti");`); o.out(); o.line('}');
+        o.line('} else {'); o.in(); o.line(`throw new Error("${C('noVersion', { name: isCtor ? c.name : f0.name })}");`); o.out(); o.line('}');
         o.out(); o.line('}');
       };
       const ctors = OO.ctors(prog, c);
@@ -1866,23 +1873,23 @@ LANGS.javascript = cFamily({
     { const hl = jsExcHelpers(g.used); if (hl.length) o.lines.splice(ooHelpAt, 0, '', ...hl); }
     o.line(''); o.line('// Main');
     o.line(`${main.name}.main();`);
-    o.line('if (rigaCorrente) console.log(rigaCorrente);');
-    if (g.used.has('creaArray') || multiDim) {
+    o.line('if (currentLine) console.log(currentLine);');
+    if (g.used.has('createArray') || multiDim) {
       o.line('');
-      o.line('// array a più dimensioni: creaArray([3, 4]) crea una matrice 3 × 4');
-      o.line('function creaArray(dimensioni, valore) {');
-      o.line('    if (dimensioni.length === 1) return new Array(dimensioni[0]).fill(valore);');
-      o.line('    return Array.from({ length: dimensioni[0] }, () => creaArray(dimensioni.slice(1), valore));');
+      o.line('// ' + C('createArrayComment'));
+      o.line('function createArray(dims, value) {');
+      o.line('    if (dims.length === 1) return new Array(dims[0]).fill(value);');
+      o.line('    return Array.from({ length: dims[0] }, () => createArray(dims.slice(1), value));');
       o.line('}');
     }
     return o.text();
   },
 });
 
-// Le dichiarazioni del ciclo "per" in C++/Java/C#/JS usano variabili già dichiarate.
+// The declarations of the "for" loop in C++/Java/C#/JS use variables already declared.
 const CodeGen = {
   LANGS,
-  /* variabili e tipi visibili in una funzione (serve all'autocompletamento dell'editor) */
+  /* variables and types visible in a function (used by the editor's autocompletion) */
   scopeFor: (prog, f) => buildScope(prog, f),
   generate(prog, lang) {
     try { setupGen(prog, lang); return LANGS[lang].generate(prog); } catch (e) { return `// Impossibile generare il codice: ${e.message}\n`; }

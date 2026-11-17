@@ -1,0 +1,38 @@
+<?xml version="1.0"?>
+<flowgorithm fileversion="4.2">
+    <attributes>
+        <attribute name="name" value="Guess the number"/>
+        <attribute name="authors" value="FlowLab examples"/>
+        <attribute name="about" value="The computer thinks of a number from 1 to 100."/>
+        <attribute name="saved" value="2026-11-17 08:00:00 PM"/>
+        <attribute name="created" value="Zmxvd2xhYjtleGFtcGxlczsyMDI2LTExLTE3IDA4OjAwOjAwIFBNOzE="/>
+        <attribute name="edited" value="Zmxvd2xhYjtleGFtcGxlczsyMDI2LTExLTE3IDA4OjAwOjAwIFBNOzE="/>
+    </attributes>
+    <function name="Main" type="None" variable="">
+        <parameters/>
+        <body>
+            <declare name="secret, guess, attempts" type="Integer" array="False" size=""/>
+            <assign variable="secret" expression="Random(100) + 1"/>
+            <assign variable="attempts" expression="0"/>
+            <output expression="&quot;I thought of a number from 1 to 100. Try to guess it!&quot;" newline="True"/>
+            <do expression="guess != secret">
+                <input variable="guess"/>
+                <assign variable="attempts" expression="attempts + 1"/>
+                <if expression="guess &lt; secret">
+                    <then>
+                        <output expression="&quot;Higher&quot;" newline="True"/>
+                    </then>
+                    <else>
+                        <if expression="guess &gt; secret">
+                            <then>
+                                <output expression="&quot;Lower&quot;" newline="True"/>
+                            </then>
+                            <else/>
+                        </if>
+                    </else>
+                </if>
+            </do>
+            <output expression="&quot;Guessed in &quot; &amp; attempts &amp; &quot; attempts&quot;" newline="True"/>
+        </body>
+    </function>
+</flowgorithm>

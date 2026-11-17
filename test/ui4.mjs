@@ -1,7 +1,7 @@
 import { chromium } from '/opt/npm-tools/node_modules/playwright/index.mjs';
 const url = 'file://' + process.cwd() + '/dist/FlowLab.html';
 const browser = await chromium.launch();
-const page = await browser.newPage({ viewport: { width: 1366, height: 768 } });
+const page = await browser.newPage({ locale: 'it-IT', viewport: { width: 1366, height: 768 } });
 const errs = [];
 page.on('pageerror', e => errs.push('PAGEERR ' + e.message));
 await page.goto(url); await page.waitForTimeout(300);

@@ -1,10 +1,11 @@
 /* ==========================================================================
-   FlowLab — interprete
-   Esegue il modello come generatore: ogni istruzione produce un evento
-   ('stmt', 'input', 'break') così l'interfaccia può eseguire a velocità
-   variabile, passo-passo, evidenziare il blocco corrente e chiedere input.
+   FlowLab — interpreter
+   Runs the model as a generator: each statement produces an event
+   ('stmt', 'input', 'break') so the interface can run at variable
+   speed, step by step, highlight the current block and ask for input.
    ========================================================================== */
 'use strict';
+if (typeof L === 'undefined' && typeof require !== 'undefined') require('./i18n.js'); // testi tradotti (in Node: italiano)
 
 const _E = (typeof module !== 'undefined') ? require('./expr.js') : ExprLib;
 const _M = (typeof module !== 'undefined') ? require('./model.js') : ModelLib;
@@ -15,14 +16,14 @@ class Interpreter {
     this.env = env;
     this.stack = [];
     this.maxDepth = 1000;
-    this.cache = new Map(); // espressioni già analizzate
+    this.cache = new Map(); // expressions already parsed
     this.funcs = new Map();
     for (const f of prog.functions) this.funcs.set(f.name, f);
-    // programmazione a oggetti: classi, metodi e costruttori per classe
+    // object-oriented programming: classes, methods and constructors by class
     this.oo = _M.hasClasses(prog);
-    this.objCount = 0; // numero unico di ogni oggetto (uso interno)
-    this.classCount = new Map(); // numerazione mostrata: progressiva per classe, Cerchio#1, Cerchio#2…
-    this.statics = new Map(); // id classe -> Map(nome minuscolo -> cella)
+    this.objCount = 0; // unique number of each object (internal use)
+    this.classCount = new Map(); // numbering shown: progressive per class, Circle#1, Circle#2…
+    this.statics = new Map(); // class id -> Map(lowercase name -> cell)
     this.byName = new Map();
     this.methods = new Map();
     this.ctors = new Map();
@@ -34,9 +35,9 @@ class Interpreter {
         (f.ctor ? this.ctors : this.methods).get(f.cls).push(f);
       }
     }
-    // eccezioni predefinite: classi disponibili anche nella vista Funzioni
+    // predefined exceptions: classes available also in the Functions view
     for (const c of _M.EXC_CLASSES) if (!this.byName.has(c.name.toLowerCase())) { this.byName.set(c.name.toLowerCase(), c); this.methods.set(c.id, []); this.ctors.set(c.id, []); }
-    // parametri di tipo delle classi e delle funzioni generiche
+    // type parameters of the classes and of the generic functions
     this.tparamNames = new Set([...(prog.classes || []).flatMap((c) => c.tparams || []), ...prog.functions.flatMap((f) => f.tparams || [])].map((t) => t.toLowerCase()));
     const self = this;
     this.ctx = {
@@ -51,21 +52,21 @@ class Interpreter {
     };
   }
 
-  /* ----------------------------- classi --------------------------------- */
+  /* ----------------------------- classes --------------------------------- */
   classById(id) { return this.oo ? this.prog.classes.find((c) => c.id === id) || null : null; }
   parentOf(c) { return c && c.parent ? this.byName.get(c.parent.toLowerCase()) || null : null; }
   chain(c) { const out = []; while (c && !out.includes(c)) { out.push(c); c = this.parentOf(c); } return out; }
   isA(c, of) { return this.chain(c).includes(of); }
-  /* ---- generici: un oggetto di una classe generica ha i suoi argomenti di tipo (obj.targs) ---- */
-  /* tipo con i parametri sostituiti da quelli dell'oggetto: "T" -> "Integer" per un ArrayList<Integer> */
+  /* ---- generics: an object of a generic class has its type arguments (obj.targs) ---- */
+  /* type with the parameters replaced by those of the object: "T" -> "Integer" for an ArrayList<Integer> */
   resolve(type, obj) {
     if (!obj || !obj.targs || !(obj.cls.tparams || []).length) return type;
     if (!obj._tmap) { obj._tmap = {}; obj.cls.tparams.forEach((p, i) => { obj._tmap[p.toLowerCase()] = obj.targs[i]; }); }
     return _E.substType(type, obj._tmap);
   }
-  /* parametro di tipo non ancora noto (oggetto creato senza indicare il tipo) */
+  /* type parameter not known yet (object created without giving the type) */
   unresolved(t) { return !!this.tparamNames && this.tparamNames.has(_E.splitType(t).base.toLowerCase()); }
-  /* conversione per assegnamenti e parametri; ctx = oggetto che dà il significato a T (di solito this) */
+  /* conversion for assignments and parameters; ctx = object that gives the meaning to T (usually this) */
   coerceTo(val, type, what, ctx) {
     const t = this.resolve(type, ctx === undefined ? (this.frame ? this.frame.tctx : null) : ctx);
     if (this.unresolved(t)) return val;
@@ -75,19 +76,19 @@ class Interpreter {
     const v = _E.coerce(val, g.base, what, isA);
     const o = v.v;
     if (o && (o.cls.tparams || []).length) {
-      if (!o.targs) { if (!g.args.some((a) => this.unresolved(a))) { o.targs = g.args.slice(); delete o._tmap; } } // new C<>(): il tipo si ricava dalla variabile
-      else if (g.args.some((a, i) => !this.unresolved(a) && !_E.sameType(a, o.targs[i]))) throw new _E.FlowError(`Tipi incompatibili: ${what || 'il valore'} è un ${_E.typeName(_E.joinType(o.cls.name, o.targs))}, ma serve ${_E.typeName(t)}`);
+      if (!o.targs) { if (!g.args.some((a) => this.unresolved(a))) { o.targs = g.args.slice(); delete o._tmap; } } // new C<>(): the type is derived from the variable
+      else if (g.args.some((a, i) => !this.unresolved(a) && !_E.sameType(a, o.targs[i]))) throw new _E.FlowError(L('run.incompatibleTypesIsAButIs', { value: what || L('expr.theValue'), joinType: _E.typeName(_E.joinType(o.cls.name, o.targs)), t: _E.typeName(t) }));
     }
     return v;
   }
-  /* tipo da mostrare per una cella (T sostituito, se noto) */
+  /* type to show for a cell (T replaced, if known) */
   cellType(cell) { return this.resolve(cell.type, cell.ctx); }
-  /* attributo cercato nella classe e nelle classi madri: { attr, owner } */
+  /* attribute looked up in the class and in the parent classes: { attr, owner } */
   fieldLookup(c, low) {
     for (const k of this.chain(c)) { const a = k.attributes.find((x) => x.name.toLowerCase() === low); if (a) return { attr: a, owner: k }; }
     return null;
   }
-  /* metodi con quel nome, dal più derivato: una versione per ogni firma (override) */
+  /* methods with that name, from the most derived: one version per signature (override) */
   methodCands(c, low) {
     const out = [], seen = new Set();
     for (const k of this.chain(c)) {
@@ -103,8 +104,8 @@ class Interpreter {
   checkAccess(vis, owner, what, name) {
     if (!vis || vis === 'public') return;
     const from = this.frame && this.frame.cls;
-    if (vis === 'private' && from !== owner) throw new _E.FlowError(`${what} "${name}" di ${owner.name} è privato: si può usare solo dentro la classe ${owner.name}`);
-    if (vis === 'protected' && !(from && this.isA(from, owner))) throw new _E.FlowError(`${what} "${name}" di ${owner.name} è protetto: si può usare solo in ${owner.name} e nelle sue sottoclassi`);
+    if (vis === 'private' && from !== owner) throw new _E.FlowError(L('run.ofIsPrivateItCanBe', { what, name, name2: owner.name, name3: owner.name }));
+    if (vis === 'protected' && !(from && this.isA(from, owner))) throw new _E.FlowError(L('run.ofIsProtectedItCanBe', { what, name, name2: owner.name, name3: owner.name }));
   }
   label(n) {
     if (!n) return '';
@@ -117,7 +118,7 @@ class Interpreter {
       case 'call': return n.name + '(…)';
       case 'new': return 'new ' + n.cls + '(…)';
     }
-    return 'l\'espressione';
+    return L('run.theExpression');
   }
   defaultOf(t) {
     if (this.unresolved(t)) return undefined;
@@ -129,29 +130,29 @@ class Interpreter {
     }
     return _E.V.obj(null);
   }
-  /* il tipo esiste? cls = classe in cui si usa, fn = funzione (per i parametri di tipo come T) */
+  /* does the type exist? cls = class in which it is used, fn = function (for type parameters like T) */
   checkType(t, cls, fn) {
     if (!this.oo) return;
     const g = _E.splitType(t);
     if (fn === undefined) fn = this.frame && this.frame.func;
     if (!g.args.length && (_E.isBaseType(g.base) || _M.isTypeParam(cls, g.base) || _M.isTypeParam(fn, g.base))) return;
     const c = this.byName.get(g.base.toLowerCase());
-    if (!c) throw new _E.FlowError(`Il tipo "${_E.typeName(t)}" non esiste: crea la classe ${g.base} nel diagramma delle classi`);
+    if (!c) throw new _E.FlowError(L('run.theTypeDoesNotExistCreate', { t: _E.typeName(t), base: g.base }));
     const np = (c.tparams || []).length;
     if (np !== g.args.length) {
-      if (np && !g.args.length) throw new _E.FlowError(`${c.name} ha dei Tipi Generici: indica i tipi, es. ${c.name}<${c.tparams.map(() => 'Intero').join(', ')}>`);
-      if (!np) throw new _E.FlowError(`${c.name} non ha Tipi Generici: si usa senza < >`);
-      throw new _E.FlowError(`${_M.classTitle(c)} vuole ${np} tipi tra < >`);
+      if (np && !g.args.length) throw new _E.FlowError(L('run.hasGenericTypesSpecifyTheTypes', { name: c.name, name2: c.name, list: c.tparams.map(() => L('expr.integer')).join(', ') }));
+      if (!np) throw new _E.FlowError(L('run.hasNoGenericTypesItIs', { name: c.name }));
+      throw new _E.FlowError(L('run.wantsTypesBetween', { c: _M.classTitle(c), np }));
     }
     for (const a of g.args) this.checkType(a, cls, fn);
   }
-  /* esegue fn in una chiamata "di servizio" per inizializzare gli attributi di una classe */
+  /* runs fn in a "service" call to initialize the attributes of a class */
   *withInit(c, obj, fn) {
-    const frame = { func: { id: 'init:' + c.id, name: c.name + ' (attributi)', params: [], body: [] }, vars: new Map(), depth: this.stack.length, cls: c, self: obj, tctx: obj, executed: 0, init: true };
+    const frame = { func: { id: 'init:' + c.id, name: c.name + L('run.attributes'), params: [], body: [] }, vars: new Map(), depth: this.stack.length, cls: c, self: obj, tctx: obj, executed: 0, init: true };
     this.stack.push(frame);
     try { return yield* fn(); } finally { this.stack.pop(); }
   }
-  /* cella di un attributo: valore iniziale come in Java (0, "", false, null) oppure quello indicato */
+  /* cell of an attribute: initial value as in Java (0, "", false, null) or the one given */
   *attrCell(a, owner) {
     this.checkType(a.type, owner);
     const self = a.static ? null : this.frame.self;
@@ -162,19 +163,19 @@ class Interpreter {
         const dims = [];
         for (const part of _E.splitTop(a.size)) {
           const sv = yield* _E.evalE(this.parse(part, 'e'), this.ctx);
-          if (sv.t !== 'Integer' || sv.v < 0) throw new _E.FlowError('la dimensione deve essere un intero non negativo');
+          if (sv.t !== 'Integer' || sv.v < 0) throw new _E.FlowError(L('run.theDimensionMustBeANon'));
           dims.push(sv.v);
         }
         const n = dims.reduce((x, y) => x * y, 1);
-        if (n > 1e7) throw new _E.FlowError('array troppo grande');
+        if (n > 1e7) throw new _E.FlowError(L('run.arrayTooLarge'));
         cell.dims = dims; cell.items = new Array(n).fill(this.defaultOf(dt));
       } else {
         cell.value = this.defaultOf(dt);
-        if (a.readonly) cell.readonly = true; // messaggio delle eccezioni: si imposta solo creandole
-        if (String(a.init || '').trim()) cell.value = this.coerceTo(yield* _E.evalE(this.parse(a.init, 'e'), this.ctx), a.type, `il valore iniziale di ${owner.name}.${a.name}`);
+        if (a.readonly) cell.readonly = true; // message of the exceptions: set only when creating them
+        if (String(a.init || '').trim()) cell.value = this.coerceTo(yield* _E.evalE(this.parse(a.init, 'e'), this.ctx), a.type, L('run.theInitialValueOf', { name: owner.name, name2: a.name }));
       }
     } catch (e) {
-      if (e instanceof _E.FlowError && !e.attrDone) { e.message = `Attributo ${owner.name}.${a.name}: ${e.message}`; e.attrDone = true; }
+      if (e instanceof _E.FlowError && !e.attrDone) { e.message = L('run.attribute', { name: owner.name, name2: a.name, message: e.message }); e.attrDone = true; }
       throw e;
     }
     return cell;
@@ -191,18 +192,18 @@ class Interpreter {
   }
   staticCell(owner, attr) {
     const cell = this.statics.get(owner.id) && this.statics.get(owner.id).get(attr.name.toLowerCase());
-    if (!cell) throw new _E.FlowError(`L'attributo statico ${owner.name}.${attr.name} non è ancora inizializzato`);
+    if (!cell) throw new _E.FlowError(L('run.theStaticAttributeIsNotInitialized', { name: owner.name, name2: attr.name }));
     return cell;
   }
-  /* attributo usato con il solo nome dentro un metodo (come this.x in Java) */
+  /* attribute used with its name alone inside a method (like this.x in Java) */
   implicitField(low, node) {
     const fr = this.frame;
     if (!fr.cls) return null;
     const hit = this.fieldLookup(fr.self ? fr.self.cls : fr.cls, low) || this.fieldLookup(fr.cls, low);
     if (!hit) return null;
-    this.checkAccess(hit.attr.visibility, hit.owner, 'L\'attributo', hit.attr.name);
+    this.checkAccess(hit.attr.visibility, hit.owner, L('run.theAttribute'), hit.attr.name);
     if (hit.attr.static) return this.staticCell(hit.owner, hit.attr);
-    if (!fr.self) throw new _E.FlowError(`"${hit.attr.name}" è un attributo d'istanza: in un metodo statico non c'è nessun oggetto (this)`, { node });
+    if (!fr.self) throw new _E.FlowError(L('run.isAnInstanceAttributeInA', { name: hit.attr.name }), { node });
     return fr.self.fields.get(low);
   }
   isVarName(name) {
@@ -210,78 +211,78 @@ class Interpreter {
     if (fr.vars.has(low)) return true;
     return !!(fr.cls && (this.fieldLookup(fr.self ? fr.self.cls : fr.cls, low) || this.fieldLookup(fr.cls, low)));
   }
-  /* bersaglio a sinistra del punto: un oggetto oppure una classe (accesso statico) */
+  /* target to the left of the dot: an object or a class (static access) */
   *target(objNode) {
     const o = objNode.k === 'par' ? objNode.e : objNode;
     if (o.k === 'super') {
-      if (!this.frame.self) throw new _E.FlowError('super si usa nei metodi non statici e nei costruttori');
+      if (!this.frame.self) throw new _E.FlowError(L('run.superIsUsedInNonStatic'));
       return { obj: this.frame.self };
     }
     if (o.k === 'var' && !o.indices && !this.isVarName(o.name) && this.byName.has(o.name.toLowerCase())) return { cls: this.byName.get(o.name.toLowerCase()) };
     const v = yield* _E.evalE(objNode, this.ctx);
-    if (v.t !== 'Object') throw new _E.FlowError(`"${this.label(objNode)}" non è un oggetto (è ${_E.typeName(v.t)}): il punto si usa con gli oggetti`, { node: objNode });
-    if (v.v === null) throw new _E.FlowError(`"${this.label(objNode)}" vale null: non indica nessun oggetto (crealo con new)`, { node: objNode, exc: 'OggettoNullo' });
+    if (v.t !== 'Object') throw new _E.FlowError(L('run.isNotAnObjectItIs', { label: this.label(objNode), t: _E.typeName(v.t) }), { node: objNode });
+    if (v.v === null) throw new _E.FlowError(L('run.isNullItDoesNotRefer', { label: this.label(objNode) }), { node: objNode, exc: 'NullReference' });
     return { obj: v.v };
   }
   fieldCell(tg, name, node) {
     const low = name.toLowerCase();
     if (tg.cls) {
       const hit = this.fieldLookup(tg.cls, low);
-      if (!hit) throw new _E.FlowError(`La classe ${tg.cls.name} non ha un attributo "${name}"`, { node });
-      if (!hit.attr.static) throw new _E.FlowError(`"${hit.attr.name}" è un attributo d'istanza di ${hit.owner.name}: serve un oggetto, es. obj.${hit.attr.name}`, { node });
-      this.checkAccess(hit.attr.visibility, hit.owner, 'L\'attributo', hit.attr.name);
+      if (!hit) throw new _E.FlowError(L('run.theClassHasNoAttribute', { name: tg.cls.name, name2: name }), { node });
+      if (!hit.attr.static) throw new _E.FlowError(L('run.isAnInstanceAttributeOfAn', { name: hit.attr.name, name2: hit.owner.name, name3: hit.attr.name }), { node });
+      this.checkAccess(hit.attr.visibility, hit.owner, L('run.theAttribute'), hit.attr.name);
       return this.staticCell(hit.owner, hit.attr);
     }
     const hit = this.fieldLookup(tg.obj.cls, low);
     if (!hit) {
       const isMethod = this.methodCands(tg.obj.cls, low).length;
-      throw new _E.FlowError(isMethod ? `"${name}" è un metodo di ${tg.obj.cls.name}: per chiamarlo scrivi ${name}(...)` : `Gli oggetti ${tg.obj.cls.name} non hanno un attributo "${name}"`, { node });
+      throw new _E.FlowError(isMethod ? L('run.isAMethodOfToCall', { name, name2: tg.obj.cls.name, name3: name }) : L('run.objectsHaveNoAttribute', { name: tg.obj.cls.name, name2: name }), { node });
     }
-    this.checkAccess(hit.attr.visibility, hit.owner, 'L\'attributo', hit.attr.name);
+    this.checkAccess(hit.attr.visibility, hit.owner, L('run.theAttribute'), hit.attr.name);
     return hit.attr.static ? this.staticCell(hit.owner, hit.attr) : tg.obj.fields.get(low);
   }
-  /* cella indicata da una variabile o da un attributo (p.x, this.v) */
+  /* cell given by a variable or by an attribute (p.x, this.v) */
   *cellOf(lv) {
     if (lv.k === 'var') return this.getVar(lv.name, lv);
     if (lv.k === 'member') return this.fieldCell(yield* this.target(lv.obj), lv.name, lv);
-    throw new _E.FlowError('Serve una variabile o un attributo');
+    throw new _E.FlowError(L('run.aVariableOrAnAttributeIs'));
   }
   *readCell(cell, node) {
     const nm = this.label(node).replace(/\[…\]$/, '');
     if (cell.array) {
-      if (!node.indices) throw new _E.FlowError(`"${nm}" è un array: serve un indice, es. ${nm}[${(cell.dims || [0]).map(() => 0).join(', ')}]`, { node });
+      if (!node.indices) throw new _E.FlowError(L('expr.isAnArrayAnIndexIs', { name: nm, name2: nm, list: (cell.dims || [0]).map(() => 0).join(', ') }), { node });
       const ivs = [];
       for (const ix of node.indices) ivs.push(yield* _E.evalE(ix, this.ctx));
       const item = cell.items[_E.arrOffset(ivs, cell, { name: nm })];
-      if (item === undefined) throw new _E.FlowError(`L'elemento ${nm}[${ivs.map((x) => x.v).join(', ')}] non ha ancora un valore`, { node });
+      if (item === undefined) throw new _E.FlowError(L('expr.theElementHasNoValueYet', { name: nm, list: ivs.map((x) => x.v).join(', ') }), { node });
       return item;
     }
-    if (node.indices) throw new _E.FlowError(`"${nm}" non è un array`, { node });
-    if (cell.value === undefined) throw new _E.FlowError(`"${nm}" non ha ancora un valore`, { node });
+    if (node.indices) throw new _E.FlowError(L('expr.isNotAnArray', { name: nm }), { node });
+    if (cell.value === undefined) throw new _E.FlowError(L('run.hasNoValueYet', { nm }), { node });
     return cell.value;
   }
-  /* la classe è un'eccezione (Eccezione o una sua sottoclasse)? */
-  isExc(c) { return !!c && this.isA(c, this.byName.get('eccezione')); }
+  /* is the class an exception (Exception or one of its subclasses)? */
+  isExc(c) { return !!c && this.isA(c, this.byName.get('exception')); }
   *ooEval(node) {
     if (!this.oo) {
-      // vista Funzioni: degli oggetti si usano solo le eccezioni, new Eccezione("…") ed e.messaggio
+      // Functions view: of the objects only the exceptions are used, new Exception("…") and e.message
       if (node.k === 'new' && this.isExc(this.byName.get(node.cls.toLowerCase()))) return yield* this.construct(node);
       if (node.k === 'member') { const tg = yield* this.target(node.obj); if (tg.obj && this.isExc(tg.obj.cls)) return yield* this.readCell(this.fieldCell(tg, node.name, node), node); }
-      throw new _E.FlowError('Oggetti, new e this si usano nella vista Oggetti (nella vista Funzioni solo le eccezioni: new Eccezione("…") ed e.messaggio)', { node });
+      throw new _E.FlowError(L('run.objectsNewAndThisAreUsed'), { node });
     }
     switch (node.k) {
       case 'this':
-        if (!this.frame.self) throw new _E.FlowError('this si usa solo nei metodi non statici e nei costruttori', { node });
+        if (!this.frame.self) throw new _E.FlowError(L('run.thisIsUsedOnlyInNon'), { node });
         return _E.V.obj(this.frame.self);
       case 'new': return yield* this.construct(node);
       case 'member': return yield* this.readCell(yield* this.cellOf(node), node);
       case 'mcall': return yield* this.mcall(node, {});
     }
-    throw new _E.FlowError('Espressione non riconosciuta');
+    throw new _E.FlowError(L('expr.unrecognizedExpression'));
   }
 
-  /* ------------------------- argomenti e chiamate ------------------------ */
-  /* valuta gli argomenti una volta sola: gli array passano come riferimento alla cella */
+  /* ------------------------- arguments and calls ------------------------ */
+  /* evaluates the arguments only once: arrays pass as a reference to the cell */
   *prepArgs(argNodes) {
     const out = [];
     for (const a of argNodes) {
@@ -300,7 +301,7 @@ class Interpreter {
     }
     return out;
   }
-  /* overloading: sceglie la versione più adatta agli argomenti */
+  /* overloading: chooses the version best suited to the arguments */
   pick(cands, pre, name, node, self) {
     if (cands.length === 1) return cands[0];
     const score = (f) => {
@@ -337,9 +338,9 @@ class Interpreter {
     let best = null, bs = -1;
     for (const f of cands) { const sc = score(f); if (sc > bs) { bs = sc; best = f; } }
     if (best) return best;
-    const got = pre.map((a) => (a.cell ? `array di ${_E.typeName(a.cell.type)}` : a.val.t === 'Object' ? (a.val.v ? a.val.v.cls.name : 'null') : _E.typeName(a.val.t))).join(', ');
+    const got = pre.map((a) => (a.cell ? L('run.arrayOf', { type: _E.typeName(a.cell.type) }) : a.val.t === 'Object' ? (a.val.v ? a.val.v.cls.name : 'null') : _E.typeName(a.val.t))).join(', ');
     const vers = cands.map((f) => `${f.name}(${f.params.map((p) => _E.typeName(this.resolve(p.type, self)) + (p.array ? '[]' : '')).join(', ')})`).join(' · ');
-    throw new _E.FlowError(`Nessuna versione di ${name} accetta questi argomenti (${got || 'nessuno'}). Versioni disponibili: ${vers}`, { node });
+    throw new _E.FlowError(L('run.noVersionOfAcceptsTheseArguments', { name, value: got || L('run.none'), vers }), { node });
   }
   bindArgs(func, pre, node, self) {
     const args = [];
@@ -348,69 +349,69 @@ class Interpreter {
       if (p.array) {
         const inner = a.node.k === 'par' ? a.node.e : a.node;
         if (!a.cell) {
-          if (inner.k === 'var' && !inner.index) throw new _E.FlowError(`"${inner.name}" non è un array, ma ${func.name} si aspetta un array`, { node });
-          throw new _E.FlowError(`Il parametro "${p.name}" di ${func.name} è un array: passa il nome di un array`, { node });
+          if (inner.k === 'var' && !inner.index) throw new _E.FlowError(L('run.isNotAnArrayButExpects', { name: inner.name, name2: func.name }), { node });
+          throw new _E.FlowError(L('run.theParameterOfIsAnArray', { name: p.name, name2: func.name }), { node });
         }
         const cell = a.cell;
         const ct = this.cellType(cell), pt = this.resolve(p.type, self);
-        if (!this.unresolved(ct) && !this.unresolved(pt) && !_E.sameType(ct, pt)) throw new _E.FlowError(`L'array "${cell.name}" è di tipo ${_E.typeName(ct)}, ma il parametro "${p.name}" è ${_E.typeName(pt)}`, { node });
+        if (!this.unresolved(ct) && !this.unresolved(pt) && !_E.sameType(ct, pt)) throw new _E.FlowError(L('run.theArrayIsOfTypeBut', { name: cell.name, ct: _E.typeName(ct), name2: p.name, pt: _E.typeName(pt) }), { node });
         const nd = (cell.dims || [0]).length, pd = p.dims || 1;
-        if (nd !== pd) throw new _E.FlowError(`L'array "${cell.name}" ha ${nd} ${nd === 1 ? 'dimensione' : 'dimensioni'}, ma il parametro "${p.name}" ne vuole ${pd}`, { node });
+        if (nd !== pd) throw new _E.FlowError(L('run.theArrayHasButTheParameter', { name: cell.name, nd, text: nd === 1 ? L('expr.dimension') : L('expr.dimensions'), name2: p.name, pd }), { node });
         args.push(cell);
       } else {
-        if (a.cell) throw new _E.FlowError(`"${a.cell.name}" è un array: il parametro "${p.name}" di ${func.name} vuole un singolo valore`, { node });
-        args.push(this.coerceTo(a.val, p.type, `l'argomento "${p.name}" di ${func.name}`, self));
+        if (a.cell) throw new _E.FlowError(L('run.isAnArrayTheParameterOf', { name: a.cell.name, name2: p.name, name3: func.name }), { node });
+        args.push(this.coerceTo(a.val, p.type, L('run.theArgumentOf', { name: p.name, name2: func.name }), self));
       }
     }
     return args;
   }
-  /* uso del valore restituito: in un'espressione serve un valore, in a, b ← f() ne servono tanti quante le variabili */
+  /* use of the returned value: an expression needs one value, a, b ← f() needs as many as the variables */
   checkRetUse(func, opts, node) {
     const nr = _M.rets(func).length;
     if (opts.allowMulti) {
-      if (nr !== opts.allowMulti) throw new _E.FlowError(`${func.name} restituisce ${nr} ${nr === 1 ? 'valore' : 'valori'}, ma a sinistra ci sono ${opts.allowMulti} variabili`, { node });
+      if (nr !== opts.allowMulti) throw new _E.FlowError(L('run.returnsButOnTheLeftThere', { name: func.name, nr, text: nr === 1 ? L('run.value') : L('run.values'), allowMulti: opts.allowMulti }), { node });
       return;
     }
     if (opts.asStatement) return;
-    if (nr === 1 && _M.rets(func)[0].array && !opts.allowArray) throw new _E.FlowError(`${func.name} restituisce un array: si usa in un'assegnazione a un array, es. v ← ${func.name}(...)`, { node });
-    if (nr === 0) throw new _E.FlowError(`${func.ctor ? 'Il costruttore' : 'La funzione'} ${func.name} non restituisce alcun valore: non si può usare in un'espressione`, { node });
+    if (nr === 1 && _M.rets(func)[0].array && !opts.allowArray) throw new _E.FlowError(L('run.returnsAnArrayItIsUsed', { name: func.name, name2: func.name }), { node });
+    if (nr === 0) throw new _E.FlowError(L('run.doesNotReturnAnyValueIt', { text: func.ctor ? L('run.theConstructor') : L('run.theFunction'), name: func.name }), { node });
     if (nr > 1) {
       const ph = _M.rets(func).map((r) => r.name).join(', ');
-      throw new _E.FlowError(`La funzione ${func.name} restituisce ${nr} valori: va usata in un'assegnazione con ${nr} variabili, es. ${ph} ← ${func.name}(...)`, { node });
+      throw new _E.FlowError(L('run.theFunctionReturnsValuesItMust', { name: func.name, nr, nr2: nr, ph, name2: func.name }), { node });
     }
   }
   *callCands(cands, name, argNodes, node, opts) {
     if (cands.length === 1) {
       const f = cands[0];
       this.checkRetUse(f, opts, node);
-      if (argNodes.length !== f.params.length) throw new _E.FlowError(`${f.name} richiede ${f.params.length} argomenti, ne sono stati passati ${argNodes.length}`, { node });
+      if (argNodes.length !== f.params.length) throw new _E.FlowError(L('expr.requiresArgumentsWerePassed', { value: f.name, sigCount: f.params.length, argsCount: argNodes.length }), { node });
     }
     const pre = yield* this.prepArgs(argNodes);
     const f = this.pick(cands, pre, name, node, opts.self);
     this.checkRetUse(f, opts, node);
-    if (f.abstract) throw new _E.FlowError(`${f.name} è un metodo astratto di ${this.classById(f.cls).name}: non ha un corpo da eseguire, lo definiscono le sottoclassi`, { node });
+    if (f.abstract) throw new _E.FlowError(L('run.isAnAbstractMethodOfIt', { name: f.name, name2: this.classById(f.cls).name }), { node });
     let self = null;
     if (this.oo) {
       const owner = this.classById(f.cls);
-      this.checkAccess(f.visibility, owner, 'Il metodo', f.name);
+      this.checkAccess(f.visibility, owner, L('run.theMethod'), f.name);
       if (!f.static) {
-        if (!opts.self) throw new _E.FlowError(opts.viaClass ? `${f.name} non è un metodo statico: serve un oggetto, es. obj.${f.name}(...)` : `Da un metodo statico non si può chiamare il metodo d'istanza ${f.name} senza un oggetto`, { node });
+        if (!opts.self) throw new _E.FlowError(opts.viaClass ? L('run.isNotAStaticMethodAn', { name: f.name, name2: f.name }) : L('run.fromAStaticMethodYouCannot', { name: f.name }), { node });
         self = opts.self;
       }
     }
-    // funzione generica: T si ricava dagli argomenti
+    // generic function: T is derived from the arguments
     const tctx = (f.tparams || []).length ? this.inferTargs(f, pre, node, self) : self;
     return yield* this.invoke(f, this.bindArgs(f, pre, node, tctx), node, { self, tctx });
   }
-  /* tipo di un valore, per dedurre T: Intero, Reale, Persona, ArrayList<Integer>… (null se non si sa) */
+  /* type of a value, to deduce T: Integer, Real, Person, ArrayList<Integer>… (null if unknown) */
   valType(v) {
     if (!v) return null;
     if (v.t !== 'Object') return v.t;
     if (!v.v) return null;
     return v.v.targs ? _E.joinType(v.v.cls.name, v.v.targs) : (v.v.cls.tparams || []).length ? null : v.v.cls.name;
   }
-  /* funzioni generiche: confronta i tipi dei parametri con quelli degli argomenti e trova T.
-     Restituisce il contesto dei tipi della chiamata (come un oggetto con i suoi argomenti di tipo) */
+  /* generic functions: compares the types of the parameters with those of the arguments and finds T.
+     Returns the type context of the call (like an object with its type arguments) */
   inferTargs(f, pre, node, self) {
     const tp = f.tparams, low = tp.map((t) => t.toLowerCase()), map = {};
     const unify = (pt, at, p) => {
@@ -420,11 +421,11 @@ class Interpreter {
       if (i >= 0) {
         const prev = map[k];
         if (prev === undefined || _E.sameType(prev, at)) { map[k] = at; return; }
-        // oggetti di classi parenti: vale la classe madre
+        // objects of related classes: the parent class counts
         const a = this.byName.get(String(prev).toLowerCase()), b = this.byName.get(String(at).toLowerCase());
         if (a && b && this.isA(b, a)) return;
         if (a && b && this.isA(a, b)) { map[k] = at; return; }
-        throw new _E.FlowError(`${f.name}: il Tipo Generico ${tp[i]} non può essere sia ${_E.typeName(prev)} sia ${_E.typeName(at)} (argomento "${p.name}"). Usa argomenti dello stesso tipo, es. converti con ToReal(...) o ToInteger(...)`, { node });
+        throw new _E.FlowError(L('run.theGenericTypeCannotBeBoth', { name: f.name, value: tp[i], prev: _E.typeName(prev), at: _E.typeName(at), name2: p.name }), { node });
       }
       if (gp.args.length && ga.args.length === gp.args.length) gp.args.forEach((x, j) => unify(x, ga.args[j], p));
     };
@@ -434,7 +435,7 @@ class Interpreter {
       if (p.array) { if (a.cell) unify(p.type, this.cellType(a.cell), p); } else if (!a.cell) unify(p.type, this.valType(a.val), p);
     });
     const names = [], args = [];
-    // un metodo generico di un oggetto generico vede anche i T della classe
+    // a generic method of a generic object also sees the T of the class
     if (self && self.targs && (self.cls.tparams || []).length) { names.push(...self.cls.tparams); args.push(...self.targs); }
     tp.forEach((t, i) => { names.push(t); args.push(map[low[i]] !== undefined ? map[low[i]] : t); });
     return { cls: { tparams: names }, targs: args, generic: f };
@@ -445,8 +446,8 @@ class Interpreter {
     if (node.obj.k === 'super') {
       const fr = this.frame;
       cls = this.parentOf(fr.cls);
-      if (!cls) throw new _E.FlowError(`${fr.cls ? fr.cls.name : 'Questa classe'} non ha una classe madre: super non si può usare`, { node });
-      if (!fr.self) throw new _E.FlowError('super.metodo(...) si usa nei metodi non statici e nei costruttori', { node });
+      if (!cls) throw new _E.FlowError(L('run.hasNoParentClassSuperCannot', { text: fr.cls ? fr.cls.name : L('run.thisClass') }), { node });
+      if (!fr.self) throw new _E.FlowError(L('run.superMethodIsUsedInNon'), { node });
       self = fr.self;
     } else {
       const tg = yield* this.target(node.obj);
@@ -455,26 +456,26 @@ class Interpreter {
     cands = this.methodCands(cls, low);
     if (!cands.length) {
       const isField = this.fieldLookup(cls, low);
-      throw new _E.FlowError(isField ? `"${node.name}" è un attributo di ${cls.name}, non un metodo: si usa senza parentesi` : `La classe ${cls.name} non ha un metodo "${node.name}"`, { node });
+      throw new _E.FlowError(isField ? L('run.isAnAttributeOfNotA', { name: node.name, name2: cls.name }) : L('run.theClassHasNoMethod', { name: cls.name, name2: node.name }), { node });
     }
     return yield* this.callCands(cands, node.name, node.args, node, { ...opts, self, viaClass });
   }
-  /* new Classe(...): attributi con i valori iniziali, poi il costruttore */
+  /* new Class(...): attributes with the initial values, then the constructor */
   *construct(node) {
     const cls = this.byName.get(node.cls.toLowerCase());
-    if (!cls) throw new _E.FlowError(`La classe "${node.cls}" non esiste`, { node });
+    if (!cls) throw new _E.FlowError(L('run.theClassDoesNotExist', { cls: node.cls }), { node });
     if (cls.abstract) {
       const subs = this.prog.classes.filter((k) => k !== cls && !k.abstract && this.isA(k, cls)).map((k) => k.name);
-      throw new _E.FlowError(`${cls.name} è una classe astratta: non si possono creare oggetti ${cls.name}${subs.length ? `. Crea un oggetto di una sottoclasse (${subs.join(', ')})` : ''}`, { node });
+      throw new _E.FlowError(L('run.isAnAbstractClassObjectsCannot', { name: cls.name, name2: cls.name, text: subs.length ? L('run.createAnObjectOfASubclass', { list: subs.join(', ') }) : '' }), { node });
     }
     const missing = _M.missingAbstract(this.prog, cls);
-    if (missing.length) throw new _E.FlowError(`${cls.name} non definisce ${missing.map((m) => m.f.name + '()').join(', ')}, ${missing.length === 1 ? 'metodo astratto' : 'metodi astratti'} di ${[...new Set(missing.map((m) => m.owner.name))].join(', ')}: definisci${missing.length === 1 ? 'lo' : 'li'} in ${cls.name} oppure rendi astratta ${cls.name}`, { node });
-    // argomenti di tipo: new ArrayList<Intero>() (dentro una classe generica anche new Nodo<T>(x))
+    if (missing.length) throw new _E.FlowError(L('run.doesNotDefineOfDefineIt', { name: cls.name, list: missing.map((m) => m.f.name + '()').join(', '), text: missing.length === 1 ? L('run.abstractMethod') : L('run.abstractMethods'), list2: [...new Set(missing.map((m) => m.owner.name))].join(', '), text2: missing.length === 1 ? 'lo' : 'li', name2: cls.name, name3: cls.name }), { node });
+    // type arguments: new ArrayList<Integer>() (inside a generic class also new Node<T>(x))
     let targs = null;
     const np = (cls.tparams || []).length;
     if (node.targs && node.targs.length) {
-      if (!np) throw new _E.FlowError(`${cls.name} non ha Tipi Generici: si crea senza < >, es. new ${cls.name}(...)`, { node });
-      if (node.targs.length !== np) throw new _E.FlowError(`${_M.classTitle(cls)} vuole ${np} tipi tra < >`, { node });
+      if (!np) throw new _E.FlowError(L('run.hasNoGenericTypesItIs2', { name: cls.name, name2: cls.name }), { node });
+      if (node.targs.length !== np) throw new _E.FlowError(L('run.wantsTypesBetween', { c: _M.classTitle(cls), np }), { node });
       targs = node.targs.map((t) => this.resolve(t, this.frame.tctx));
       for (const t of targs) this.checkType(t, this.frame.cls);
       if (targs.some((t) => this.unresolved(t))) targs = null;
@@ -493,16 +494,16 @@ class Interpreter {
     return _E.V.obj(obj);
   }
   *runCtor(cls, argNodes, obj, node) {
-    // eccezione predefinita: new Eccezione() oppure new Eccezione("messaggio"), anche come super("messaggio")
+    // predefined exception: new Exception() or new Exception("message"), also as super("message")
     if (cls.builtin) {
-      if (argNodes.length > 1) throw new _E.FlowError(`${cls.name} si crea con il messaggio: new ${cls.name}("testo")`, { node });
+      if (argNodes.length > 1) throw new _E.FlowError(L('run.isCreatedWithTheMessageNew', { name: cls.name, name2: cls.name }), { node });
       const v = argNodes.length ? yield* _E.evalE(argNodes[0], this.ctx) : _E.V.str('');
-      obj.fields.get('messaggio').value = this.coerceTo(v, 'String', `il messaggio di ${cls.name}`, null);
+      obj.fields.get('message').value = this.coerceTo(v, 'String', L('run.theMessageOf', { name: cls.name }), null);
       return;
     }
     const ctors = this.ctors.get(cls.id) || [];
     if (!ctors.length) {
-      if (argNodes.length) throw new _E.FlowError(`${cls.name} non ha costruttori con parametri: si crea con new ${cls.name}() senza argomenti`, { node });
+      if (argNodes.length) throw new _E.FlowError(L('run.hasNoConstructorsWithParametersIt', { name: cls.name, name2: cls.name }), { node });
       const parent = this.parentOf(cls);
       if (parent) yield* this.runCtor(parent, [], obj, node);
       return;
@@ -512,15 +513,15 @@ class Interpreter {
       cands = ctors.filter((f) => f.params.length === argNodes.length);
       if (!cands.length) {
         const vers = ctors.map((f) => `${cls.name}(${f.params.map((p) => _E.typeName(p.type) + (p.array ? '[]' : '')).join(', ')})`).join(' · ');
-        throw new _E.FlowError(`${cls.name} non ha un costruttore con ${argNodes.length} ${argNodes.length === 1 ? 'argomento' : 'argomenti'}. Costruttori disponibili: ${vers}`, { node });
+        throw new _E.FlowError(L('run.hasNoConstructorWithAvailableConstructors', { name: cls.name, argNodesCount: argNodes.length, text: argNodes.length === 1 ? L('run.argument') : L('run.arguments'), vers }), { node });
       }
     }
     const pre = yield* this.prepArgs(argNodes);
     const f = this.pick(cands, pre, cls.name, node, obj);
-    this.checkAccess(f.visibility, cls, 'Il costruttore', cls.name);
+    this.checkAccess(f.visibility, cls, L('run.theConstructor'), cls.name);
     yield* this.invoke(f, this.bindArgs(f, pre, node, obj), node, { self: obj });
   }
-  /* il primo blocco eseguibile del costruttore è super(...)? */
+  /* is the first executable block of the constructor super(...)? */
   startsWithSuper(func) {
     if (this.superFirst.has(func.id)) return this.superFirst.get(func.id);
     const first = func.body.find((s) => s.kind !== 'comment');
@@ -533,7 +534,7 @@ class Interpreter {
     if (!this.oo) return !!this.findFunc(name);
     const fr = this.frame; if (!fr || !fr.cls) return false;
     const low = name.toLowerCase();
-    // senza oggetto, il nome di una funzione integrata indica sempre la funzione integrata
+    // without an object, the name of a built-in function always means the built-in function
     if (_E.BUILTINS[low]) return false;
     return this.methodCands(fr.self ? fr.self.cls : fr.cls, low).length > 0 || this.methodCands(fr.cls, low).length > 0;
   }
@@ -554,7 +555,7 @@ class Interpreter {
     try {
       r = what === 'lv' ? _E.parseLValue(src) : _E.parseExpr(src);
     } catch (e) {
-      throw new _E.FlowError(`Errore di sintassi in "${src}": ${e.message}`);
+      throw new _E.FlowError(L('run.syntaxErrorIn', { src, message: e.message }));
     }
     this.cache.set(key, r);
     return r;
@@ -568,21 +569,21 @@ class Interpreter {
     if (this.oo) {
       const fc = this.implicitField(low, node);
       if (fc) return fc;
-      if (this.byName.has(low)) throw new _E.FlowError(`"${name}" è una classe: usa ${name}.attributo, ${name}.metodo(...) oppure new ${name}(...)`, { node });
-      if (f.cls && this.methodCands(f.self ? f.self.cls : f.cls, low).length) throw new _E.FlowError(`"${name}" è un metodo: per chiamarlo scrivi ${name}(...)`, { node });
-    } else if (this.findFunc(name)) throw new _E.FlowError(`"${name}" è una funzione: per chiamarla scrivi ${name}(...)`, { node });
-    throw new _E.FlowError(`La variabile "${name}" non è stata dichiarata`, { node });
+      if (this.byName.has(low)) throw new _E.FlowError(L('run.isAClassUseAttributeMethod', { name, name2: name, name3: name, name4: name }), { node });
+      if (f.cls && this.methodCands(f.self ? f.self.cls : f.cls, low).length) throw new _E.FlowError(L('run.isAMethodToCallIt', { name, name2: name }), { node });
+    } else if (this.findFunc(name)) throw new _E.FlowError(L('run.isAFunctionToCallIt', { name, name2: name }), { node });
+    throw new _E.FlowError(L('run.theVariableHasNotBeenDeclared', { name }), { node });
   }
 
   *run() {
     const main = this.prog.functions[0];
-    if (main.params.length) throw new _E.FlowError('La funzione Main non può avere parametri');
+    if (main.params.length) throw new _E.FlowError(L('run.theMainFunctionCannotHaveParameters'));
     if (this.oo) yield* this.initStatics();
     yield* this.invoke(main, [], null);
   }
 
   *invoke(func, args, node, opts) {
-    if (this.stack.length >= this.maxDepth) throw new _E.FlowError(`Stack overflow: più di ${this.maxDepth} chiamate annidate (ricorsione infinita?)`, { node });
+    if (this.stack.length >= this.maxDepth) throw new _E.FlowError(L('run.stackOverflowMoreThanNestedCalls', { maxDepth: this.maxDepth }), { node });
     const cls = this.oo ? this.classById(func.cls) : null;
     const self = (opts && opts.self) || null;
     const frame = { func, vars: new Map(), depth: this.stack.length, cls, self, tctx: (opts && opts.tctx) || self, executed: 0 };
@@ -593,12 +594,12 @@ class Interpreter {
     this.stack.push(frame);
     yield { type: 'stmt', stmt: { id: 'start:' + func.id, kind: 'start' }, frame };
     if (func.ctor && cls && this.parentOf(cls) && !this.startsWithSuper(func)) {
-      // come in Java: senza super(...) esplicito si chiama il costruttore senza parametri della classe madre
+      // as in Java: without an explicit super(...) the parameterless constructor of the parent class is called
       const parent = this.parentOf(cls);
       const pc = this.ctors.get(parent.id) || [];
       if (pc.length && !pc.some((f) => !f.params.length)) {
         this.stack.pop();
-        throw new _E.FlowError(`Il costruttore di ${cls.name} deve iniziare con un blocco Chiamata super(...): ${parent.name} non ha un costruttore senza parametri`, { node, stmtId: 'start:' + func.id, funcId: func.id });
+        throw new _E.FlowError(L('run.theConstructorOfMustStartWith', { name: cls.name, name2: parent.name }), { node, stmtId: 'start:' + func.id, funcId: func.id });
       }
       yield* this.runCtor(parent, [], frame.self, node);
     }
@@ -610,29 +611,29 @@ class Interpreter {
       const vals = [];
       for (const r of rs) {
         let cell = frame.vars.get(r.name.toLowerCase());
-        // un metodo può restituire direttamente un attributo della sua classe
+        // a method can directly return an attribute of its class
         if (!cell && this.oo && r.name) { try { cell = this.implicitField(r.name.toLowerCase(), node); } catch (e) { cell = null; } }
         if (!r.name || !cell) {
           this.stack.pop();
-          throw new _E.FlowError(`La funzione ${func.name} deve restituire "${r.name}", ma questa variabile non è stata dichiarata`, { node, stmtId: 'end:' + func.id });
+          throw new _E.FlowError(L('run.theFunctionMustReturnButThis', { name: func.name, name2: r.name }), { node, stmtId: 'end:' + func.id });
         }
-        // array restituito: chi chiama riceve lo stesso array (come in Java)
+        // returned array: the caller receives the same array (as in Java)
         if (r.array || cell.array) {
           const bad = (msg) => { this.stack.pop(); return new _E.FlowError(msg, { node, stmtId: 'end:' + func.id }); };
-          if (!cell.array) throw bad(`La funzione ${func.name} deve restituire un array, ma "${r.name}" non è un array`);
-          if (!r.array) throw bad(`"${r.name}" è un array: per restituirlo indica «array» nel valore restituito di ${func.name}`);
+          if (!cell.array) throw bad(L('run.theFunctionMustReturnAnArray', { name: func.name, name2: r.name }));
+          if (!r.array) throw bad(L('run.isAnArrayToReturnIt', { name: r.name, name2: func.name }));
           const nd = (cell.dims || [0]).length;
-          if (nd !== (r.dims || 1)) throw bad(`"${r.name}" ha ${nd} ${nd === 1 ? 'dimensione' : 'dimensioni'}, ma ${func.name} restituisce un array a ${r.dims || 1}`);
+          if (nd !== (r.dims || 1)) throw bad(L('run.hasButReturnsAnArrayWith', { name: r.name, nd, text: nd === 1 ? L('expr.dimension') : L('expr.dimensions'), name2: func.name, value: r.dims || 1 }));
           const ct = this.cellType(cell), rt = this.resolve(r.type, frame.tctx);
-          if (!this.unresolved(ct) && !this.unresolved(rt) && !_E.sameType(ct, rt)) throw bad(`"${r.name}" è un array di ${_E.typeName(ct)}, ma ${func.name} restituisce un array di ${_E.typeName(rt)}`);
+          if (!this.unresolved(ct) && !this.unresolved(rt) && !_E.sameType(ct, rt)) throw bad(L('run.isAnArrayOfButReturns', { name: r.name, ct: _E.typeName(ct), name2: func.name, rt: _E.typeName(rt) }));
           vals.push({ t: 'ArrRef', cell: { name: r.name, type: rt, ctx: null, items: cell.items, dims: (cell.dims || [cell.items.length]).slice() } });
           continue;
         }
         if (cell.value === undefined) {
           this.stack.pop();
-          throw new _E.FlowError(`La funzione ${func.name} termina senza aver assegnato un valore a "${r.name}"`, { node, stmtId: 'end:' + func.id });
+          throw new _E.FlowError(L('run.theFunctionEndsWithoutAssigningA', { name: func.name, name2: r.name }), { node, stmtId: 'end:' + func.id });
         }
-        vals.push(this.coerceTo(cell.value, r.type, `il valore restituito "${r.name}"`));
+        vals.push(this.coerceTo(cell.value, r.type, L('run.theReturnValue', { name: r.name })));
       }
       ret = rs.length === 1 ? vals[0] : { t: 'Tuple', items: vals };
     }
@@ -662,7 +663,7 @@ class Interpreter {
     frame.executed++;
     if (_M.isIncomplete(s)) {
       yield { type: 'stmt', stmt: s, frame };
-      throw this.tag(new _E.FlowError('Blocco incompleto: fai doppio clic per completarlo'), s, frame);
+      throw this.tag(new _E.FlowError(L('run.incompleteBlockDoubleClickToComplete')), s, frame);
     }
     try {
       yield* this.exec(s, frame);
@@ -689,64 +690,64 @@ class Interpreter {
         const names = s.name.split(',').map((x) => x.trim()).filter(Boolean);
         let size = 0, dims = null;
         if (s.array) {
-          // una o più dimensioni: "10" oppure "3, 4"
+          // one or more dimensions: "10" or "3, 4"
           dims = [];
           for (const part of _E.splitTop(s.size)) {
             const sv = yield* ev(part);
-            if (sv.t !== 'Integer') throw new _E.FlowError(`La dimensione dell'array deve essere un intero, non ${_E.TYPE_IT[sv.t]}`);
-            if (sv.v < 0) throw new _E.FlowError('La dimensione dell\'array non può essere negativa');
+            if (sv.t !== 'Integer') throw new _E.FlowError(L('run.theArraySizeMustBeAn', { value: _E.TYPE_IT[sv.t] }));
+            if (sv.v < 0) throw new _E.FlowError(L('run.theArraySizeCannotBeNegative'));
             dims.push(sv.v);
           }
           size = dims.reduce((a, b) => a * b, 1);
-          if (size > 1e7) throw new _E.FlowError('Array troppo grande (massimo 10 milioni di elementi)');
+          if (size > 1e7) throw new _E.FlowError(L('run.arrayTooLargeAtMost10'));
         }
         this.checkType(s.type, frame.cls, frame.func);
         for (const n of names) {
-          if (!_E.validIdent(n)) throw new _E.FlowError(`"${n}" non è un nome di variabile valido`);
-          if (_E.RESERVED.has(n.toLowerCase())) throw new _E.FlowError(`"${n}" è una parola riservata`);
+          if (!_E.validIdent(n)) throw new _E.FlowError(L('run.isNotAValidVariableName', { n }));
+          if (_E.RESERVED.has(n.toLowerCase())) throw new _E.FlowError(L('run.isAReservedWord', { n }));
           const key = n.toLowerCase();
-          if (frame.vars.has(key) && frame.vars.get(key).constant) throw new _E.FlowError(`Il nome "${n}" è già usato dalla costante "${frame.vars.get(key).name}"`);
-          if (frame.vars.has(key)) throw new _E.FlowError(frame.vars.get(key).name === n ? `La variabile "${n}" è già stata dichiarata` : `La variabile "${n}" è già stata dichiarata come "${frame.vars.get(key).name}" (maiuscole e minuscole non contano)`);
+          if (frame.vars.has(key) && frame.vars.get(key).constant) throw new _E.FlowError(L('run.theNameIsAlreadyUsedBy', { n, name: frame.vars.get(key).name }));
+          if (frame.vars.has(key)) throw new _E.FlowError(frame.vars.get(key).name === n ? L('run.theVariableHasAlreadyBeenDeclared', { n }) : L('run.theVariableHasAlreadyBeenDeclared2', { n, name: frame.vars.get(key).name }));
           if (s.array) frame.vars.set(key, { name: n, type: s.type, array: true, dims: dims.slice(), items: new Array(size).fill(undefined), ctx: frame.tctx });
           else frame.vars.set(key, { name: n, type: s.type, array: false, value: undefined, ctx: frame.tctx });
         }
-        // valore iniziale: vale per tutte le variabili del blocco
+        // initial value: it applies to all the variables of the block
         if (!s.array && String(s.init || '').trim()) for (const n of names) yield* this.store({ k: 'var', name: n }, yield* ev(s.init));
         return;
       }
       case 'const': {
         yield { type: 'stmt', stmt: s, frame };
         const n = s.name.trim();
-        if (!_E.validIdent(n)) throw new _E.FlowError(`"${n}" non è un nome valido per una costante`);
-        if (_E.RESERVED.has(n.toLowerCase())) throw new _E.FlowError(`"${n}" è una parola riservata`);
+        if (!_E.validIdent(n)) throw new _E.FlowError(L('run.isNotAValidNameFor', { n }));
+        if (_E.RESERVED.has(n.toLowerCase())) throw new _E.FlowError(L('run.isAReservedWord', { n }));
         const key = n.toLowerCase();
-        if (frame.vars.has(key)) throw new _E.FlowError(`Il nome "${n}" è già usato da ${frame.vars.get(key).constant ? 'un\'altra costante' : 'una variabile'}`);
+        if (frame.vars.has(key)) throw new _E.FlowError(L('run.theNameIsAlreadyUsedBy2', { n, text: frame.vars.get(key).constant ? L('run.anotherConstant') : L('run.aVariable') }));
         const v = yield* ev(s.expression);
-        frame.vars.set(key, { name: n, type: s.type, array: false, value: this.coerceTo(v, s.type, `il valore della costante "${n}"`), constant: true, ctx: frame.tctx });
+        frame.vars.set(key, { name: n, type: s.type, array: false, value: this.coerceTo(v, s.type, L('run.theValueOfTheConstant', { n })), constant: true, ctx: frame.tctx });
         return;
       }
       case 'assign': {
         yield { type: 'stmt', stmt: s, frame };
         const targets = _E.splitTop(s.variable);
         if (targets.length > 1) {
-          // a, b, c ← funzione(...) : assegnazione multipla
+          // a, b, c ← function(...) : multiple assignment
           let e = this.parse(s.expression, 'e');
           while (e.k === 'par') e = e.e;
-          if (!((e.k === 'call' && this.hasUser(e.name)) || e.k === 'mcall')) throw new _E.FlowError('Per assegnare più variabili insieme, a destra serve la chiamata di una funzione che restituisce più valori');
+          if (!((e.k === 'call' && this.hasUser(e.name)) || e.k === 'mcall')) throw new _E.FlowError(L('run.toAssignSeveralVariablesTogetherThe'));
           const lvs = _E.parseLValueList(s.variable);
           const tup = e.k === 'call' ? yield* this.callUser(e.name, e.args, e, false, targets.length) : yield* this.mcall(e, { allowMulti: targets.length });
           for (let i = 0; i < lvs.length; i++) yield* this.store(lvs[i], tup.items[i]);
           return;
         }
         const lv = this.parse(s.variable, 'lv');
-        // array ← altroArray: l'array a sinistra diventa lo stesso array (come in Java)
+        // array ← otherArray: the array on the left becomes the same array (as in Java)
         let rx = this.parse(s.expression, 'e');
         while (rx.k === 'par') rx = rx.e;
         if (!lv.indices && (rx.k === 'var' || rx.k === 'member') && !rx.indices) {
           const tcell = yield* this.cellOf(lv);
           if (tcell.array) { yield* this.storeArray(tcell, lv, rx); return; }
         }
-        // array ← funzione(...) che restituisce un array
+        // array ← function(...) that returns an array
         if (!lv.indices && ((rx.k === 'call' && this.hasUser(rx.name)) || rx.k === 'mcall')) {
           const tcell = yield* this.cellOf(lv);
           if (tcell.array) {
@@ -763,19 +764,19 @@ class Interpreter {
         yield { type: 'stmt', stmt: s, frame };
         const lv = this.parse(s.variable, 'lv');
         const cell = yield* this.cellOf(lv);
-        if (cell.constant) throw new _E.FlowError(`"${cell.name}" è una costante: non si può leggere un nuovo valore`);
-        if (cell.array && !lv.index) throw new _E.FlowError(`"${lv.name}" è un array: indica l'elemento, es. ${lv.name}[i]`);
-        // verifica l'indice prima di chiedere il valore
+        if (cell.constant) throw new _E.FlowError(L('run.isAConstantANewValue', { name: cell.name }));
+        if (cell.array && !lv.index) throw new _E.FlowError(L('run.isAnArraySpecifyTheElement', { name: lv.name, name2: lv.name }));
+        // checks the index before asking for the value
         if (cell.array) { const ivs = []; for (const ix of lv.indices) ivs.push(yield* _E.evalE(ix, this.ctx)); _E.arrOffset(ivs, cell, lv); }
         for (;;) {
           const text = yield { type: 'input', stmt: s, frame, varType: cell.type, varName: s.variable };
-          if (text === null || text === undefined) throw new _E.FlowError('Input annullato');
+          if (text === null || text === undefined) throw new _E.FlowError(L('run.inputCancelled'));
           try {
             const v = _E.parseInputText(text, cell.type);
             yield* this.store(lv, v);
             break;
           } catch (e) {
-            env.output(e.message + '. Riprova.', true, 'error');
+            env.output(e.message + L('run.tryAgain'), true, 'error');
           }
         }
         return;
@@ -789,7 +790,7 @@ class Interpreter {
       case 'if': {
         yield { type: 'stmt', stmt: s, frame };
         const c = yield* ev(s.expression);
-        if (c.t !== 'Boolean') throw new _E.FlowError(`La condizione deve essere vera o falsa, invece è ${_E.TYPE_IT[c.t]}`);
+        if (c.t !== 'Boolean') throw new _E.FlowError(L('run.theConditionMustBeTrueOr', { value: _E.TYPE_IT[c.t] }));
         yield { type: 'branch', stmt: s, frame, taken: c.v };
         yield* this.block(c.v ? s.then : s.else);
         return;
@@ -798,7 +799,7 @@ class Interpreter {
         for (;;) {
           yield { type: 'stmt', stmt: s, frame };
           const c = yield* ev(s.expression);
-          if (c.t !== 'Boolean') throw new _E.FlowError(`La condizione deve essere vera o falsa, invece è ${_E.TYPE_IT[c.t]}`);
+          if (c.t !== 'Boolean') throw new _E.FlowError(L('run.theConditionMustBeTrueOr', { value: _E.TYPE_IT[c.t] }));
           if (!c.v) break;
           yield* this.block(s.body);
         }
@@ -809,7 +810,7 @@ class Interpreter {
           yield* this.block(s.body);
           yield { type: 'stmt', stmt: s, frame };
           const c = yield* ev(s.expression);
-          if (c.t !== 'Boolean') throw new _E.FlowError(`La condizione deve essere vera o falsa, invece è ${_E.TYPE_IT[c.t]}`);
+          if (c.t !== 'Boolean') throw new _E.FlowError(L('run.theConditionMustBeTrueOr', { value: _E.TYPE_IT[c.t] }));
           if (!c.v) break;
         }
         return;
@@ -818,13 +819,13 @@ class Interpreter {
         yield { type: 'stmt', stmt: s, frame };
         const lv = this.parse(s.variable, 'lv');
         const cell = yield* this.cellOf(lv);
-        if (cell.array && !lv.index) throw new _E.FlowError(`La variabile del ciclo "${lv.name}" non può essere un array`);
-        if (cell.type !== 'Integer' && cell.type !== 'Real') throw new _E.FlowError(`La variabile del ciclo "${lv.name}" deve essere numerica`);
+        if (cell.array && !lv.index) throw new _E.FlowError(L('run.theLoopVariableCannotBeAn', { name: lv.name }));
+        if (cell.type !== 'Integer' && cell.type !== 'Real') throw new _E.FlowError(L('run.theLoopVariableMustBeNumeric', { name: lv.name }));
         const a = yield* ev(s.start), b = yield* ev(s.end);
         const st = yield* ev(String(s.step).trim() || '1');
-        for (const [v, n] of [[a, 'iniziale'], [b, 'finale'], [st, 'del passo']]) if (!_E.isNum(v)) throw new _E.FlowError(`Il valore ${n} del ciclo deve essere un numero`);
-        if (st.v === 0) throw new _E.FlowError('Il passo del ciclo non può essere zero');
-        if (st.v < 0) throw new _E.FlowError('Il passo deve essere positivo: per contare all\'indietro scegli "decrescente"');
+        for (const [v, n] of [[a, L('run.start')], [b, L('run.end')], [st, L('run.step')]]) if (!_E.isNum(v)) throw new _E.FlowError(L('run.theValueOfTheLoopMust', { n }));
+        if (st.v === 0) throw new _E.FlowError(L('run.theLoopStepCannotBeZero'));
+        if (st.v < 0) throw new _E.FlowError(L('run.theStepMustBePositiveTo'));
         const dec = s.direction === 'dec';
         const mk = (x) => (cell.type === 'Integer' ? _E.V.int(Math.trunc(x)) : _E.V.real(x));
         let i = a.v;
@@ -847,16 +848,16 @@ class Interpreter {
         while (e.k === 'par') e = e.e;
         if (e.k === 'var' && !e.index) e = { k: 'call', name: e.name, args: [] };
         if (e.k === 'supercall') {
-          if (!frame.func.ctor) throw new _E.FlowError('super(...) si può usare solo in un costruttore');
-          if (frame.executed !== 1) throw new _E.FlowError('super(...) deve essere il primo blocco del costruttore');
+          if (!frame.func.ctor) throw new _E.FlowError(L('run.superCanBeUsedOnlyIn'));
+          if (frame.executed !== 1) throw new _E.FlowError(L('run.superMustBeTheFirstBlock'));
           const parent = this.parentOf(frame.cls);
-          if (!parent) throw new _E.FlowError(`${frame.cls.name} non ha una classe madre: super(...) non serve`);
+          if (!parent) throw new _E.FlowError(L('run.hasNoParentClassSuperIs', { name: frame.cls.name }));
           yield* this.runCtor(parent, e.args, frame.self, e);
           return;
         }
         if (e.k === 'mcall') { yield* this.mcall(e, { asStatement: true }); return; }
         if (e.k === 'new') { yield* _E.evalE(e, this.ctx); return; }
-        if (e.k !== 'call') throw new _E.FlowError(this.oo ? 'Il blocco Chiamata deve contenere la chiamata di un metodo, es. Stampa(x) oppure p.sposta(1, 2)' : 'Il blocco Chiamata deve contenere una chiamata di funzione, es. Stampa(x)');
+        if (e.k !== 'call') throw new _E.FlowError(this.oo ? L('run.theCallBlockMustContainThe') : L('run.theCallBlockMustContainA'));
         if (this.hasUser(e.name)) yield* this.callUser(e.name, e.args, e, true);
         else yield* _E.evalE(e, this.ctx);
         return;
@@ -866,7 +867,7 @@ class Interpreter {
         let hit = s.always;
         if (!hit) {
           const c = yield* ev(s.expression);
-          if (c.t !== 'Boolean') throw new _E.FlowError('La condizione del punto di interruzione deve essere booleana');
+          if (c.t !== 'Boolean') throw new _E.FlowError(L('run.theBreakpointConditionMustBeBoolean'));
           hit = c.v;
         }
         if (hit) yield { type: 'break', stmt: s, frame };
@@ -885,7 +886,7 @@ class Interpreter {
         const cell = yield* this.cellOf(lv);
         const line = env.fileRead();
         let v;
-        try { v = _E.parseInputText(line, cell.type); } catch (e) { throw new _E.FlowError(`Lettura dal file: ${e.message}`); }
+        try { v = _E.parseInputText(line, cell.type); } catch (e) { throw new _E.FlowError(L('run.readingFromFile', { message: e.message })); }
         yield* this.store(lv, v);
         return;
       }
@@ -898,27 +899,27 @@ class Interpreter {
       case 'throw': {
         yield { type: 'stmt', stmt: s, frame };
         const v = yield* ev(s.expression);
-        if (v.t !== 'Object' || !v.v) throw new _E.FlowError(v.t === 'Object' ? 'Throw: l\'eccezione vale null' : `Throw vuole un'eccezione, es. new Eccezione("messaggio"), non ${_E.TYPE_IT[v.t] || v.t}`);
-        if (!this.isExc(v.v.cls)) throw new _E.FlowError(`Throw: ${v.v.cls.name} non è un'eccezione (una classe di eccezioni eredita da Eccezione)`);
+        if (v.t !== 'Object' || !v.v) throw new _E.FlowError(v.t === 'Object' ? L('run.throwTheExceptionIsNull') : L('run.throwWantsAnExceptionEG', { value: _E.TYPE_IT[v.t] || v.t }));
+        if (!this.isExc(v.v.cls)) throw new _E.FlowError(L('run.throwIsNotAnExceptionAn', { name: v.v.cls.name }));
         throw this.excError(v.v);
       }
       case 'try': {
         yield { type: 'stmt', stmt: s, frame };
         const depth = this.stack.length;
         let pending = null, pendInfo = null;
-        // eccezione arrivata qui: si esce dalle funzioni chiamate dentro il Try (lost: i loro nomi, per il cursore)
+        // exception arrived here: the functions called inside the Try are exited (lost: their names, for the cursor)
         const unwind = (e, obj) => { const lost = this.stack.slice(depth).filter((f) => !f.init).map((f) => f.func.name); this.stack.length = depth; return { type: obj.cls.name, lost }; };
         try {
           yield* this.block(s.body);
         } catch (e) {
           const obj = this.excOf(e);
-          if (!obj) throw e; // errore del programma, non un'eccezione: si ferma tutto
+          if (!obj) throw e; // error of the program, not an exception: everything stops
           const info = unwind(e, obj);
           const c = (s.catches || []).find((k) => { const t = this.byName.get(String(k.type).toLowerCase()); return t && this.isA(obj.cls, t); });
           if (!c) { pending = e; pendInfo = info; }
           else {
             const key = String(c.variable || 'e').toLowerCase(), old = frame.vars.get(key);
-            if (old && !old.catchVar) throw this.tag(new _E.FlowError(`Catch: la variabile "${c.variable}" è già usata in questa funzione, scegli un altro nome`), s, frame);
+            if (old && !old.catchVar) throw this.tag(new _E.FlowError(L('run.catchTheVariableIsAlreadyUsed', { variable: c.variable })), s, frame);
             frame.vars.set(key, { name: c.variable, type: obj.cls.name, array: false, value: _E.V.obj(obj), catchVar: true, ctx: null });
             yield { type: 'stmt', stmt: { id: s.id + ':catch:' + c.id, kind: 'catch' }, frame, exc: info };
             try { yield* this.block(c.body); } catch (e2) {
@@ -929,7 +930,7 @@ class Interpreter {
           }
         }
         if (s.hasFinally) {
-          // con un'eccezione in sospeso il cursore ci arriva con la freccia rossa; dopo il Finally l'eccezione prosegue
+          // with a pending exception the cursor arrives with the red arrow; after the Finally the exception continues
           yield { type: 'stmt', stmt: { id: s.id + ':finally', kind: 'finally' }, frame, exc: pendInfo ? { ...pendInfo, pending: true } : undefined };
           yield* this.block(s.finally || []);
         }
@@ -939,17 +940,17 @@ class Interpreter {
     }
   }
 
-  /* ---- eccezioni ---- */
-  /* errore che porta un'eccezione lanciata con Throw: se nessuno la cattura, il programma si ferma con questo messaggio */
+  /* ---- exceptions ---- */
+  /* error carrying an exception thrown with Throw: if nobody catches it, the program stops with this message */
   excError(obj) {
-    const msg = obj.fields.get('messaggio').value.v;
-    const where = this.stack.filter((f) => !f.init).map((f, i) => (i === 0 ? 'Inizio' : f.func.name)).reverse();
-    const e = new _E.FlowError(`Eccezione non gestita: ${obj.cls.name}${msg ? ' — ' + msg : ''}${where.length > 1 ? ` (lanciata in ${where[0]}, chiamata da ${where.slice(1).join(' ← ')})` : ''}`);
+    const msg = obj.fields.get('message').value.v;
+    const where = this.stack.filter((f) => !f.init).map((f, i) => (i === 0 ? L('run.main') : f.func.name)).reverse();
+    const e = new _E.FlowError(L('run.unhandledException', { name: obj.cls.name, text: msg ? ' — ' + msg : '', text2: where.length > 1 ? L('run.thrownInCalledFrom', { value: where[0], list: where.slice(1).join(' ← ') }) : '' }));
     e.thrown = obj;
     return e;
   }
-  /* l'eccezione portata da un errore: lanciata con Throw, oppure un errore di esecuzione (divisione per zero…).
-     null per gli errori del programma, che non si possono catturare */
+  /* the exception carried by an error: thrown with Throw, or a runtime error (division by zero…).
+     null for the errors of the program, which cannot be caught */
   excOf(e) {
     if (!(e instanceof _E.FlowError)) return null;
     if (e.thrown) return e.thrown;
@@ -957,23 +958,23 @@ class Interpreter {
     const cls = this.byName.get(e.exc.toLowerCase());
     const n = (this.classCount.get(cls.id) || 0) + 1;
     this.classCount.set(cls.id, n);
-    const obj = { id: n, uid: ++this.objCount, cls, fields: new Map([['messaggio', { name: 'messaggio', type: 'String', array: false, value: _E.V.str(e.message), field: true, owner: cls, visibility: 'public', readonly: true, ctx: null }]]), targs: null };
+    const obj = { id: n, uid: ++this.objCount, cls, fields: new Map([['message', { name: 'message', type: 'String', array: false, value: _E.V.str(e.message), field: true, owner: cls, visibility: 'public', readonly: true, ctx: null }]]), targs: null };
     e.thrown = obj;
     return obj;
   }
   *storeArray(tcell, lv, rx) {
     const nm = lv.k === 'var' ? lv.name : this.label(lv);
     const src = yield* this.cellOf(rx);
-    if (!src.array) throw new _E.FlowError(`"${nm}" è un array: a destra serve un array dello stesso tipo, oppure indica l'elemento da modificare, es. ${nm}[i]`);
+    if (!src.array) throw new _E.FlowError(L('run.isAnArrayTheRightSide', { nm, nm2: nm }));
     this.linkArray(tcell, nm, src, `"${this.label(rx)}"`);
   }
-  /* l'array a sinistra diventa lo stesso array di src (come in Java) */
+  /* the array on the left becomes the same array as src (as in Java) */
   linkArray(tcell, nm, src, what) {
-    if (tcell.constant) throw new _E.FlowError(`"${tcell.name}" è una costante: il suo valore non si può modificare`);
+    if (tcell.constant) throw new _E.FlowError(L('run.isAConstantItsValueCannot', { name: tcell.name }));
     const tt = this.cellType(tcell), st = this.cellType(src);
-    if (!this.unresolved(tt) && !this.unresolved(st) && !_E.sameType(tt, st)) throw new _E.FlowError(`Tipi incompatibili: ${what} è un array di ${_E.typeName(st)}, ma "${nm}" è un array di ${_E.typeName(tt)}`);
+    if (!this.unresolved(tt) && !this.unresolved(st) && !_E.sameType(tt, st)) throw new _E.FlowError(L('run.incompatibleTypesIsAnArrayOf', { what, st: _E.typeName(st), nm, tt: _E.typeName(tt) }));
     const sd = src.dims || [src.items.length], td = tcell.dims || [tcell.items.length];
-    if (sd.length !== td.length) throw new _E.FlowError(`${what} ha ${sd.length} ${sd.length === 1 ? 'dimensione' : 'dimensioni'}, "${nm}" ne ha ${td.length}`);
+    if (sd.length !== td.length) throw new _E.FlowError(L('run.hasHas', { what, sdCount: sd.length, text: sd.length === 1 ? L('expr.dimension') : L('expr.dimensions'), nm, tdCount: td.length }));
     tcell.items = src.items; tcell.dims = sd.slice();
     tcell.lastWrite = undefined;
     tcell.writes = (tcell.writes || 0) + 1;
@@ -981,25 +982,25 @@ class Interpreter {
   *store(lv, val) {
     const cell = yield* this.cellOf(lv);
     const nm = lv.k === 'var' ? lv.name : this.label(lv).replace(/\[…\]$/, '');
-    if (cell.readonly) throw new _E.FlowError(`"${cell.name}" di un'eccezione si può solo leggere: il messaggio si indica creandola, es. new Eccezione("testo")`);
-    if (cell.constant) throw new _E.FlowError(`"${cell.name}" è una costante: il suo valore non si può modificare`);
-    // array restituito da una funzione
+    if (cell.readonly) throw new _E.FlowError(L('run.ofAnExceptionCanOnlyBe', { name: cell.name }));
+    if (cell.constant) throw new _E.FlowError(L('run.isAConstantItsValueCannot', { name: cell.name }));
+    // array returned by a function
     if (val && val.t === 'ArrRef') {
-      if (!cell.array || lv.index) throw new _E.FlowError(`"${nm}" non è un array: a destra c'è una funzione che restituisce un array di ${_E.typeName(val.cell.type)}`);
-      this.linkArray(cell, nm, val.cell, 'il valore restituito');
+      if (!cell.array || lv.index) throw new _E.FlowError(L('run.isNotAnArrayOnThe', { nm, type: _E.typeName(val.cell.type) }));
+      this.linkArray(cell, nm, val.cell, L('run.theReturnValue2'));
       return;
     }
     if (cell.array) {
-      if (!lv.index) throw new _E.FlowError(`"${nm}" è un array: indica l'elemento da modificare, es. ${nm}[i]`);
+      if (!lv.index) throw new _E.FlowError(L('run.isAnArraySpecifyTheElement2', { nm, nm2: nm }));
       const ivs = [];
       for (const ix of lv.indices) ivs.push(yield* _E.evalE(ix, this.ctx));
       const off = _E.arrOffset(ivs, cell, { name: nm });
-      cell.items[off] = this.coerceTo(val, cell.type, `il valore assegnato a ${nm}[${ivs.map((x) => x.v).join(', ')}]`, cell.ctx);
+      cell.items[off] = this.coerceTo(val, cell.type, L('run.theValueAssignedTo', { nm, list: ivs.map((x) => x.v).join(', ') }), cell.ctx);
       cell.lastWrite = off;
       cell.writes = (cell.writes || 0) + 1;
     } else {
-      if (lv.index) throw new _E.FlowError(`"${nm}" non è un array`);
-      cell.value = this.coerceTo(val, cell.type, `il valore assegnato a "${nm}"`, cell.ctx);
+      if (lv.index) throw new _E.FlowError(L('expr.isNotAnArray', { name: nm }));
+      cell.value = this.coerceTo(val, cell.type, L('run.theValueAssignedTo2', { nm }), cell.ctx);
       cell.writes = (cell.writes || 0) + 1;
     }
   }

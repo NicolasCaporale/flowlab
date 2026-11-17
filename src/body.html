@@ -1,88 +1,88 @@
 <div id="app">
-  <header class="bar" role="toolbar" aria-label="Strumenti">
+  <header class="bar" role="toolbar" aria-label="Tools" data-t-aria-label="page.tools">
     <div class="brand">
-      <svg viewBox="0 0 32 32" aria-hidden="true"><rect x="9" y="1.5" width="14" height="6" rx="3" fill="var(--f-term)" stroke="var(--s-term)" stroke-width="1.5"/><path d="M16 7.5V11" stroke="var(--flow)" stroke-width="1.5"/><path d="M16 11L24 17L16 23L8 17Z" fill="var(--f-cond)" stroke="var(--s-cond)" stroke-width="1.5"/><path d="M24 17H28V27H16M8 17H4V27H16V30.5" fill="none" stroke="var(--accent)" stroke-width="1.8" stroke-linecap="round"/></svg>
-      <div class="bt"><b>FlowLab</b><button type="button" id="progName" title="Proprietà del programma">Programma</button></div>
+      <svg viewBox="0 0 32 32" aria-hidden="true"><rect x="9" y="1.5" width="14" height="6" rx="3" fill="var(--f-term)" stroke="var(--s-term)" stroke-width="1.5"></rect><path d="M16 7.5V11" stroke="var(--flow)" stroke-width="1.5"></path><path d="M16 11L24 17L16 23L8 17Z" fill="var(--f-cond)" stroke="var(--s-cond)" stroke-width="1.5"></path><path d="M24 17H28V27H16M8 17H4V27H16V30.5" fill="none" stroke="var(--accent)" stroke-width="1.8" stroke-linecap="round"></path></svg>
+      <div class="bt"><b>FlowLab</b><button type="button" id="progName" title="Program properties" data-t="model.program" data-t-title="ui.programProperties2">Program</button></div>
     </div>
-    <button class="tb" id="fileBtn" type="button" aria-haspopup="menu"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg><span class="lbl">File</span></button>
-    <button class="tb icon" id="openBtn" type="button" title="Apri file .fprg (Ctrl+O)" aria-label="Apri"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></button>
-    <button class="tb icon" id="saveBtn" type="button" title="Salva come .fprg (Ctrl+S)" aria-label="Salva"><svg viewBox="0 0 24 24"><path d="M5 3h11l4 4v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a1 1 0 0 1 1-2zM8 3v5h7V3M8 21v-7h8v7"/></svg></button>
-    <button class="tb icon" id="undoBtn" type="button" title="Annulla (Ctrl+Z)" aria-label="Annulla"><svg viewBox="0 0 24 24"><path d="M9 14L4 9l5-5M4 9h10a6 6 0 0 1 0 12h-3"/></svg></button>
-    <button class="tb icon" id="redoBtn" type="button" title="Ripeti (Ctrl+Y)" aria-label="Ripeti"><svg viewBox="0 0 24 24"><path d="M15 14l5-5-5-5M20 9H10a6 6 0 0 0 0 12h3"/></svg></button>
+    <button class="tb" id="fileBtn" type="button" aria-haspopup="menu"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"></path></svg><span class="lbl" data-t="page.file">File</span></button>
+    <button class="tb icon" id="openBtn" type="button" title="Open .fprg file (Ctrl+O)" aria-label="Open" data-t-title="page.openFprgFileCtrlO" data-t-aria-label="ui.open"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg></button>
+    <button class="tb icon" id="saveBtn" type="button" title="Save as .fprg (Ctrl+S)" aria-label="Save" data-t-title="page.saveAsFprgCtrlS" data-t-aria-label="ui.save"><svg viewBox="0 0 24 24"><path d="M5 3h11l4 4v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a1 1 0 0 1 1-2zM8 3v5h7V3M8 21v-7h8v7"></path></svg></button>
+    <button class="tb icon" id="undoBtn" type="button" title="Undo (Ctrl+Z)" aria-label="Undo" data-t-title="page.undoCtrlZ" data-t-aria-label="page.undo"><svg viewBox="0 0 24 24"><path d="M9 14L4 9l5-5M4 9h10a6 6 0 0 1 0 12h-3"></path></svg></button>
+    <button class="tb icon" id="redoBtn" type="button" title="Redo (Ctrl+Y)" aria-label="Redo" data-t-title="page.redoCtrlY" data-t-aria-label="page.redo"><svg viewBox="0 0 24 24"><path d="M15 14l5-5-5-5M20 9H10a6 6 0 0 0 0 12h3"></path></svg></button>
     <span class="sep" aria-hidden="true"></span>
-    <div class="viewsw" role="radiogroup" aria-label="Vista del programma">
-      <button type="button" class="vbtn" id="viewFn" role="radio" aria-checked="true" aria-label="Vista funzioni" title="Vista funzioni: il programma è un insieme di funzioni (Ctrl+Alt+F)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 4h-1.5A3.5 3.5 0 0 0 10 7.5V20M6.5 11H14"/><path d="M15.5 13.5l5 5M20.5 13.5l-5 5"/></svg><span class="lbl">Funzioni</span></button>
-      <button type="button" class="vbtn" id="viewOo" role="radio" aria-checked="false" aria-label="Vista oggetti" title="Vista oggetti: diagramma delle classi UML (Ctrl+Alt+O)"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="3" width="9" height="11" rx="1.2"/><path d="M2.5 7h9M2.5 10.5h9"/><rect x="13.5" y="10" width="8" height="11" rx="1.2"/><path d="M13.5 14h8M7 14v3.5h6.5"/></svg><span class="lbl">Oggetti</span></button>
+    <div class="viewsw" role="radiogroup" aria-label="Program view" data-t-aria-label="page.programView">
+      <button type="button" class="vbtn" id="viewFn" role="radio" aria-checked="true" aria-label="Functions view" title="Functions view: the program is a set of functions (Ctrl+Alt+F)" data-t-title="page.functionsViewTheProgramIsA" data-t-aria-label="page.functionsView"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 4h-1.5A3.5 3.5 0 0 0 10 7.5V20M6.5 11H14"></path><path d="M15.5 13.5l5 5M20.5 13.5l-5 5"></path></svg><span class="lbl" data-t="page.functions">Functions</span></button>
+      <button type="button" class="vbtn" id="viewOo" role="radio" aria-checked="false" aria-label="Objects view" title="Objects view: UML class diagram (Ctrl+Alt+O)" data-t-title="page.objectsViewUmlClassDiagramCtrl" data-t-aria-label="page.objectsView"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="3" width="9" height="11" rx="1.2"></rect><path d="M2.5 7h9M2.5 10.5h9"></path><rect x="13.5" y="10" width="8" height="11" rx="1.2"></rect><path d="M13.5 14h8M7 14v3.5h6.5"></path></svg><span class="lbl" data-t="page.objects">Objects</span></button>
     </div>
     <div class="funcbox">
-      <label for="funcSel" id="funcLbl">Funzione</label>
+      <label for="funcSel" id="funcLbl" data-t="ui.function">Function</label>
       <select id="funcSel" class="fsel"></select>
-      <button class="iconbtn" id="funcAdd" type="button" title="Nuova funzione (N)" aria-label="Nuova funzione"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
-      <button class="iconbtn" id="funcEdit" type="button" title="Modifica funzione o proprietà del programma (F2)" aria-label="Modifica funzione"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16zM14 6l4 4"/></svg></button>
-      <button class="iconbtn" id="funcDel" type="button" title="Elimina funzione (Maiusc+Canc)" aria-label="Elimina funzione"><svg viewBox="0 0 24 24"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13"/></svg></button>
+      <button class="iconbtn" id="funcAdd" type="button" title="New function (N)" aria-label="New function" data-t-title="ui.newFunctionN" data-t-aria-label="ui.newFunction"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"></path></svg></button>
+      <button class="iconbtn" id="funcEdit" type="button" title="Edit function or program properties (F2)" aria-label="Edit function" data-t-title="ui.editFunctionOrProgramPropertiesF2" data-t-aria-label="page.editFunction"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16zM14 6l4 4"></path></svg></button>
+      <button class="iconbtn" id="funcDel" type="button" title="Delete function (Shift+Del)" aria-label="Delete function" data-t-title="ui.deleteFunctionShiftDel" data-t-aria-label="page.deleteFunction"><svg viewBox="0 0 24 24"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13"></path></svg></button>
     </div>
     <span class="sep" aria-hidden="true"></span>
-    <button class="tb run" id="runBtn" type="button" title="Esegui (F5)"><svg viewBox="0 0 24 24"><path d="M7 4.5v15l12-7.5z"/></svg><span class="lbl">Esegui</span></button>
-    <button class="tb" id="stepBtn" type="button" title="Esegui un passo (F10)"><svg viewBox="0 0 24 24"><path d="M5 5v14M10 6l9 6-9 6z"/></svg><span class="lbl">Passo</span></button>
-    <button class="tb icon" id="overBtn" type="button" title="Passo sopra (F8): esegue tutta la chiamata del blocco corrente senza entrare nella funzione o nel metodo" aria-label="Passo sopra"><svg viewBox="0 0 24 24"><path d="M4 13a8 8 0 0 1 15-3.5"/><path d="M20 5v5h-5"/><circle cx="12" cy="18" r="2"/></svg></button>
-    <button class="tb icon" id="outBtn" type="button" title="Esci dalla funzione (Maiusc+F8): esegue il resto della funzione o del metodo in corso e si ferma sul blocco successivo di chi l'ha chiamata" aria-label="Esci dalla funzione"><svg viewBox="0 0 24 24"><path d="M5 4v16h6"/><path d="M12 12h8M16 8l4 4-4 4"/></svg></button>
-    <button class="tb icon" id="pauseBtn" type="button" title="Pausa (F6)" aria-label="Pausa" disabled><svg viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></svg></button>
-    <button class="tb icon" id="stopBtn" type="button" title="Ferma (Maiusc+F5)" aria-label="Ferma" disabled><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg></button>
-    <label class="speed" for="speed"><span class="lbl">Velocità</span> <input id="speed" type="range" min="0" max="3" step="1" value="2"><output id="speedVal">Media</output></label>
+    <button class="tb run" id="runBtn" type="button" title="Run (F5)" data-t-title="page.runF5"><svg viewBox="0 0 24 24"><path d="M7 4.5v15l12-7.5z"></path></svg><span class="lbl" data-t="ui.run">Run</span></button>
+    <button class="tb" id="stepBtn" type="button" title="Run one step (F10)" data-t-title="page.runOneStepF10"><svg viewBox="0 0 24 24"><path d="M5 5v14M10 6l9 6-9 6z"></path></svg><span class="lbl" data-t="ui.step">Step</span></button>
+    <button class="tb icon" id="overBtn" type="button" title="Step over (F8): runs the whole call of the current block without entering the function or method" aria-label="Step over" data-t-title="page.stepOverF8RunsTheWhole" data-t-aria-label="page.stepOver"><svg viewBox="0 0 24 24"><path d="M4 13a8 8 0 0 1 15-3.5"></path><path d="M20 5v5h-5"></path><circle cx="12" cy="18" r="2"></circle></svg></button>
+    <button class="tb icon" id="outBtn" type="button" title="Step out (Shift+F8): runs the rest of the current function or method and stops at the next block of its caller" aria-label="Step out" data-t-title="page.stepOutShiftF8RunsThe" data-t-aria-label="page.stepOut"><svg viewBox="0 0 24 24"><path d="M5 4v16h6"></path><path d="M12 12h8M16 8l4 4-4 4"></path></svg></button>
+    <button class="tb icon" id="pauseBtn" type="button" title="Pause (F6)" aria-label="Pause" disabled="" data-t-title="page.pauseF6" data-t-aria-label="chart.pause"><svg viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"></path></svg></button>
+    <button class="tb icon" id="stopBtn" type="button" title="Stop (Shift+F5)" aria-label="Stop" disabled="" data-t-title="page.stopShiftF5" data-t-aria-label="ui.stop"><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1.5"></rect></svg></button>
+    <label class="speed" for="speed"><span class="lbl" data-t="page.speed">Speed</span> <input id="speed" type="range" min="0" max="3" step="1" value="2"><output id="speedVal" data-t="ui.medium">Medium</output></label>
     <span class="grow"></span>
-    <button class="tb" id="exBtn" type="button" aria-haspopup="menu" title="Programmi di esempio"><svg viewBox="0 0 24 24"><path d="M4 5h7v6H4zM13 5h7v6h-7zM4 13h7v6H4zM13 13h7v6h-7z"/></svg><span class="lbl">Esempi</span></button>
-    <button class="tb" id="modBtn" type="button" title="Importa un modulo: classi e funzioni già pronte da riusare (Ctrl+I)"><svg viewBox="0 0 24 24"><path d="M9 3h6v3a2 2 0 1 0 4 0V5h2v6h-3a2 2 0 1 0 0 4h3v6h-6v-3a2 2 0 1 0-4 0v3H5v-6h1a2 2 0 1 0 0-4H5V5h4z"/></svg><span class="lbl">Importa modulo</span></button>
-    <button class="tb icon" id="helpBtn" type="button" title="Guida rapida (F1)" aria-label="Guida rapida"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.3-1 .9-1 1.6V14M12 17.5v.01"/></svg></button>
-    <button class="tb icon" id="themeBtn" type="button" title="Tema chiaro/scuro" aria-label="Cambia tema"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 0 0 16z" fill="currentColor"/></svg></button>
+    <button class="tb" id="exBtn" type="button" aria-haspopup="menu" title="Example programs" data-t-title="ui.examplePrograms"><svg viewBox="0 0 24 24"><path d="M4 5h7v6H4zM13 5h7v6h-7zM4 13h7v6H4zM13 13h7v6h-7z"></path></svg><span class="lbl" data-t="page.examples">Examples</span></button>
+    <button class="tb" id="modBtn" type="button" title="Import a module: ready-made classes and functions to reuse (Ctrl+I)" data-t-title="page.importAModuleReadyMadeClasses"><svg viewBox="0 0 24 24"><path d="M9 3h6v3a2 2 0 1 0 4 0V5h2v6h-3a2 2 0 1 0 0 4h3v6h-6v-3a2 2 0 1 0-4 0v3H5v-6h1a2 2 0 1 0 0-4H5V5h4z"></path></svg><span class="lbl" data-t="page.importModule">Import module</span></button>
+    <button class="tb icon" id="helpBtn" type="button" title="Quick guide (F1)" aria-label="Quick guide" data-t-title="page.quickGuideF1" data-t-aria-label="ui.quickGuide"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.3-1 .9-1 1.6V14M12 17.5v.01"></path></svg></button>
+    <button class="tb icon" id="themeBtn" type="button" title="Light/dark theme" aria-label="Change theme" data-t-title="page.lightDarkTheme" data-t-aria-label="page.changeTheme"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"></circle><path d="M12 4a8 8 0 0 0 0 16z" fill="currentColor"></path></svg></button>
   </header>
 
   <main class="work">
-    <section class="canvas-col" aria-label="Diagramma di flusso">
+    <section class="canvas-col" aria-label="Flowchart" data-t-aria-label="page.flowchart">
       <div id="canvasWrap"><div id="chart" class="vchart"></div></div>
-      <div id="modBar" hidden><button type="button" id="modToggle">⊟ Condensa i moduli</button></div><div id="chartTools"><button type="button" id="compactBtn" aria-pressed="false" title="Vista compatta: i blocchi in sequenza si toccano (Maiusc+K)" aria-label="Vista compatta"><svg viewBox="0 0 24 24" aria-hidden="true"><rect class="cb1" x="6" y="2.5" width="12" height="5" rx="1"/><path class="cb-arrow" d="M12 7.5v3"/><rect class="cb2" x="6" y="10.5" width="12" height="5" rx="1"/><path class="cb-arrow" d="M12 15.5v3"/><rect class="cb3" x="6" y="18.5" width="12" height="3.5" rx="1"/></svg><span class="lbl">Compatta</span></button><div id="crumbBar" hidden><button type="button" id="backUml" title="Torna al diagramma delle classi (U)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 6l-6 6 6 6"/></svg>Diagramma delle classi</button><span id="crumbWhere"></span></div></div>
-      <div class="zoombar" role="group" aria-label="Zoom">
-        <button type="button" id="zoomOut" aria-label="Riduci">−</button>
-        <button type="button" id="zoomVal" title="Torna al 100% (Ctrl+0)">100%</button>
-        <button type="button" id="zoomIn" aria-label="Ingrandisci">+</button>
-        <button type="button" id="zoomFit" title="Adatta alla finestra (Maiusc+1)" aria-label="Adatta alla finestra">⤢</button>
+      <div id="modBar" hidden=""><button type="button" id="modToggle" data-t="ui.collapseModules">⊟ Collapse modules</button></div><div id="chartTools"><button type="button" id="compactBtn" aria-pressed="false" title="Compact view: blocks in sequence touch each other (Shift+K)" aria-label="Compact view" data-t-title="ui.compactViewBlocksInSequenceTouch" data-t-aria-label="page.compactView"><svg viewBox="0 0 24 24" aria-hidden="true"><rect class="cb1" x="6" y="2.5" width="12" height="5" rx="1"></rect><path class="cb-arrow" d="M12 7.5v3"></path><rect class="cb2" x="6" y="10.5" width="12" height="5" rx="1"></rect><path class="cb-arrow" d="M12 15.5v3"></path><rect class="cb3" x="6" y="18.5" width="12" height="3.5" rx="1"></rect></svg><span class="lbl" data-t="ui.compact">Compact</span></button><div id="crumbBar" hidden=""><button type="button" id="backUml" title="Back to the class diagram (U)" data-t-title="page.backToTheClassDiagramU"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 6l-6 6 6 6"></path></svg><span data-t="ui.classDiagram">Class diagram</span></button><span id="crumbWhere"></span></div></div>
+      <div class="zoombar" role="group" aria-label="Zoom" data-t-aria-label="page.zoom">
+        <button type="button" id="zoomOut" aria-label="Zoom out" data-t-aria-label="ui.zoomOut">−</button>
+        <button type="button" id="zoomVal" title="Back to 100% (Ctrl+0)" data-t-title="page.backTo100Ctrl0">100%</button>
+        <button type="button" id="zoomIn" aria-label="Zoom in" data-t-aria-label="ui.zoomIn">+</button>
+        <button type="button" id="zoomFit" title="Fit to window (Shift+1)" aria-label="Fit to window" data-t-title="page.fitToWindowShift1" data-t-aria-label="ui.fitToWindow">⤢</button>
         <span class="zsep" aria-hidden="true"></span>
-        <button type="button" id="viewAdd" title="Nuova vista: un'altra finestra sul programma, per vedere e modificare un altro diagramma o un'altra parte di questo (Ctrl+Alt+V)" aria-label="Nuova vista"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="13" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-3"/></svg><span>Nuova vista</span></button>
+        <button type="button" id="viewAdd" title="New view: another window on the program, to see and edit another diagram or another part of this one (Ctrl+Alt+V)" aria-label="New view" data-t-title="ui.newViewAnotherWindowOnThe" data-t-aria-label="ui.newView"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="13" height="13" rx="2"></rect><path d="M8 7V5a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-3"></path></svg><span data-t="ui.newView">New view</span></button>
       </div>
       <footer class="statusbar">
-        <span id="status" class="status" role="status"><span id="statusText">Pronto</span></span>
+        <span id="status" class="status" role="status"><span id="statusText" data-t="ui.ready">Ready</span></span>
         <span id="stepCount"></span>
-        <span class="hint-add">Clic su una freccia per aggiungere un blocco · doppio clic per modificarlo · trascina per spostarlo</span>
+        <span class="hint-add" data-t="ui.clickAnArrowToAddA">Click an arrow to add a block · double-click to edit it · drag to move it</span>
       </footer>
     </section>
-    <div id="grip" role="separator" aria-orientation="vertical" aria-label="Ridimensiona pannello" tabindex="0"><button id="sideToggle" type="button" title="Nascondi il pannello (Ctrl+B)" aria-label="Nascondi il pannello" aria-expanded="true"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M4.5 2.5L8 6L4.5 9.5"/></svg></button></div>
-    <aside id="side" aria-label="Pannelli">
-      <div id="tabs" role="tablist" aria-label="Pannelli"></div>
-      <section class="pane" id="pane-console" role="tabpanel" aria-label="Console">
-        <div class="panehead"><span>Output del programma e input da tastiera</span><span class="grow"></span><button class="btn small" id="conClear" type="button">Pulisci</button></div>
+    <div id="grip" role="separator" aria-orientation="vertical" aria-label="Resize panel" tabindex="0" data-t-aria-label="page.resizePanel"><button id="sideToggle" type="button" title="Hide the panel (Ctrl+B)" aria-label="Hide the panel" aria-expanded="true" data-t-title="page.hideThePanelCtrlB" data-t-aria-label="ui.hideThePanel"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M4.5 2.5L8 6L4.5 9.5"></path></svg></button></div>
+    <aside id="side" aria-label="Panels" data-t-aria-label="page.panels">
+      <div id="tabs" role="tablist" aria-label="Panels" data-t-aria-label="page.panels"></div>
+      <section class="pane" id="pane-console" role="tabpanel" aria-label="Console" data-t-aria-label="page.console">
+        <div class="panehead"><span data-t="page.programOutputAndKeyboardInput">Program output and keyboard input</span><span class="grow"></span><button class="btn small" id="conClear" type="button" data-t="page.clear">Clear</button></div>
         <div id="conOut" aria-live="polite"></div>
         <form id="conForm" autocomplete="off" onsubmit="return false">
           <span id="conPrompt">›</span>
-          <input id="conInput" type="text" disabled placeholder="L'input si attiva quando il programma chiede un valore" aria-label="Valore di input">
-          <button id="conSend" type="button" disabled>Invia</button>
+          <input id="conInput" type="text" disabled="" placeholder="Input becomes active when the program asks for a value" aria-label="Input value" data-t-aria-label="page.inputValue" data-t-placeholder="ui.inputBecomesActiveWhenTheProgram">
+          <button id="conSend" type="button" disabled="" data-t="page.send">Send</button>
         </form>
       </section>
-      <section class="pane" id="pane-vars" role="tabpanel" aria-label="Variabili" hidden>
-        <div class="panehead"><span>Valori durante l'esecuzione · in giallo quelli appena cambiati</span></div>
+      <section class="pane" id="pane-vars" role="tabpanel" aria-label="Variables" hidden="" data-t-aria-label="ui.variables">
+        <div class="panehead"><span data-t="page.valuesDuringExecutionJustChangedOnes">Values during execution · just-changed ones in yellow</span></div>
         <div id="varsBody"></div>
       </section>
-      <section class="pane" id="pane-code" role="tabpanel" aria-label="Codice sorgente" hidden>
-        <div class="panehead"><label for="langSel">Linguaggio</label><select id="langSel" class="fsel"></select><span class="grow"></span><button class="btn small" id="codeCopy" type="button">Copia</button></div>
+      <section class="pane" id="pane-code" role="tabpanel" aria-label="Source code" hidden="" data-t-aria-label="page.sourceCode">
+        <div class="panehead"><label for="langSel" data-t="page.language">Language</label><select id="langSel" class="fsel"></select><span class="grow"></span><button class="btn small" id="codeCopy" type="button" data-t="ui.copy">Copy</button></div>
         <pre id="codeOut"></pre>
       </section>
-      <section class="pane" id="pane-files" role="tabpanel" aria-label="File di testo" hidden>
-        <div class="panehead"><span>File di testo per i blocchi Apri, Leggi, Scrivi</span><span class="grow"></span><button class="btn small" id="fileNew" type="button">Nuovo</button><button class="btn small" id="fileUpload" type="button">Carica…</button></div>
+      <section class="pane" id="pane-files" role="tabpanel" aria-label="Text files" hidden="" data-t-aria-label="page.textFiles">
+        <div class="panehead"><span data-t="page.textFilesForTheOpenRead">Text files for the Open, Read, Write blocks</span><span class="grow"></span><button class="btn small" id="fileNew" type="button" data-t="page.new">New</button><button class="btn small" id="fileUpload" type="button" data-t="page.upload">Upload…</button></div>
         <div id="filesBody"></div>
       </section>
     </aside>
   </main>
-  <input type="file" id="fileInput" accept=".fprg,.xml,.txt" hidden>
-  <input type="file" id="txtInput" accept=".txt,.csv,text/plain" multiple hidden>
+  <input type="file" id="fileInput" accept=".fprg,.xml,.txt" hidden="">
+  <input type="file" id="txtInput" accept=".txt,.csv,text/plain" multiple="" hidden="">
   <div id="floatLayer"></div>
-  <div id="pop" hidden></div>
+  <div id="pop" hidden=""></div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 </div>

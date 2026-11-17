@@ -1,10 +1,10 @@
 // Viste ausiliarie: finestre mobili con un altro diagramma, modifica, «Continua», esecuzione, salvataggio
 import { chromium } from '/opt/npm-tools/node_modules/playwright/index.mjs';
 const browser = await chromium.launch();
-const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+const page = await browser.newPage({ locale: 'it-IT', viewport: { width: 1440, height: 900 } });
 const errs = []; page.on('pageerror', (e) => errs.push(e.message));
 await page.goto('file://' + process.cwd() + '/dist/FlowLab.html'); await page.waitForTimeout(300);
-await page.evaluate(() => { localStorage.clear(); const s = document.querySelector('#speed'); s.value = 0; s.dispatchEvent(new Event('input')); FlowLab.loadExample('bolle'); });
+await page.evaluate(() => { localStorage.clear(); const s = document.querySelector('#speed'); s.value = 0; s.dispatchEvent(new Event('input')); FlowLab.loadExample('bubble_sort'); });
 const wait = (ms = 150) => page.waitForTimeout(ms);
 const ok = (name, cond) => console.log(`${cond ? 'ok  ' : 'FAIL'} ${name}`);
 await wait(250);
@@ -123,7 +123,7 @@ await page.locator('.auxwin .minbtn').click(); await wait(100);
 ok('ridotta', await page.locator('.auxwin.min').count() === 1);
 await page.locator('.auxwin .minbtn').click(); await wait(100);
 // 9. vista Oggetti: diagramma delle classi in una vista
-await page.evaluate(() => FlowLab.loadExample('forme')); await wait(250);
+await page.evaluate(() => FlowLab.loadExample('shapes')); await wait(250);
 ok('altro programma: viste chiuse', (await page.locator('.auxwin').count()) === 0);
 await page.evaluate(() => FlowLab.showFunc(1)); await wait(100);
 await page.click('#viewAdd'); await wait(150);

@@ -1,4 +1,5 @@
 const E=require('../src/expr.js'), M=require('../src/model.js'), {Interpreter}=require('../src/interp.js');
+process.env.FLOWLAB_LANG = process.env.FLOWLAB_LANG || 'it'; // expected messages in Italian
 const S=M.makeStmt;
 function run(prog, inputs=[]){
   let out=''; const env={output:(t,nl)=>{out+=t+(nl?'\n':'')}, eof:()=>true, fileOpen(){},fileClose(){},fileRead(){},fileWrite(){}};

@@ -1,0 +1,111 @@
+<?xml version="1.0"?>
+<flowgorithm fileversion="4.2">
+    <attributes>
+        <attribute name="name" value="Bank accounts"/>
+        <attribute name="authors" value="FlowLab examples"/>
+        <attribute name="about" value="A class with private attributes, two constructors and a static attribute that counts the open accounts."/>
+        <attribute name="saved" value="2026-11-17 08:00:00 PM"/>
+        <attribute name="created" value="Zmxvd2xhYjtleGFtcGxlczsyMDI2LTExLTE3IDA4OjAwOjAwIFBNOzE="/>
+        <attribute name="edited" value="Zmxvd2xhYjtleGFtcGxlczsyMDI2LTExLTE3IDA4OjAwOjAwIFBNOzE="/>
+    </attributes>
+    <flowlab-classes>
+        <class name="BankAccounts" parent="" x="40" y="60"/>
+        <class name="BankAccount" parent="" x="360" y="40">
+            <attribute name="owner" type="String" array="False" size="" visibility="private" static="False" init=""/>
+            <attribute name="balance" type="Real" array="False" size="" visibility="private" static="False" init=""/>
+            <attribute name="openAccounts" type="Integer" array="False" size="" visibility="public" static="True" init="0"/>
+        </class>
+    </flowlab-classes>
+    <function name="Main" type="None" variable="" flowlab-class="BankAccounts" flowlab-visibility="public" flowlab-static="True">
+        <parameters/>
+        <body>
+            <comment text="Try adding the block  a.balance ← 1000000 : balance is private and the program stops with an error."/>
+            <declare name="a, b" type="BankAccount" array="False" size=""/>
+            <assign variable="a" expression="new BankAccount(&quot;Anna&quot;, 100)"/>
+            <assign variable="b" expression="new BankAccount(&quot;Bruno&quot;)"/>
+            <call expression="a.deposit(50)"/>
+            <if expression="a.withdraw(30)">
+                <then>
+                    <output expression="&quot;Anna withdrew 30 €&quot;" newline="True"/>
+                </then>
+                <else/>
+            </if>
+            <if expression="not b.withdraw(10)">
+                <then>
+                    <output expression="&quot;Bruno does not have enough money to withdraw 10 €&quot;" newline="True"/>
+                </then>
+                <else/>
+            </if>
+            <output expression="a.describe()" newline="True"/>
+            <output expression="b.describe()" newline="True"/>
+            <output expression="&quot;Open accounts: &quot; &amp; BankAccount.openAccounts" newline="True"/>
+        </body>
+    </function>
+    <function name="BankAccount" type="None" variable="" flowlab-class="BankAccount" flowlab-visibility="public" flowlab-static="False" flowlab-ctor="True">
+        <parameters>
+            <parameter name="name" type="String" array="False"/>
+        </parameters>
+        <body>
+            <assign variable="owner" expression="name"/>
+            <assign variable="balance" expression="0"/>
+            <assign variable="openAccounts" expression="openAccounts + 1"/>
+        </body>
+    </function>
+    <function name="BankAccount" type="None" variable="" flowlab-class="BankAccount" flowlab-visibility="public" flowlab-static="False" flowlab-ctor="True">
+        <parameters>
+            <parameter name="name" type="String" array="False"/>
+            <parameter name="initial" type="Real" array="False"/>
+        </parameters>
+        <body>
+            <assign variable="owner" expression="name"/>
+            <assign variable="balance" expression="initial"/>
+            <assign variable="openAccounts" expression="openAccounts + 1"/>
+        </body>
+    </function>
+    <function name="deposit" type="None" variable="" flowlab-class="BankAccount" flowlab-visibility="public" flowlab-static="False">
+        <parameters>
+            <parameter name="amount" type="Real" array="False"/>
+        </parameters>
+        <body>
+            <if expression="amount &gt; 0">
+                <then>
+                    <assign variable="balance" expression="balance + amount"/>
+                </then>
+                <else>
+                    <output expression="&quot;Invalid amount&quot;" newline="True"/>
+                </else>
+            </if>
+        </body>
+    </function>
+    <function name="withdraw" type="Boolean" variable="done" flowlab-class="BankAccount" flowlab-visibility="public" flowlab-static="False">
+        <parameters>
+            <parameter name="amount" type="Real" array="False"/>
+        </parameters>
+        <body>
+            <declare name="done" type="Boolean" array="False" size=""/>
+            <if expression="amount &gt; 0 and amount &lt;= balance">
+                <then>
+                    <assign variable="balance" expression="balance - amount"/>
+                    <assign variable="done" expression="true"/>
+                </then>
+                <else>
+                    <assign variable="done" expression="false"/>
+                </else>
+            </if>
+        </body>
+    </function>
+    <function name="getBalance" type="Real" variable="s" flowlab-class="BankAccount" flowlab-visibility="public" flowlab-static="False">
+        <parameters/>
+        <body>
+            <declare name="s" type="Real" array="False" size=""/>
+            <assign variable="s" expression="balance"/>
+        </body>
+    </function>
+    <function name="describe" type="String" variable="text" flowlab-class="BankAccount" flowlab-visibility="public" flowlab-static="False">
+        <parameters/>
+        <body>
+            <declare name="text" type="String" array="False" size=""/>
+            <assign variable="text" expression="owner &amp; &quot;: &quot; &amp; ToFixed(balance, 2) &amp; &quot; €&quot;"/>
+        </body>
+    </function>
+</flowgorithm>

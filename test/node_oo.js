@@ -1,4 +1,5 @@
 // Programmazione a oggetti: interprete, salvataggio .fprg esteso e ricarica
+process.env.FLOWLAB_LANG = process.env.FLOWLAB_LANG || 'it'; // expected messages in Italian
 const { JSDOM } = (() => { try { return require('jsdom'); } catch (e) { return {}; } })();
 if (JSDOM) global.DOMParser = new JSDOM('').window.DOMParser;
 const M = require('../src/model.js'), { Interpreter } = require('../src/interp.js');

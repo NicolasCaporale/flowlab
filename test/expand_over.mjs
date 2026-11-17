@@ -1,11 +1,11 @@
 // Blocchi con testo troncato espandibili con + · Passo sopra
 import { chromium } from '/opt/npm-tools/node_modules/playwright/index.mjs';
 const browser = await chromium.launch();
-const page = await browser.newPage({ viewport: { width: 1366, height: 820 } });
+const page = await browser.newPage({ locale: 'it-IT', viewport: { width: 1366, height: 820 } });
 const errs = []; page.on('pageerror', (e) => errs.push(e.message));
 await page.goto('file://' + process.cwd() + '/dist/FlowLab.html'); await page.waitForTimeout(300);
 const wait = (ms = 120) => page.waitForTimeout(ms);
-await page.evaluate(() => { localStorage.clear(); FlowLab.loadExample('lista'); FlowLab.showFunc(0); });
+await page.evaluate(() => { localStorage.clear(); FlowLab.loadExample('linked_list'); FlowLab.showFunc(0); });
 await wait(200);
 const out = page.locator('#chart .shape[data-kind=output]').last();
 const box0 = await out.boundingBox();
@@ -25,7 +25,7 @@ await page.locator('#chart .shape[data-kind=if] .ctoggle').click(); await wait(1
 console.log('Se richiuso:', await page.locator('#chart .shape[data-kind=if] text').count(), 'riga');
 
 // Passo sopra
-await page.evaluate(() => FlowLab.loadExample('bolle')); await wait(200);
+await page.evaluate(() => FlowLab.loadExample('bubble_sort')); await wait(200);
 const cur = () => page.evaluate(() => { const r = FlowLab.run; const f = r.curFrame; return `${f ? f.func.name : '-'}#${r.curId && document.querySelector(`#chart .shape[data-id="${r.curId}"] text`)?.textContent}`; });
 const trace = [];
 for (let i = 0; i < 6; i++) { await page.click('#stepBtn'); await wait(40); trace.push(await cur()); }

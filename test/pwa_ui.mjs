@@ -4,8 +4,8 @@ import { spawn } from 'child_process';
 const srv = spawn('python3', ['-m', 'http.server', '8766'], { cwd: 'dist', stdio: 'ignore' });
 await new Promise((r) => setTimeout(r, 800));
 const browser = await chromium.launch();
-const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
-const page = await ctx.newPage();
+const ctx = await browser.newContext({ locale: 'it-IT', viewport: { width: 1280, height: 800 } });
+const page = await ctx.newPage({ locale: 'it-IT' });
 const errs = []; page.on('pageerror', (e) => errs.push(e.message));
 const ok = (name, cond) => console.log(`${cond ? 'ok  ' : 'FAIL'} ${name}`);
 try {
@@ -29,8 +29,8 @@ try {
   ok('senza rete: ' + await page.title(), (await page.locator('#runBtn').count()) === 1);
   await ctx.setOffline(false);
   // app installata: un file .fprg aperto dal sistema arriva con launchQueue e Ctrl+S lo salva lì
-  const p3 = await ctx.newPage();
-  const xml = await page.evaluate(() => { FlowLab.loadExample('fattoriale'); const x = FlowLab.serialize(); FlowLab.loadExample('media'); return x; });
+  const p3 = await ctx.newPage({ locale: 'it-IT' });
+  const xml = await page.evaluate(() => { FlowLab.loadExample('factorial'); const x = FlowLab.serialize(); FlowLab.loadExample('grade_average'); return x; });
   await p3.addInitScript((x) => {
     window.__written = null;
     const fh = { name: 'Fattoriale.fprg', getFile: async () => new File([x], 'Fattoriale.fprg'), queryPermission: async () => 'granted', requestPermission: async () => 'granted',
@@ -44,7 +44,7 @@ try {
   const mf = await (await page.request.get('http://localhost:8766/manifest.webmanifest')).json();
   ok('manifest: apre i .fprg', mf.file_handlers[0].accept['application/x-fprg'][0] === '.fprg');
   // copia scaricata (file://): la voce spiega dove installare
-  const p2 = await ctx.newPage();
+  const p2 = await ctx.newPage({ locale: 'it-IT' });
   await p2.goto('file://' + process.cwd() + '/dist/FlowLab.html'); await p2.waitForTimeout(300);
   await p2.click('#fileBtn'); await p2.waitForTimeout(100); await p2.click('.ctxmenu button.install'); await p2.waitForTimeout(150);
   ok('copia scaricata: ' + (await p2.locator('.modal .confirm').textContent()).slice(0, 70), /versione online/.test(await p2.locator('.modal .confirm').textContent()));

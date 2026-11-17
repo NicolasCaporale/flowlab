@@ -1,7 +1,7 @@
 // Moduli: importazione dalla libreria, uso di una classe generica, sola lettura, salvataggio, aggiornamento e rimozione
 import { chromium } from '/opt/npm-tools/node_modules/playwright/index.mjs';
 const browser = await chromium.launch();
-const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+const page = await browser.newPage({ locale: 'it-IT', viewport: { width: 1440, height: 900 } });
 const errs = []; page.on('pageerror', (e) => errs.push(e.message));
 await page.goto('file://' + process.cwd() + '/dist/FlowLab.html'); await page.waitForTimeout(300);
 await page.evaluate(() => { localStorage.clear(); const s = document.querySelector('#speed'); s.value = 0; s.dispatchEvent(new Event('input')); });
@@ -10,7 +10,7 @@ const ok = (name, cond) => console.log(`${cond ? 'ok  ' : 'FAIL'} ${name}`);
 const out = async () => (await page.innerText('#conOut')).split('\n').filter((l) => l && !/^(Programma|▶|■|Esecuzione)/.test(l)).join(' | ');
 
 // programma nuovo, vista funzioni: Ctrl+I apre la libreria
-await page.evaluate(() => FlowLab.loadExample('tabellina')); await wait(200);
+await page.evaluate(() => FlowLab.loadExample('times_table')); await wait(200);
 await page.keyboard.press('Control+i'); await wait(200);
 await page.evaluate(() => document.querySelectorAll('.modal details').forEach((d) => { d.open = true; })); await page.waitForTimeout(100);
 await page.waitForFunction(() => ![...document.querySelectorAll('.modsrc')].some((d) => /Caricamento/.test(d.innerText)), null, { timeout: 30000 });
@@ -85,9 +85,9 @@ await page.evaluate(() => document.querySelectorAll('.modal details').forEach((d
 await page.locator('.modsrc .modrow', { hasText: 'Queue' }).locator('button').click(); await wait(250);
 ok('Queue: ' + (await page.locator('.umod .umodlab').allTextContents()).join(', '), (await page.locator('.umod').count()) === 2);
 await page.screenshot({ path: 'test/mod4_two.png' });
-// moduli di sole funzioni (Ordinamento, Ricerca) in un programma a funzioni: la vista non cambia
-await page.evaluate(() => { FlowLab.loadExample('tabellina'); FlowLab.setView('functions'); }); await wait(200);
-for (const id of ['Ordinamento', 'Ricerca']) {
+// moduli di sole funzioni (Sorting, Search) in un programma a funzioni: la vista non cambia
+await page.evaluate(() => { FlowLab.loadExample('times_table'); FlowLab.setView('functions'); }); await wait(200);
+for (const id of ['Sorting', 'Search']) {
   await page.keyboard.press('Control+i'); await wait(150);
   await page.evaluate(() => document.querySelectorAll('.modal details').forEach((d) => { d.open = true; })); await page.waitForTimeout(100);
   await page.waitForFunction(() => ![...document.querySelectorAll('.modsrc')].some((d) => /Caricamento/.test(d.innerText)), null, { timeout: 30000 });
@@ -101,7 +101,7 @@ await page.evaluate(() => {
   p.functions[0].body = [M.makeStmt('declare', { name: 'v', type: 'Integer', array: true, size: '6' }), M.makeStmt('declare', { name: 'i', type: 'Integer' }),
     M.makeStmt('for', { variable: 'i', start: '0', end: '5', direction: 'inc', step: '1', body: [M.makeStmt('assign', { variable: 'v[i]', expression: '(i * 7) mod 6' })] }),
     M.makeStmt('call', { expression: 'bubbleSort(v, 6)' }),
-    M.makeStmt('output', { expression: '"Ordinato, il 4 è in posizione " & ricercaBinaria(v, 6, 4)' })];
+    M.makeStmt('output', { expression: '"Ordinato, il 4 è in posizione " & binarySearch(v, 6, 4)' })];
   FlowLab.showFunc(0); FlowLab.render();
 });
 await page.click('#runBtn'); await wait(500);

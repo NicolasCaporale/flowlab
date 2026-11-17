@@ -1,5 +1,5 @@
 import { chromium } from '/opt/npm-tools/node_modules/playwright/index.mjs';
-const browser = await chromium.launch(); const page = await browser.newPage();
+const browser = await chromium.launch(); const page = await browser.newPage({ locale: 'it-IT' });
 const errs=[]; page.on('pageerror', e => errs.push(e.message));
 await page.goto('file://' + process.cwd() + '/dist/FlowLab.html'); await page.waitForTimeout(300);
 await page.evaluate(() => FlowLab.loadText(`<?xml version="1.0"?><${ModelLib.FPRG_ROOT} fileversion="4.2"><attributes/><function name="Main" type="None" variable=""><parameters/><body><forward expression="50" pen="down"/><turn expression="90" rotate="left"/><output expression="&quot;ok&quot;" newline="True"/></body></function></${ModelLib.FPRG_ROOT}>`, 't.fprg'));

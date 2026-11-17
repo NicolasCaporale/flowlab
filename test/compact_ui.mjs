@@ -2,11 +2,11 @@
 import { chromium } from '/opt/npm-tools/node_modules/playwright/index.mjs';
 import fs from 'fs';
 const browser = await chromium.launch();
-const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, acceptDownloads: true });
-const page = await ctx.newPage();
+const ctx = await browser.newContext({ locale: 'it-IT', viewport: { width: 1440, height: 900 }, acceptDownloads: true });
+const page = await ctx.newPage({ locale: 'it-IT' });
 const errs = []; page.on('pageerror', (e) => errs.push(e.message));
 await page.goto('file://' + process.cwd() + '/dist/FlowLab.html'); await page.waitForTimeout(300);
-await page.evaluate(() => { localStorage.clear(); const s = document.querySelector('#speed'); s.value = 0; s.dispatchEvent(new Event('input')); FlowLab.loadExample('bolle'); });
+await page.evaluate(() => { localStorage.clear(); const s = document.querySelector('#speed'); s.value = 0; s.dispatchEvent(new Event('input')); FlowLab.loadExample('bubble_sort'); });
 const wait = (ms = 150) => page.waitForTimeout(ms);
 const ok = (name, cond) => console.log(`${cond ? 'ok  ' : 'FAIL'} ${name}`);
 const H = () => page.evaluate(() => +document.querySelector('#chart svg').dataset.h);
@@ -54,7 +54,7 @@ await page.keyboard.press('o'); await wait(150);
 ok('dialogo di un nuovo blocco: ' + await page.locator('.modal h2, .modal .mhead, .modal header').first().textContent(), (await page.locator('.modal').count()) === 1);
 await page.keyboard.press('Escape'); await wait(80);
 // diagramma delle classi: niente pulsante
-await page.evaluate(() => FlowLab.loadExample('forme')); await wait(200);
+await page.evaluate(() => FlowLab.loadExample('shapes')); await wait(200);
 await page.evaluate(() => FlowLab.showUml()); await wait(150);
 ok('nascosto nel diagramma delle classi', !(await page.locator('#compactBtn').isVisible()));
 await page.evaluate(() => FlowLab.showFunc(0)); await wait(150);

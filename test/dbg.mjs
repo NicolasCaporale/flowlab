@@ -1,6 +1,6 @@
 import { chromium } from '/opt/npm-tools/node_modules/playwright/index.mjs';
 const browser = await chromium.launch();
-const page = await browser.newPage();
+const page = await browser.newPage({ locale: 'it-IT' });
 page.on('pageerror', e => console.log('PAGEERR', e.message));
 await page.goto('file://' + process.cwd() + '/dist/FlowLab.html'); await page.waitForTimeout(400);
 const ins = await page.$$('#chart .ins'); await ins[0].click(); await page.click('.insbtn[title="Input"]');

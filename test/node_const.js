@@ -1,4 +1,5 @@
 global.ModelLib = require('../src/model.js'); global.ExprLib = require('../src/expr.js');
+process.env.FLOWLAB_LANG = process.env.FLOWLAB_LANG || 'it'; // expected messages in Italian
 const { Interpreter } = require('../src/interp.js'); const C = require('../src/codegen.js'); const fs = require('fs');
 const M = ModelLib, S = M.makeStmt;
 const run = (p) => { let out = ''; const env = { output: (t, nl) => { out += t + (nl ? '\n' : ''); }, eof: () => true }; const g = new Interpreter(p, env).run(); try { for (let r = g.next(); !r.done; r = g.next()) if (r.value.type === 'input') g.next('1'); } catch (e) { out += 'ERRORE: ' + e.message + '\n'; } return out.trim(); };

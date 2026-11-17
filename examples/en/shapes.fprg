@@ -1,0 +1,157 @@
+<?xml version="1.0"?>
+<flowgorithm fileversion="4.2">
+    <attributes>
+        <attribute name="name" value="Geometric shapes"/>
+        <attribute name="authors" value="FlowLab examples"/>
+        <attribute name="about" value="Shape is an abstract class: area and perimeter have no body and are defined by Rectangle, Square and Circle. The Drawing contains an array of shapes: each shape uses its own version of the methods."/>
+        <attribute name="saved" value="2026-11-17 08:00:00 PM"/>
+        <attribute name="created" value="Zmxvd2xhYjtleGFtcGxlczsyMDI2LTExLTE3IDA4OjAwOjAwIFBNOzE="/>
+        <attribute name="edited" value="Zmxvd2xhYjtleGFtcGxlczsyMDI2LTExLTE3IDA4OjAwOjAwIFBNOzE="/>
+    </attributes>
+    <flowlab-classes>
+        <class name="GeometricShapes" parent="" x="780" y="330"/>
+        <class name="Shape" parent="" abstract="True" x="330" y="40">
+            <attribute name="name" type="String" array="False" size="" visibility="protected" static="False" init=""/>
+        </class>
+        <class name="Rectangle" parent="Shape" x="140" y="300">
+            <attribute name="width" type="Real" array="False" size="" visibility="private" static="False" init=""/>
+            <attribute name="height" type="Real" array="False" size="" visibility="private" static="False" init=""/>
+        </class>
+        <class name="Circle" parent="Shape" x="540" y="300">
+            <attribute name="radius" type="Real" array="False" size="" visibility="private" static="False" init=""/>
+        </class>
+        <class name="Square" parent="Rectangle" x="140" y="560"/>
+        <class name="Drawing" parent="" x="780" y="40">
+            <attribute name="shapes" type="Shape" array="True" size="10" visibility="private" static="False" init=""/>
+            <attribute name="count" type="Integer" array="False" size="" visibility="private" static="False" init="0"/>
+        </class>
+    </flowlab-classes>
+    <function name="Main" type="None" variable="" flowlab-class="GeometricShapes" flowlab-visibility="public" flowlab-static="True">
+        <parameters/>
+        <body>
+            <declare name="d" type="Drawing" array="False" size=""/>
+            <assign variable="d" expression="new Drawing()"/>
+            <call expression="d.add(new Rectangle(3, 2))"/>
+            <call expression="d.add(new Square(4))"/>
+            <call expression="d.add(new Circle(1.5))"/>
+            <call expression="d.print()"/>
+            <output expression="&quot;Total area: &quot; &amp; ToFixed(d.totalArea(), 2)" newline="True"/>
+        </body>
+    </function>
+    <function name="Shape" type="None" variable="" flowlab-class="Shape" flowlab-visibility="public" flowlab-static="False" flowlab-ctor="True">
+        <parameters>
+            <parameter name="n" type="String" array="False"/>
+        </parameters>
+        <body>
+            <assign variable="name" expression="n"/>
+        </body>
+    </function>
+    <function name="area" type="Real" variable="a" flowlab-class="Shape" flowlab-visibility="public" flowlab-static="False" flowlab-abstract="True">
+        <parameters/>
+        <body/>
+    </function>
+    <function name="perimeter" type="Real" variable="p" flowlab-class="Shape" flowlab-visibility="public" flowlab-static="False" flowlab-abstract="True">
+        <parameters/>
+        <body/>
+    </function>
+    <function name="describe" type="String" variable="text" flowlab-class="Shape" flowlab-visibility="public" flowlab-static="False">
+        <parameters/>
+        <body>
+            <declare name="text" type="String" array="False" size=""/>
+            <assign variable="text" expression="name &amp; &quot;: area &quot; &amp; ToFixed(area(), 2) &amp; &quot;, perimeter &quot; &amp; ToFixed(perimeter(), 2)"/>
+        </body>
+    </function>
+    <function name="Rectangle" type="None" variable="" flowlab-class="Rectangle" flowlab-visibility="public" flowlab-static="False" flowlab-ctor="True">
+        <parameters>
+            <parameter name="b" type="Real" array="False"/>
+            <parameter name="h" type="Real" array="False"/>
+        </parameters>
+        <body>
+            <call expression="super(&quot;rectangle&quot;)"/>
+            <assign variable="width" expression="b"/>
+            <assign variable="height" expression="h"/>
+        </body>
+    </function>
+    <function name="area" type="Real" variable="a" flowlab-class="Rectangle" flowlab-visibility="public" flowlab-static="False">
+        <parameters/>
+        <body>
+            <declare name="a" type="Real" array="False" size=""/>
+            <assign variable="a" expression="width * height"/>
+        </body>
+    </function>
+    <function name="perimeter" type="Real" variable="p" flowlab-class="Rectangle" flowlab-visibility="public" flowlab-static="False">
+        <parameters/>
+        <body>
+            <declare name="p" type="Real" array="False" size=""/>
+            <assign variable="p" expression="2 * (width + height)"/>
+        </body>
+    </function>
+    <function name="Square" type="None" variable="" flowlab-class="Square" flowlab-visibility="public" flowlab-static="False" flowlab-ctor="True">
+        <parameters>
+            <parameter name="side" type="Real" array="False"/>
+        </parameters>
+        <body>
+            <call expression="super(side, side)"/>
+            <assign variable="name" expression="&quot;square&quot;"/>
+        </body>
+    </function>
+    <function name="Circle" type="None" variable="" flowlab-class="Circle" flowlab-visibility="public" flowlab-static="False" flowlab-ctor="True">
+        <parameters>
+            <parameter name="r" type="Real" array="False"/>
+        </parameters>
+        <body>
+            <call expression="super(&quot;circle&quot;)"/>
+            <assign variable="radius" expression="r"/>
+        </body>
+    </function>
+    <function name="area" type="Real" variable="a" flowlab-class="Circle" flowlab-visibility="public" flowlab-static="False">
+        <parameters/>
+        <body>
+            <declare name="a" type="Real" array="False" size=""/>
+            <assign variable="a" expression="Pi * radius ^ 2"/>
+        </body>
+    </function>
+    <function name="perimeter" type="Real" variable="p" flowlab-class="Circle" flowlab-visibility="public" flowlab-static="False">
+        <parameters/>
+        <body>
+            <declare name="p" type="Real" array="False" size=""/>
+            <assign variable="p" expression="2 * Pi * radius"/>
+        </body>
+    </function>
+    <function name="add" type="None" variable="" flowlab-class="Drawing" flowlab-visibility="public" flowlab-static="False">
+        <parameters>
+            <parameter name="f" type="Shape" array="False"/>
+        </parameters>
+        <body>
+            <if expression="count &lt; Size(shapes)">
+                <then>
+                    <assign variable="shapes[count]" expression="f"/>
+                    <assign variable="count" expression="count + 1"/>
+                </then>
+                <else>
+                    <output expression="&quot;The drawing is full&quot;" newline="True"/>
+                </else>
+            </if>
+        </body>
+    </function>
+    <function name="totalArea" type="Real" variable="t" flowlab-class="Drawing" flowlab-visibility="public" flowlab-static="False">
+        <parameters/>
+        <body>
+            <declare name="t" type="Real" array="False" size=""/>
+            <declare name="i" type="Integer" array="False" size=""/>
+            <assign variable="t" expression="0"/>
+            <for variable="i" start="0" end="count - 1" direction="inc" step="1">
+                <assign variable="t" expression="t + shapes[i].area()"/>
+            </for>
+        </body>
+    </function>
+    <function name="print" type="None" variable="" flowlab-class="Drawing" flowlab-visibility="public" flowlab-static="False">
+        <parameters/>
+        <body>
+            <declare name="i" type="Integer" array="False" size=""/>
+            <for variable="i" start="0" end="count - 1" direction="inc" step="1">
+                <output expression="shapes[i].describe()" newline="True"/>
+            </for>
+        </body>
+    </function>
+</flowgorithm>

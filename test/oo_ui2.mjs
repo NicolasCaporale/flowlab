@@ -1,7 +1,7 @@
 // Vista Oggetti: ridenominazione, eliminazioni, tastiera, salvataggio e riapertura
 import { chromium } from '/opt/npm-tools/node_modules/playwright/index.mjs';
 const browser = await chromium.launch();
-const page = await browser.newPage({ viewport: { width: 1366, height: 820 } });
+const page = await browser.newPage({ locale: 'it-IT', viewport: { width: 1366, height: 820 } });
 const errs = [];
 page.on('pageerror', (e) => errs.push('PAGEERR ' + e.message));
 await page.goto('file://' + process.cwd() + '/dist/FlowLab.html'); await page.waitForTimeout(300);
@@ -10,7 +10,7 @@ const wait = (ms = 120) => page.waitForTimeout(ms);
 const out = async () => (await page.innerText('#conOut')).split('\n').slice(1, -1).join(' | ');
 const head = (name) => page.locator(`.ubox:has(.uname:text-is("${name}")) .uhit.head`);
 
-await page.evaluate(() => (FlowLab.loadExample('forme'), FlowLab.showUml())); await wait(250);
+await page.evaluate(() => (FlowLab.loadExample('shapes'), FlowLab.showUml())); await wait(250);
 await page.click('#runBtn'); await wait(300);
 const before = await out();
 await page.evaluate(() => FlowLab.showUml()); await wait(100);
@@ -77,7 +77,7 @@ await page.click('#runBtn'); await wait(300);
 console.log('esecuzione dopo riapertura uguale:', (await out()) === before);
 
 // proprietà del programma: la classe predefinita segue il nome
-await page.evaluate(() => FlowLab.loadExample('tabellina')); await wait(100);
+await page.evaluate(() => FlowLab.loadExample('times_table')); await wait(100);
 await page.click('#viewOo'); await wait(100);
 await page.click('#progName'); await wait(80);
 await page.fill('#f_pname', 'Tabelline della scuola'); await page.press('#f_pname', 'Enter'); await wait(120);

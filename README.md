@@ -1,130 +1,152 @@
 # FlowLab
 
-Editor ed esecutore di **diagrammi di flusso** che gira interamente nel browser.
-È un unico file HTML: si apre in Chrome con un doppio clic e funziona anche offline.
-Legge e salva i programmi nel formato **`.fprg`** (XML) usato dagli editor di diagrammi di flusso più diffusi a scuola.
+**Flowchart** editor and runner that works entirely in the browser.
+It is a single HTML file: it opens in Chrome with a double click and also works offline.
+It reads and saves programs in the **`.fprg`** (XML) format used by the flowchart editors most common in schools.
+The interface is multilingual (English and Italian, and any language added as a JSON file).
 
-Il software è stato creato con **Claude Opus 5.5** di Anthropic.
+The software was created with **Claude Opus 5.5** by Anthropic.
 
-👉 **Per usarlo:**
-- **online**, senza installare nulla: apri <https://nicvac.github.io/flowlab/dist/FlowLab.html>;
-- **come app**: dalla versione online, menu File › *Installa FlowLab come app* (Chrome o Edge); si apre in una finestra sua e funziona anche senza rete;
-- **offline**: scarica [`dist/FlowLab.html`](dist/FlowLab.html) e aprilo con Chrome.
+👉 **To use it:**
+- **online**, without installing anything: open <https://nicvac.github.io/flowlab/dist/FlowLab.html>;
+- **as an app**: from the online version, File menu › *Install FlowLab as an app* (Chrome or Edge); it opens in its own window and also works without a network;
+- **offline**: download [`dist/FlowLab.html`](dist/FlowLab.html) and open it with Chrome.
 
-### Aprire un programma da un indirizzo web
+### Opening a program from a web address
 
-Aggiungendo `?url=` seguito dall'indirizzo di un file `.fprg`, FlowLab apre direttamente quel programma:
+Adding `?url=` followed by the address of a `.fprg` file, FlowLab opens that program directly:
 
 ```
-https://nicvac.github.io/flowlab/dist/FlowLab.html?url=https://github.com/utente/repo/blob/main/esercizio.fprg
+https://nicvac.github.io/flowlab/dist/FlowLab.html?url=https://github.com/user/repo/blob/main/exercise.fprg
 ```
 
-- Vanno bene i file su GitHub (anche il link «blob» della pagina del file: FlowLab lo trasforma nel file grezzo), nei Gist e su GitHub Pages. Altri siti funzionano se permettono la lettura da altre pagine (CORS).
-- Dopo l'apertura il parametro sparisce dalla barra degli indirizzi: ricaricando la pagina si ritrova il proprio lavoro. Il programma che c'era prima si recupera con Ctrl+Z.
-- Dal menu File: *Apri da indirizzo web…* e *Copia il link a questo programma*, per condividerlo con la classe.
-- Nella cartella [`esempi/`](esempi/) ci sono tutti gli esempi in formato `.fprg`, con i link che li aprono direttamente in FlowLab.
+- Files on GitHub (also the «blob» link of the file page: FlowLab turns it into the raw file), in Gists and on GitHub Pages work. Other sites work if they allow reading from other pages (CORS).
+- After opening, the parameter disappears from the address bar: reloading the page you find your own work again. The program that was open before is recovered with Ctrl+Z.
+- From the File menu: *Open from web address…* and *Copy the link to this program*, to share it with the class.
+- The [`examples/`](examples/) folder contains all the examples in `.fprg` format, with links that open them directly in FlowLab.
 
-## Funzionalità
+## Features
 
-- **Editor:** clic su una freccia per aggiungere un blocco, doppio clic per modificarlo, trascinamento per spostarlo; copia/incolla, annulla/ripeti, più funzioni con parametri e array.
-- **Blocchi:** Dichiara (con valore iniziale facoltativo: `a, b: Intero = 0`), Costante, Assegna, Input, Output, Chiama, Se, Mentre, Per, Fai-mentre, Commento, Punto di interruzione, File (Apri, Leggi, Scrivi, Chiudi). Se il testo di un blocco non sta nel riquadro, il pulsante + lo mostra tutto su più righe.
-- **Esecuzione:** quattro velocità, esecuzione passo-passo (Passo entra nelle funzioni chiamate, Passo sopra le esegue senza entrarci, Esci dalla funzione esegue il resto della funzione in corso e si ferma dopo la chiamata) con evidenziazione del blocco corrente e un cursore che percorre le frecce seguite (rami dei Se e ritorni dei cicli compresi), punti di interruzione, messaggi di errore in italiano con il blocco in errore segnato in rosso.
-- **Vista compatta** (pulsante *Compatta* in alto a sinistra sul diagramma, Maiusc+K): i blocchi semplici in sequenza (dichiarazioni e costanti, assegnazioni, input, output, chiamate, commenti, interruzioni) si toccano, senza frecce tra loro, e hanno la stessa larghezza; il diagramma diventa più corto. Un diagramma appena aperto è sempre nella vista estesa, e le esportazioni (SVG, PNG, PDF) usano sempre la vista estesa. In entrambe le viste, sotto il corpo di un ciclo la freccia di ritorno parte subito e, se il corpo finisce con un altro ciclo o con un Se, la sua uscita prosegue dritta nel ritorno, senza gradini.
-- **Viste ausiliarie** (pulsante *Nuova vista* accanto allo zoom, Ctrl+Alt+V): finestre mobili e ridimensionabili, quante se ne vuole, ognuna con un diagramma del programma (anche lo stesso del foglio principale, su un'altra parte, oppure il diagramma delle classi). Nelle viste si naviga e si modifica come nel foglio: i comandi e i tasti agiscono sulla vista in cui si è cliccato, e un blocco si può trascinare da una vista all'altra. Con **Continua** la vista mostra la parte del diagramma che il foglio principale non mostra e scorre insieme a lui (anche con la rotella sulla vista): se il foglio è scorso in giù, la parte tagliata in alto; altrimenti il seguito, cioè la parte che esce dal fondo. Con più viste *Continua*, la prima mostra la parte in alto (se è tagliata) e le altre, in fila, il seguito. Quando una parte del diagramma non si vede, sul pulsante *Nuova vista* compare un pallino rosso: premendolo, la nuova vista si apre già in modalità *Continua*. Durante l'esecuzione i blocchi si illuminano in tutte le viste che li mostrano (il cursore animato resta nel foglio principale). Le viste si ricordano con il programma aperto e si chiudono aprendone un altro.
-- **Pannelli:** console di input/output, variabili (in giallo quelle appena cambiate, con lo stack delle chiamate), file di testo virtuali. Le schede si riordinano trascinandole e si possono sganciare in finestre mobili da posizionare ovunque, riducibili alla sola barra del titolo; il pannello laterale si nasconde e si riapre con il pulsantino sul divisore. La disposizione viene ricordata.
-- **Array a più dimensioni**: `m[3, 4]` si dichiara indicando le dimensioni separate da virgola e si usa con `m[i, j]` oppure `m[i][j]`; `Size(m, d)` dà il numero di elementi della dimensione `d`.
-- **Visualizzatore di array per il debug**: dalla scheda Variabili ogni array si apre in una finestra mobile. Un array a una dimensione è una striscia, a due una scacchiera, a tre un cubo aperto a libro (si sfoglia la prima dimensione, ogni pagina è una scacchiera su carta a quadretti); oltre le tre dimensioni le prime si scelgono con dei selettori di indice. Si vedono solo le celle che entrano nella finestra, con una sfumatura verso la trasparenza dove ce ne sono altre, e durante l'esecuzione la vista si sposta sulla cella appena modificata.
-- **Costanti**: un blocco dedicato (`MAX: Intero = 100`) con un valore che non può essere modificato; nel codice diventano `const` (C++, C#, JavaScript), `final` (Java) o una variabile in maiuscolo (Python).
-- **Funzioni con più valori restituiti**, come in Python: `min, max, idxMin, idxMax ← calcolaMassimoEMinimo(V, N)`. Nel codice generato diventano tuple in Python e C#, `std::tie` in C++, un `record` in Java (16+), un array destrutturato in JavaScript. È un'estensione di FlowLab: gli altri programmi che usano il formato `.fprg` non possono eseguire questi programmi.
-- **Eccezioni**, nella vista Funzioni e nella vista Oggetti, con i termini di Java:
-  - il blocco **Try** protegge i blocchi che contiene; a destra la linea tratteggiata porta ai rami **Catch**, uno per tipo di eccezione (si controllano in ordine, prima i tipi più specifici), che si riuniscono sotto; il **Finally**, facoltativo, si esegue sempre;
-  - il blocco **Throw** lancia un'eccezione: `Throw new Eccezione("voto non valido")`; in un Catch, `Throw e` la rilancia;
-  - tipi predefiniti: `Eccezione` e le sue sottoclassi `DivisionePerZero`, `IndiceNonValido`, `ConversioneNonValida` (ToInteger, ToReal), `OggettoNullo`, `ErroreFile`. Gli errori dell'interprete di questi tipi diventano eccezioni che si possono catturare; nella vista Oggetti si creano eccezioni proprie con *Nuova eccezione…* (menu del diagramma delle classi, Maiusc+E): ereditano da un'eccezione predefinita o da un'altra eccezione del programma (nel diagramma delle classi: «eredita da Eccezione») e possono avere attributi e metodi. Classi ed eccezioni restano separate: una classe eredita solo da classi, un'eccezione solo da eccezioni; nel diagramma delle classi le eccezioni hanno un colore proprio e le eccezioni predefinite da cui il programma eredita compaiono da sole, tratteggiate e in sola lettura, con l'attributo `messaggio` e i costruttori da richiamare con `super(messaggio)`; all'apertura del diagramma si mettono nel posto migliore, di solito sopra le sottoclassi, e poi si spostano a mano trascinandole (la posizione non si salva nel file);
-  - nel Catch `e.messaggio` è il messaggio dell'eccezione; l'eccezione risale dalle funzioni chiamate fino al primo Try che la cattura. Se nessuno la cattura il programma si ferma con il tipo, il messaggio e la catena delle chiamate. Durante l'esecuzione animata o passo passo, quando parte un'eccezione il blocco da cui arriva si cerchia di rosso, un'etichetta ne indica il tipo (e la funzione da cui risale, se viene da una chiamata) e il cursore percorre una freccia rossa tratteggiata fino al Catch che la cattura, oppure al Finally, dopo il quale l'eccezione prosegue;
-  - nel codice: `try`/`catch`/`finally` in Java (eccezioni controllate: FlowLab scrive i `throws` necessari nelle firme), C# e JavaScript (un solo `catch` con `instanceof`), `try`/`except`/`finally` in Python, `try`/`catch` in C++ (il Finally si ottiene catturando tutto e rilanciando). I tipi predefiniti diventano quelli del linguaggio (`ArithmeticException`, `ZeroDivisionError`, `out_of_range`…); dove il linguaggio non lancia nulla (la divisione tra reali per zero, un indice fuori dall'array in Python, JavaScript e C++, una conversione come `stoi("12a")`) il codice usa piccole funzioni di controllo, solo se il programma cattura quel tipo di eccezione.
-- **Array come valori restituiti**, come i parametri: nel dialogo della funzione ogni valore restituito ha la sua forma (valore, array, matrice…). La chiamata si assegna a un array, `v ← quadrati(10)`, e `v` diventa l'array restituito (come in Java); con più valori `voti, n ← leggiVoti()`. Un metodo può restituire anche un attributo array della sua classe. Nel codice: `int[] quadrati(int n)` in Java, `int[,]` in C#, `vector<int>` in C++ (dove l'array restituito viene copiato).
-- **Classi e oggetti (vista Oggetti)**: il comando *Funzioni / Oggetti* nella barra cambia vista. Nella vista Oggetti il foglio mostra un **diagramma delle classi UML**: ogni classe ha attributi e metodi con i modificatori d'accesso (`+` pubblico, `-` privato, `#` protetto), i membri statici sono sottolineati, le frecce indicano l'ereditarietà e le associazioni (attributi che hanno come tipo un'altra classe, con la molteplicità). All'inizio il programma è un'unica classe con le funzioni come metodi statici; la vista Funzioni resta disponibile finché c'è una sola classe con soli metodi statici e pubblici.
-  - Doppio clic su un metodo: si apre il suo diagramma di flusso, che si disegna come una funzione. Clic destro su una classe: nuovi attributi, metodi e costruttori. Le classi si spostano trascinandole.
-  - **Autocompletamento:** scrivendo il punto dopo un oggetto (`p.`, `this.`, `lista.get(0).`) o dopo il nome di una classe (`Punto.`) compare l'elenco dei metodi e degli attributi che si possono usare in quel punto, con i tipi (per un `ArrayList<Intero>` si vede `add(x: Intero)`), gli ereditati e il rispetto di privato e protetto; si sceglie con le frecce e Invio o Tab.
-  - Nelle espressioni: `p ← new Punto(1, 2)`, `p.x`, `p.sposta(3, 4)`, `this.x`, `Punto.contatore`, `super(...)` come primo blocco di un costruttore, `super.metodo()`, `null`.
-  - Ereditarietà con ridefinizione dei metodi (polimorfismo), più costruttori con parametri diversi, attributi e metodi statici, valori iniziali degli attributi.
-  - **Classi e metodi astratti**: una classe astratta («abstract», nome in corsivo) non crea oggetti; un metodo astratto non ha corpo e lo definiscono le sottoclassi (aprendolo si vedono le loro versioni). FlowLab segnala le sottoclassi concrete che non definiscono un metodo astratto ereditato. Nel codice: `abstract` in Java e C#, `= 0` in C++, `ABC` e `@abstractmethod` in Python. I modificatori d'accesso sono controllati durante l'esecuzione: leggere un attributo privato da fuori della classe dà errore, come in Java.
-  - Nella scheda Variabili gli oggetti si aprono con la freccina per vedere i loro attributi; compaiono anche `this` e gli attributi statici.
-  - Un clic sul valore di un riferimento (`Nodo#1`) apre l'oggetto in una finestra, collegata alla riga da cui è stata aperta. Se durante l'esecuzione quella riga passa a un altro oggetto (per esempio `testa` da `Nodo#1` a `Nodo#2`), si apre anche il nuovo oggetto al posto del vecchio, che scende sotto e resta aperto, collegato a un'altra riga che punta ancora a lui (`Nodo#2.prossimo`): passo dopo passo si vede crescere la catena dei riferimenti.
-  - Nel codice generato diventano classi vere: `extends`/`super` in Java, `: base(...)` e `virtual`/`override` in C#, puntatori, `virtual` e liste di inizializzazione in C++, `self` e `super().__init__` in Python, `class`/`extends` in JavaScript. In Python e JavaScript, che non hanno l'overloading, le versioni con parametri diversi sono raccolte in un unico metodo che sceglie in base agli argomenti.
-- **Tipi Generici** (`T`, `S`, `V`…): nel menu del tipo di un parametro o di un attributo c'è la voce *Nuovo Tipo Generico*. Scegliendola, FlowLab assegna un nome libero (prima `T`, poi `S`, `V`…) e da quel momento lo stesso Tipo Generico si può riusare negli altri menu («T (Tipo Generico)»), anche dentro un altro tipo (`Coppia<T>`). Non c'è nulla da dichiarare prima: il Tipo Generico nasce dove lo si usa e sparisce quando non lo usa più nessuno.
-  - **Nelle classi**: un Tipo Generico usato in un attributo, in un costruttore o in un metodo non statico appartiene alla classe, che diventa `ArrayList<T>`, `Coppia<T, S>`. Le variabili si dichiarano `ArrayList<Intero>` e gli oggetti si creano con `new ArrayList<Intero>()` oppure `new ArrayList<>()` (il tipo si ricava dalla variabile); l'interprete controlla i tipi degli elementi. Una classe già usata nel programma non può acquistare o perdere Tipi Generici, e una classe con Tipi Generici non eredita e non ha sottoclassi. Due array si possono assegnare (`a ← b`): `a` diventa lo stesso array di `b`, come in Java.
-  - **Nelle funzioni e nei metodi statici**: il Tipo Generico appartiene alla funzione (`massimo<T>(v: T[], n: Intero): T`). A ogni chiamata `T` si ricava dagli argomenti: `massimo(voti, 5)` con un array di Interi, `massimo(nomi, 3)` con uno di Stringhe; se gli argomenti danno a `T` due tipi diversi (un Intero e un Reale) l'interprete lo segnala. Per questo un Tipo Generico nuovo si crea nei parametri; nei valori restituiti e nelle dichiarazioni si usano quelli già presenti.
-  - I valori di un Tipo Generico si confrontano con `= != < <= > >=`.
-  - Nel codice: `class Coppia<T>` e `static <T> T massimo(T[] v, int n)` in Java, con i confronti scritti come metodi dell'oggetto, come per le Stringhe (`a.equals(b)`, `a.compareTo(b) < 0`), e con `T extends Comparable<T>` solo se servono i confronti `< >`; gli array di tipi base passati a una funzione con Tipo Generico diventano `Integer[]`, `Double[]`. In C# `class Coppia<T>` e `massimo<T>(...)` con `where T : IComparable<T>`; in C++ `template <typename T>`.
-- **Moduli** (pulsante *Importa modulo* accanto a *Esempi*, oppure Ctrl+I): un modulo è un normale programma `.fprg` da riusare. I moduli si prendono da **raccolte su GitHub**: una raccolta è una cartella di un repository pubblico in cui ogni sottocartella è un argomento (`strutture_dati` diventa «Strutture dati») e contiene i file `.fprg`. Nel dialogo le raccolte si sfogliano ad albero (raccolta › argomento › moduli) e una raccolta si scarica da GitHub solo quando la si apre. Di default c'è la [raccolta ufficiale](moduli/) (strutture dati: `ArrayList<T>`, `Stack<T>`, `Queue<T>` con i costruttori di Java, compresi quelli con la capacità iniziale e quelli che copiano un'altra struttura; algoritmi di ordinamento e di ricerca); se ne possono aggiungere altre incollando il link della cartella, e un modulo si può importare anche da un file o da un indirizzo web. La descrizione mostrata è quella scritta in Proprietà del programma. Se il modulo ha delle classi, le classi compaiono in un riquadro «modulo …» del diagramma delle classi, che si può condensare (solo i nomi delle classi) o espandere con il pulsantino sul riquadro, con *Condensa i moduli* o con Maiusc+M; se ha solo funzioni, le funzioni si aggiungono al programma e si chiamano per nome, senza cambiare vista. In entrambi i casi restano in sola lettura (i loro diagrammi di flusso si possono aprire e seguire passo passo), si aggiornano e si rimuovono dallo stesso dialogo, e il Main del modulo serve solo per provarlo. Chiunque può scrivere un modulo, anche uno studente. Nel codice generato i moduli della raccolta ufficiale che hanno un equivalente nel linguaggio usano le classi già disponibili (`java.util.ArrayList`, `Stack`, `Queue`; `list` e `deque` in Python; `vector`, `stack`, `queue` in C++; `List`, `Stack`, `Queue` in C#; gli array in JavaScript); gli altri diventano classi o funzioni scritte nel codice.
-- **Installazione come app** (menu File › *Installa FlowLab come app*, oppure l'icona di installazione nella barra degli indirizzi di Chrome o Edge): dalla [versione online](https://nicvac.github.io/flowlab/dist/FlowLab.html) FlowLab si installa sul computer o sul Chromebook e si apre in una finestra sua, con l'icona tra le app; funziona anche senza rete (la pagina si chiede prima alla rete, così c'è sempre l'ultima versione, e altrimenti si usa la copia salvata). Una volta installato, FlowLab apre i file `.fprg` con il doppio clic o con «Apri con» (ognuno nella sua finestra) e Ctrl+S li salva direttamente lì. La copia scaricata in locale non si installa: la voce del menu spiega dove farlo.
-- **Codice generato:** pseudocodice italiano, Python, C++, Java, C#, JavaScript.
-- **Esportazione:** `.fprg`, SVG, PNG, codice sorgente e **tutto il progetto in PDF** (copertina con indice, diagramma delle classi, diagramma di flusso di ogni funzione o metodo con i testi espansi, ciascuno intero su una pagina alta quanto serve, pensata per la lettura a schermo, con il testo dei blocchi sempre a 9 pt (i diagrammi più larghi di un A4 allargano la pagina); codice sorgente nel linguaggio scelto nella scheda Codice, su pagine A4 orizzontali e colorato come nella scheda).
-- **Scorciatoie da tastiera** per tutte le operazioni, indicate nei menu contestuali, nei suggerimenti dei pulsanti e nella Guida rapida (F1). Una lettera aggiunge un blocco dopo quello selezionato (D Dichiara, A Assegna, I Input, O Output, S Se, M Mentre, P Per…; anche nel menu «Aggiungi un blocco»), Alt+↑/↓ sposta il blocco; nel diagramma delle classi A, M e C aggiungono attributo, metodo e costruttore alla classe selezionata, N una nuova classe; F2 modifica, Pag↑/Pag↓ passano da un diagramma all'altro.
-- **Esempi pronti:** media dei voti, pari/dispari, tabellina, MCD di Euclide, indovina il numero, fattoriale ricorsivo, ordinamento a bolle, minimo e massimo, matrici e cubi, conto in banca, forme geometriche, animali (classi astratte), lista collegata, lettura/scrittura di file, eccezioni (Try, Catch, Finally, Throw), prelievi dal conto (eccezioni dell'utente).
+- **Editor:** click an arrow to add a block, double-click to edit it, drag to move it; copy/paste, undo/redo, several functions with parameters and arrays.
+- **Blocks:** Declare (with an optional initial value: `a, b: Integer = 0`), Constant, Assign, Input, Output, Call, If, While, For, Do-while, Comment, Breakpoint, File (Open, Read, Write, Close). If the text of a block does not fit in the box, the + button shows all of it on several lines.
+- **Execution:** four speeds, step-by-step execution (Step enters the called functions, Step over runs them without entering, Step out runs the rest of the current function and stops after the call) with the current block highlighted and a cursor that follows the arrows taken (branches of the Ifs and returns of the loops included), breakpoints, error messages in the chosen language with the block in error marked in red.
+- **Compact view** (*Compact* button at the top left of the diagram, Shift+K): simple blocks in sequence (declarations and constants, assignments, input, output, calls, comments, breakpoints) touch each other, without arrows between them, and keep their width; the diagram becomes shorter. A newly opened diagram is always in the extended view, and exports (SVG, PNG, PDF) always use the extended view. In both views, below the body of a loop the return arrow starts at once and, if the body ends with another loop or an If, its exit goes straight into the return, without steps.
+- **Auxiliary views** (*New view* button next to the zoom, Ctrl+Alt+V): floating, resizable windows, as many as you like, each with a diagram of the program (also the same one as the main sheet, on another part, or the class diagram). In the views you navigate and edit as in the sheet: commands and keys act on the view you clicked, and a block can be dragged from one view to another. With **Continue** the view shows the part of the diagram the main sheet does not show and scrolls with it (also with the wheel on the view): if the sheet is scrolled down, the part cut off at the top; otherwise the rest, the part beyond the bottom. With several *Continue* views, the first shows the top part (if cut off) and the others, in a row, the rest; a coloured, numbered dashed line marks the point in common. When part of the diagram is not visible, a red dot appears on the *New view* button: pressing it, the new view opens already in *Continue* mode. During execution blocks light up in all the views that show them (the animated cursor stays in the main sheet). Views are remembered with the open program and closed when another one is opened.
+- **Panels:** input/output console, variables (just-changed ones in yellow, with the call stack), virtual text files. Tabs are reordered by dragging and can be detached into floating windows to place anywhere, collapsible to the title bar; the side panel hides and reopens with the small button on the divider. The layout is remembered.
+- **Multi-dimensional arrays**: `m[3, 4]` is declared by giving the dimensions separated by commas and used with `m[i, j]` or `m[i][j]`; `Size(m, d)` gives the number of elements of dimension `d`.
+- **Array viewer for debugging**: from the Variables tab every array opens in a floating window. A one-dimensional array is a strip, a two-dimensional one a chessboard, a three-dimensional one a cube opened like a book (you leaf through the first dimension, each page is a chessboard on squared paper); beyond three dimensions the first ones are chosen with index selectors. Only the cells that fit in the window are shown, fading where there are more, and during execution the view moves to the cell just changed.
+- **Constants**: a dedicated block (`MAX: Integer = 100`) with a value that cannot be changed; in the code they become `const` (C++, C#, JavaScript), `final` (Java) or an uppercase variable (Python).
+- **Functions with several return values**, as in Python: `min, max, idxMin, idxMax ← computeMaxAndMin(V, N)`. In the generated code they become tuples in Python and C#, `std::tie` in C++, a `record` in Java (16+), a destructured array in JavaScript. It is a FlowLab extension: other programs that use the `.fprg` format cannot run these programs.
+- **Exceptions**, in the Functions view and in the Objects view, with the terms of Java:
+  - the **Try** block protects the blocks it contains; on the right the dashed line leads to the **Catch** branches, one per exception type (checked in order, more specific types first), which join below; the optional **Finally** always runs;
+  - the **Throw** block throws an exception: `Throw new Exception("invalid grade")`; in a Catch, `Throw e` rethrows it;
+  - predefined types, with the same English names in every language: `Exception` and its subclasses `DivisionByZero`, `IndexOutOfRange`, `InvalidConversion` (ToInteger, ToReal), `NullReference`, `FileError`. Interpreter errors of these types become exceptions that can be caught. In the Objects view you create your own exceptions with *New exception…* (class diagram menu, Shift+E): they inherit from a predefined exception or from another exception of the program and can have attributes and methods. Classes and exceptions stay separate: a class inherits only from classes, an exception only from exceptions. In the class diagram exceptions have their own colour, and the predefined exceptions the program inherits from appear by themselves, dashed and read-only, with the `message` attribute and the constructors to call with `super(message)`; when the diagram opens they place themselves in the best spot, usually above the subclasses, and then they can be moved by dragging (the position is not saved in the file);
+  - in the Catch `e.message` is the message of the exception; the exception goes up from the called functions to the first Try that catches it. If nobody catches it the program stops with the type, the message and the chain of calls. During animated or step-by-step execution, when an exception starts the block it comes from is circled in red, a label shows its type (and the function it comes from, if it comes from a call) and the cursor follows a dashed red arrow to the Catch that catches it, or to the Finally, after which the exception continues;
+  - in the code: `try`/`catch`/`finally` in Java (checked exceptions: FlowLab writes the necessary `throws` in the signatures), C# and JavaScript (a single `catch` with `instanceof`), `try`/`except`/`finally` in Python, `try`/`catch` in C++ (the Finally is obtained by catching everything and rethrowing). The predefined types become those of the language (`ArithmeticException`, `ZeroDivisionError`, `out_of_range`…); where the language throws nothing (division between reals by zero, an index outside the array in Python, JavaScript and C++, a conversion like `stoi("12a")`) the code uses small check functions, only if the program catches that type of exception.
+- **Arrays as return values**, like the parameters: in the function dialog every return value has its shape (value, array, matrix…). The call is assigned to an array, `v ← squares(10)`, and `v` becomes the returned array (as in Java); with several values `grades, n ← readGrades()`. A method can also return an array attribute of its class. In the code: `int[] squares(int n)` in Java, `int[,]` in C#, `vector<int>` in C++ (where the returned array is copied).
+- **Classes and objects (Objects view)**: the *Functions / Objects* command in the bar changes view. In the Objects view the sheet shows a **UML class diagram**: each class has attributes and methods with the access modifiers (`+` public, `-` private, `#` protected), static members are underlined, arrows show inheritance and associations (attributes whose type is another class, with the multiplicity). At first the program is a single class with the functions as static methods; the Functions view stays available as long as there is a single class with only static, public methods.
+  - Double-click a method: its flowchart opens, drawn like a function. Right-click a class: new attributes, methods and constructors. Classes are moved by dragging them.
+  - **Autocompletion:** typing the dot after an object (`p.`, `this.`, `list.get(0).`) or after the name of a class (`Point.`) shows the list of the methods and attributes that can be used there, with their types (for an `ArrayList<Integer>` you see `add(x: Integer)`), the inherited ones and respecting private and protected; choose with the arrows and Enter or Tab.
+  - In expressions: `p ← new Point(1, 2)`, `p.x`, `p.move(3, 4)`, `this.x`, `Point.counter`, `super(...)` as the first block of a constructor, `super.method()`, `null`.
+  - Inheritance with method overriding (polymorphism), several constructors with different parameters, static attributes and methods, initial values of attributes.
+  - **Abstract classes and methods**: an abstract class («abstract», name in italics) creates no objects; an abstract method has no body and the subclasses define it (opening it shows their versions). FlowLab points out concrete subclasses that do not define an inherited abstract method. In the code: `abstract` in Java and C#, `= 0` in C++, `ABC` and `@abstractmethod` in Python. Access modifiers are checked during execution: reading a private attribute from outside the class gives an error, as in Java.
+  - In the Variables tab objects open with the small arrow to show their attributes; `this` and the static attributes appear too.
+  - A click on the value of a reference (`Node#1`) opens the object in a window, linked to the row it was opened from. If during execution that row moves to another object (for example `head` from `Node#1` to `Node#2`), the new object opens too in place of the old one, which moves down and stays open, linked to another row that still points to it (`Node#2.next`): step by step you see the chain of references grow.
+  - In the generated code they become real classes: `extends`/`super` in Java, `: base(...)` and `virtual`/`override` in C#, pointers, `virtual` and initializer lists in C++, `self` and `super().__init__` in Python, `class`/`extends` in JavaScript. In Python and JavaScript, which have no overloading, the versions with different parameters are gathered in a single method that chooses according to the arguments.
+- **Generic Types** (`T`, `S`, `V`…): in the type menu of a parameter or an attribute there is the item *New Generic Type*. Choosing it, FlowLab assigns a free name (first `T`, then `S`, `V`…) and from then on the same Generic Type can be reused in the other menus («T (Generic Type)»), also inside another type (`Pair<T>`). There is nothing to declare first: the Generic Type appears where it is used and disappears when nobody uses it any more.
+  - **In classes**: a Generic Type used in an attribute, in a constructor or in a non-static method belongs to the class, which becomes `ArrayList<T>`, `Pair<T, S>`. Variables are declared `ArrayList<Integer>` and objects are created with `new ArrayList<Integer>()` or `new ArrayList<>()` (the type is inferred from the variable); the interpreter checks the types of the elements. A class already used in the program cannot gain or lose Generic Types, and a class with Generic Types does not inherit and has no subclasses. Two arrays can be assigned (`a ← b`): `a` becomes the same array as `b`, as in Java.
+  - **In functions and static methods**: the Generic Type belongs to the function (`maximum<T>(v: T[], n: Integer): T`). At each call `T` is inferred from the arguments: `maximum(grades, 5)` with an array of Integers, `maximum(names, 3)` with one of Strings; if the arguments give `T` two different types (an Integer and a Real) the interpreter reports it. For this reason a new Generic Type is created in the parameters; in return values and declarations the existing ones are used.
+  - Values of a Generic Type are compared with `= != < <= > >=`.
+  - In the code: `class Pair<T>` and `static <T> T maximum(T[] v, int n)` in Java, with comparisons written as methods of the object, as for Strings (`a.equals(b)`, `a.compareTo(b) < 0`), and with `T extends Comparable<T>` only if the `< >` comparisons are needed; arrays of base types passed to a function with a Generic Type become `Integer[]`, `Double[]`. In C# `class Pair<T>` and `maximum<T>(...)` with `where T : IComparable<T>`; in C++ `template <typename T>`.
+- **Modules** (*Import module* button next to *Examples*, or Ctrl+I): a module is a normal `.fprg` program to reuse. Modules come from **collections on GitHub**: a collection is a folder of a public repository in which each subfolder is a topic (`data_structures` becomes «Data structures») and contains the `.fprg` files. In the dialog collections are browsed as a tree (collection › topic › modules) and a collection is downloaded from GitHub only when it is opened. By default there is the [official collection](modules/) (data structures: `ArrayList<T>`, `Stack<T>`, `Queue<T>` with the Java constructors, including those with the initial capacity and those that copy another structure; sorting and searching algorithms); others can be added by pasting the link of the folder, and a module can also be imported from a file or from a web address. The description shown is the one written in Program properties. If the module has classes, the classes appear in a «module …» box of the class diagram, which can be collapsed (only the class names) or expanded with the small button on the box, with *Collapse modules* or with Shift+M; if it has only functions, the functions are added to the program and called by name, without changing view. In both cases they stay read-only (their flowcharts can be opened and followed step by step), they are updated and removed from the same dialog, and the Main of the module is only for testing it. Anyone can write a module, even a student. In the generated code the modules of the official collection that have an equivalent in the language use the classes already available (`java.util.ArrayList`, `Stack`, `Queue`; `list` and `deque` in Python; `vector`, `stack`, `queue` in C++; `List`, `Stack`, `Queue` in C#; arrays in JavaScript); the others become classes or functions written in the code.
+- **Installation as an app** (File menu › *Install FlowLab as an app*, or the install icon in the address bar of Chrome or Edge): from the [online version](https://nicvac.github.io/flowlab/dist/FlowLab.html) FlowLab is installed on the computer or Chromebook and opens in its own window, with the icon among the apps; it also works without a network (the page is asked to the network first, so there is always the latest version, otherwise the saved copy is used). Once installed, FlowLab opens `.fprg` files with a double click or with «Open with» (each in its own window) and Ctrl+S saves them right there. A copy downloaded locally cannot be installed: the menu item explains where to do it. Chrome does not install apps in guest mode: there FlowLab works in a tab (save the `.fprg` before closing).
+- **Languages** (File menu › *Language*): the interface, the diagrams (Main/End, True/False, the types Integer, Real…), the messages of the execution, the keyboard shortcuts of the blocks, the pseudocode and the comments of the generated code are in the chosen language; the examples have their own version in each language. The first time FlowLab uses the first browser language it has, otherwise English, and then it remembers the choice. Some things have a single name in every language, in English: the predefined exceptions with the `message` attribute, the built-in functions, the keywords of the expressions. `.fprg` files are the same in every language. See [Adding a language](#adding-a-language).
+- **Generated code:** pseudocode (in the chosen language), Python, C++, Java, C#, JavaScript.
+- **Export:** `.fprg`, SVG, PNG, source code and **the whole project as PDF** (cover with contents, class diagram, flowchart of each function or method with the texts expanded, each one whole on a page as tall as needed, meant for on-screen reading, with the text of the blocks always at 9 pt (diagrams wider than an A4 widen the page); source code in the language chosen in the Code tab, on landscape A4 pages and coloured as in the tab).
+- **Keyboard shortcuts** for all operations, shown in the context menus, in the button tooltips and in the Quick guide (F1). A letter adds a block after the selected one (in English: D Declare, A Assign, I Input, O Output, F If, W While, R For, L Do-while…; the letters come from the language file; also in the «Add a block» menu), Alt+↑/↓ moves the block; in the class diagram A, M and C add an attribute, method and constructor to the selected class, N a new class; F2 edits, PgUp/PgDn move from one diagram to another.
+- **Ready-made examples:** grade average, even/odd, times table, Euclid's GCD, guess the number, recursive factorial, bubble sort, minimum and maximum, matrices and cubes, bank account, geometric shapes, animals (abstract classes), linked list, reading/writing files, exceptions (Try, Catch, Finally, Throw), account withdrawals (user exceptions).
 
-## Compatibilità con il formato .fprg
+## Compatibility with the .fprg format
 
-FlowLab è compatibile con il **formato `.fprg` standard**.
+FlowLab is compatible with the **standard `.fprg` format**.
 
-- **Apertura:** i file `.fprg` standard si aprono in FlowLab. I blocchi della grafica tartaruga non sono supportati e vengono scartati con un avviso.
-- **Salvataggio:** se il programma non usa le funzionalità estese, FlowLab salva in formato `.fprg` standard e il file si apre negli altri editor che usano questo formato.
-- Come previsto dal formato, i nomi di variabili e funzioni non distinguono maiuscole e minuscole. Le stringhe scritte tra apici singoli vengono salvate tra virgolette doppie.
+- **Opening:** standard `.fprg` files open in FlowLab. Turtle graphics blocks are not supported and are dropped with a warning.
+- **Saving:** if the program does not use the extended features, FlowLab saves in the standard `.fprg` format and the file opens in the other editors that use this format.
+- As the format requires, the names of variables and functions are case-insensitive. Strings written between single quotes are saved between double quotes.
 
-### Formato .fprg esteso
+### Extended .fprg format
 
-Se il programma usa una delle funzionalità estese di FlowLab, il file viene salvato in un **formato `.fprg` esteso, non standard**. Le funzionalità estese sono:
+If the program uses one of the extended features of FlowLab, the file is saved in an **extended, non-standard `.fprg` format**. The extended features are:
 
-- costanti
-- array a più dimensioni
-- funzioni con più valori restituiti
-- funzioni che restituiscono array
-- eccezioni (Try, Catch, Finally, Throw)
-- classi e oggetti
-- classi e funzioni con Tipi Generici
-- moduli importati
-- dichiarazioni con valore iniziale
+- constants
+- multi-dimensional arrays
+- functions with several return values
+- functions returning arrays
+- exceptions (Try, Catch, Finally, Throw)
+- classes and objects
+- classes and functions with Generic Types
+- imported modules
+- declarations with an initial value
 
-### Verifica
+### Verification
 
-`node test/compat.mjs <cartella con file .fprg>` apre ogni file, controlla blocchi, espressioni e nomi, salva e riapre, verifica che il file salvato usi solo il formato standard ed esegue il programma.
+`node test/compat.mjs <folder with .fprg files>` opens each file, checks blocks, expressions and names, saves and reopens, verifies that the saved file uses only the standard format and runs the program.
 
-## Linguaggio delle espressioni
+## Expression language
 
-| Operatori | Significato |
+| Operators | Meaning |
 |---|---|
-| `+ - * /` | aritmetica (`/` dà sempre un reale) |
-| `mod` `%` | resto |
-| `^` | potenza |
-| `&` | concatenazione di testi e numeri |
-| `=` `==` `!=` `<>` `<` `<=` `>` `>=` | confronti |
-| `and` `&&` `or` `\|\|` `not` `!` | logici |
+| `+ - * /` | arithmetic (`/` always gives a real) |
+| `mod` `%` | remainder |
+| `^` | power |
+| `&` | concatenation of texts and numbers |
+| `=` `==` `!=` `<>` `<` `<=` `>` `>=` | comparisons |
+| `and` `&&` `or` `\|\|` `not` `!` | logical |
 
-Funzioni integrate: `Abs, Arccos, Arcsin, Arctan, Cos, Sin, Tan, Cosh, Sinh, Tanh, Int, Ln, Log, Log10, Sgn, Sqrt, Random, Len, Char, ToChar, ToCode, ToFixed, ToInteger, ToReal, ToString, Size, EOF`, costante `Pi`.
+Built-in functions: `Abs, Arccos, Arcsin, Arctan, Cos, Sin, Tan, Cosh, Sinh, Tanh, Int, Ln, Log, Log10, Sgn, Sqrt, Random, Len, Char, ToChar, ToCode, ToFixed, ToInteger, ToReal, ToString, Size, EOF`, constant `Pi`.
 
-## Struttura
+## Adding a language
+
+The languages are JSON files in [`languages/`](languages/), one per language (`en.json`, `it.json`). FlowLab includes those of the repository in the page (they work offline) and, in File › Language, also lists those found in the folder on GitHub: a new file there appears in the menu without a new version of FlowLab.
+
+A language file has these sections:
+
+| Section | Content |
+|---|---|
+| `language`, `name` | code (`fr`) and name of the language in the language itself (`Français`) |
+| `strings` | the texts of the interface, diagrams and messages, by id: `"ui.newClass": "New class"`; values in braces (`{name}`) are filled in by FlowLab |
+| `keys` | names of the keys in the texts built by FlowLab (`"Shift": "Maiusc"`) |
+| `shortcuts` | the letter that adds each kind of block (`"while": "W"`, `"read": "Shift+R"`) |
+| `code` | texts of the generated code: comments, messages and the words of the pseudocode |
+
+To start a new language, copy `en.json`, change `language` and `name` and translate the values. Missing texts are shown in English. `node tools/i18n_check.js` lists the missing texts of each language and checks the placeholders and the shortcuts. The examples of a language go in `examples/<code>/` (see [`examples/`](examples/)); without that folder FlowLab shows the English examples.
+
+In the code every text is written as `L('ui.newClass')` or `L('run.varHasNoValue', { name })`, with the text in `languages/en.json` and the other languages.
+
+## Structure
 
 ```
 src/
-  expr.js      lessico, parser, valori tipizzati, funzioni integrate, valutatore
-  model.js     modello del programma, lettura/scrittura .fprg
-  interp.js    interprete a generatore (passo-passo, input, interruzioni)
-  codegen.js   generatori di codice (pseudocodice, Python, C++, Java, C#, JS)
-  render.js    impaginazione e disegno SVG del diagramma
-  uml.js       diagramma delle classi
-  pdf.js       scrittura dei file PDF
-  arrayview.js finestre per visualizzare gli array
-  examples.js  programmi di esempio
-  app.js       interfaccia
+  i18n.js      languages: texts by id, language choice, files from the languages folder
+  expr.js      lexer, parser, typed values, built-in functions, evaluator
+  model.js     program model, reading/writing .fprg
+  interp.js    generator-based interpreter (step by step, input, breakpoints)
+  codegen.js   code generators (pseudocode, Python, C++, Java, C#, JS)
+  render.js    layout and SVG drawing of the diagram
+  uml.js       class diagram
+  pdf.js       writing PDF files
+  arrayview.js windows to view arrays and objects
+  examples.js  example programs (from the examples folder)
+  app.js       interface
   style.css, body.html
-  pwa/         installazione come app: service worker e icone (si rigenerano con node tools/icone.mjs)
-esempi/        gli esempi in formato .fprg (si rigenerano con node tools/esempi.js)
-moduli/        libreria dei moduli per argomento (si rigenera con node tools/moduli.js; build.py la include nella pagina)
-build.py       unisce i sorgenti in dist/FlowLab.html (standalone) e dist/artifact.html; scrive anche manifest, service worker e icone per l'installazione come app
-test/          test Node e Playwright
+  pwa/         installation as an app: service worker and icons (regenerated with node tools/icons.mjs)
+languages/     one JSON file per language (build.py includes them in the page)
+examples/      the examples in .fprg format, one folder per language (README regenerated with node tools/examples.js)
+modules/       module library by topic (regenerated with node tools/modules.js; build.py includes it in the page)
+build.py       joins the sources into dist/FlowLab.html (standalone) and dist/artifact.html; also writes manifest, service worker and icons for the installation as an app
+tools/         examples README, module library, icons, language check
+test/          Node and Playwright tests
 ```
 
-Per ricostruire: `python3 build.py`.
-Test: `node test/node_interp.js`, `node test/node_codegen.js all`, `node test/node_oo.js`, `node test/node_codegen_oo.js run` (compila ed esegue il codice a oggetti generato e lo confronta con l'interprete), `node test/ui.mjs` e `node test/oo_ui.mjs` (richiedono Playwright).
-
+To rebuild: `python3 build.py`.
+Tests: `node test/node_interp.js`, `node test/node_oo.js`, `node test/node_codegen_oo.js run` (compiles and runs the generated object-oriented code and compares it with the interpreter), `node tools/i18n_check.js`, `node test/ui.mjs`, `node test/oo_ui.mjs` and `node test/lang_ui.mjs` (they require Playwright).

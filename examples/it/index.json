@@ -1,0 +1,82 @@
+[
+ {
+  "id": "grade_average",
+  "title": "Media dei voti",
+  "tags": "Per · Se"
+ },
+ {
+  "id": "even_odd",
+  "title": "Pari o dispari",
+  "tags": "Se · mod"
+ },
+ {
+  "id": "times_table",
+  "title": "Tabellina",
+  "tags": "Per"
+ },
+ {
+  "id": "gcd",
+  "title": "MCD di Euclide",
+  "tags": "Mentre"
+ },
+ {
+  "id": "guess_number",
+  "title": "Indovina il numero",
+  "tags": "Fai-mentre · Random"
+ },
+ {
+  "id": "factorial",
+  "title": "Fattoriale ricorsivo",
+  "tags": "Funzione · ricorsione"
+ },
+ {
+  "id": "bubble_sort",
+  "title": "Ordinamento a bolle",
+  "tags": "Array · procedura"
+ },
+ {
+  "id": "min_max",
+  "title": "Minimo e massimo (più valori restituiti)",
+  "tags": "Funzione · più valori"
+ },
+ {
+  "id": "matrices",
+  "title": "Matrici e cubi (array a più dimensioni)",
+  "tags": "Array 2D · 3D · 4D"
+ },
+ {
+  "id": "bank_account",
+  "title": "Conto in banca (classi e incapsulamento)",
+  "tags": "Oggetti · privato · costruttori"
+ },
+ {
+  "id": "shapes",
+  "title": "Forme geometriche (ereditarietà e polimorfismo)",
+  "tags": "Oggetti · astratta · super"
+ },
+ {
+  "id": "animals",
+  "title": "Animali (classi e metodi astratti)",
+  "tags": "Oggetti · astratta · override"
+ },
+ {
+  "id": "linked_list",
+  "title": "Lista collegata (oggetti che puntano ad altri oggetti)",
+  "tags": "Oggetti · null · associazione"
+ },
+ {
+  "id": "files",
+  "title": "Scrivere e leggere un file",
+  "tags": "File"
+ },
+ {
+  "id": "exceptions",
+  "title": "Eccezioni (Try, Catch, Finally, Throw)",
+  "tags": "Eccezioni · funzioni"
+ },
+ {
+  "id": "withdrawals",
+  "title": "Prelievi dal conto (eccezioni dell'utente)",
+  "tags": "Oggetti · eccezioni · ereditarietà"
+ }
+]

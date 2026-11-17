@@ -1,9 +1,9 @@
 import { chromium } from '/opt/npm-tools/node_modules/playwright/index.mjs';
-const browser = await chromium.launch(); const page = await browser.newPage({ viewport: { width: 1100, height: 900 } });
+const browser = await chromium.launch(); const page = await browser.newPage({ locale: 'it-IT', viewport: { width: 1100, height: 900 } });
 await page.goto('file://' + process.cwd() + '/dist/FlowLab.html'); await page.waitForTimeout(300);
-await page.evaluate(() => { localStorage.clear(); localStorage.setItem('flowlab:sideHidden','true'); FlowLab.loadExample('media'); });
+await page.evaluate(() => { localStorage.clear(); localStorage.setItem('flowlab:sideHidden','true'); FlowLab.loadExample('grade_average'); });
 await page.reload(); await page.waitForTimeout(300);
-await page.evaluate(() => FlowLab.loadExample('media'));
+await page.evaluate(() => FlowLab.loadExample('grade_average'));
 let shots = 0;
 for (let i = 0; i < 30; i++) {
   await page.click('#stepBtn'); await page.waitForTimeout(80);

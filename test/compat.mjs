@@ -4,7 +4,7 @@ import fs from 'fs'; import path from 'path';
 const dir = process.argv[2];
 const files = [];
 (function walk(d) { for (const f of fs.readdirSync(d)) { const p = path.join(d, f); if (fs.statSync(p).isDirectory()) { if (f !== '.git') walk(p); } else if (/\.fprg$/i.test(f)) files.push(p); } })(dir);
-const browser = await chromium.launch(); const page = await browser.newPage();
+const browser = await chromium.launch(); const page = await browser.newPage({ locale: 'it-IT' });
 await page.goto('file://' + process.cwd() + '/dist/FlowLab.html'); await page.waitForTimeout(300);
 const inputs = files.map((f) => ({ name: path.relative(dir, f), xml: fs.readFileSync(f, 'utf8') }));
 const report = await page.evaluate((inputs) => {

@@ -1,0 +1,87 @@
+<?xml version="1.0"?>
+<flowgorithm fileversion="4.2">
+    <attributes>
+        <attribute name="name" value="Linked list"/>
+        <attribute name="authors" value="FlowLab examples"/>
+        <attribute name="about" value="Each Node contains a value and the reference to the next node (null at the end). Open the Variables tab and run with Step to follow the references."/>
+        <attribute name="saved" value="2026-11-17 08:00:00 PM"/>
+        <attribute name="created" value="Zmxvd2xhYjtleGFtcGxlczsyMDI2LTExLTE3IDA4OjAwOjAwIFBNOzE="/>
+        <attribute name="edited" value="Zmxvd2xhYjtleGFtcGxlczsyMDI2LTExLTE3IDA4OjAwOjAwIFBNOzE="/>
+    </attributes>
+    <flowlab-classes>
+        <class name="LinkedList" parent="" x="40" y="60"/>
+        <class name="Node" parent="" x="420" y="300">
+            <attribute name="value" type="Integer" array="False" size="" visibility="public" static="False" init=""/>
+            <attribute name="next" type="Node" array="False" size="" visibility="public" static="False" init=""/>
+        </class>
+        <class name="List" parent="" x="420" y="40">
+            <attribute name="head" type="Node" array="False" size="" visibility="private" static="False" init=""/>
+            <attribute name="length" type="Integer" array="False" size="" visibility="private" static="False" init="0"/>
+        </class>
+    </flowlab-classes>
+    <function name="Main" type="None" variable="" flowlab-class="LinkedList" flowlab-visibility="public" flowlab-static="True">
+        <parameters/>
+        <body>
+            <declare name="list" type="List" array="False" size=""/>
+            <declare name="i" type="Integer" array="False" size=""/>
+            <assign variable="list" expression="new List()"/>
+            <for variable="i" start="1" end="5" direction="inc" step="1">
+                <call expression="list.addFirst(i * i)"/>
+            </for>
+            <call expression="list.print()"/>
+            <output expression="&quot;Contains 9? &quot; &amp; list.contains(9) &amp; &quot; · contains 10? &quot; &amp; list.contains(10)" newline="True"/>
+        </body>
+    </function>
+    <function name="Node" type="None" variable="" flowlab-class="Node" flowlab-visibility="public" flowlab-static="False" flowlab-ctor="True">
+        <parameters>
+            <parameter name="v" type="Integer" array="False"/>
+            <parameter name="after" type="Node" array="False"/>
+        </parameters>
+        <body>
+            <assign variable="value" expression="v"/>
+            <assign variable="next" expression="after"/>
+        </body>
+    </function>
+    <function name="addFirst" type="None" variable="" flowlab-class="List" flowlab-visibility="public" flowlab-static="False">
+        <parameters>
+            <parameter name="v" type="Integer" array="False"/>
+        </parameters>
+        <body>
+            <assign variable="head" expression="new Node(v, head)"/>
+            <assign variable="length" expression="length + 1"/>
+        </body>
+    </function>
+    <function name="contains" type="Boolean" variable="found" flowlab-class="List" flowlab-visibility="public" flowlab-static="False">
+        <parameters>
+            <parameter name="v" type="Integer" array="False"/>
+        </parameters>
+        <body>
+            <declare name="found" type="Boolean" array="False" size=""/>
+            <declare name="n" type="Node" array="False" size=""/>
+            <assign variable="found" expression="false"/>
+            <assign variable="n" expression="head"/>
+            <while expression="n != null and not found">
+                <if expression="n.value = v">
+                    <then>
+                        <assign variable="found" expression="true"/>
+                    </then>
+                    <else/>
+                </if>
+                <assign variable="n" expression="n.next"/>
+            </while>
+        </body>
+    </function>
+    <function name="print" type="None" variable="" flowlab-class="List" flowlab-visibility="public" flowlab-static="False">
+        <parameters/>
+        <body>
+            <declare name="n" type="Node" array="False" size=""/>
+            <assign variable="n" expression="head"/>
+            <output expression="&quot;List (&quot; &amp; length &amp; &quot; elements): &quot;" newline="False"/>
+            <while expression="n != null">
+                <output expression="n.value &amp; &quot; &quot;" newline="False"/>
+                <assign variable="n" expression="n.next"/>
+            </while>
+            <output expression="&quot;&quot;" newline="True"/>
+        </body>
+    </function>
+</flowgorithm>

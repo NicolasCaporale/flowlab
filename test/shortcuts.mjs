@@ -1,7 +1,7 @@
 // Scorciatoie da tastiera: blocchi, funzioni, diagramma delle classi, vista, file
 import { chromium } from '/opt/npm-tools/node_modules/playwright/index.mjs';
 const browser = await chromium.launch();
-const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, acceptDownloads: true });
+const page = await browser.newPage({ locale: 'it-IT', viewport: { width: 1440, height: 900 }, acceptDownloads: true });
 const errs = []; page.on('pageerror', (e) => errs.push(e.message));
 await page.goto('file://' + process.cwd() + '/dist/FlowLab.html'); await page.waitForTimeout(300);
 await page.evaluate(() => { localStorage.clear(); window.showSaveFilePicker = undefined; const s = document.querySelector('#speed'); s.value = 0; s.dispatchEvent(new Event('input')); });
@@ -13,7 +13,7 @@ const kinds = () => page.evaluate(() => FlowLab.state.prog.functions[FlowLab.sta
 const ok = (name, cond) => console.log(`${cond ? 'ok  ' : 'FAIL'} ${name}`);
 
 // programma nuovo: i tasti aggiungono i blocchi in fondo
-await page.evaluate(() => FlowLab.loadExample('tabellina')); await wait(200);
+await page.evaluate(() => FlowLab.loadExample('times_table')); await wait(200);
 await page.evaluate(() => { FlowLab.state.prog.functions[0].body = []; FlowLab.state.sel = null; FlowLab.render(); });
 await page.locator('#chart').click({ position: { x: 5, y: 5 } }); await wait(60);
 await key('d'); ok('D apre Dichiara', (await title()) === 'Nuovo blocco: Dichiarazione');
@@ -44,13 +44,13 @@ await cancel();
 
 // funzioni: N, F2, Pag↓
 await key('n'); ok('N: nuova funzione', (await title()) === 'Nuova funzione'); await cancel();
-await page.evaluate(() => FlowLab.loadExample('fattoriale')); await wait(200);
+await page.evaluate(() => FlowLab.loadExample('factorial')); await wait(200);
 await key('PageDown'); ok('Pag↓: diagramma successivo', (await page.evaluate(() => FlowLab.state.fi)) === 1);
 await key('F2'); ok('F2: modifica la funzione', /Modifica/.test(await title())); await cancel();
 await key('PageUp'); ok('Pag↑: torna a Inizio', (await page.evaluate(() => FlowLab.state.fi)) === 0);
 
 // diagramma delle classi
-await page.evaluate(() => { FlowLab.loadExample('forme'); FlowLab.showUml(); }); await wait(200);
+await page.evaluate(() => { FlowLab.loadExample('shapes'); FlowLab.showUml(); }); await wait(200);
 await key('a'); ok('A senza classe selezionata: avviso', (await page.locator('.toast').textContent()).includes('Seleziona'));
 await page.locator('.ubox:has(.uname:text-is("Cerchio")) .uhit.head').click(); await wait(80);
 await key('a'); ok('A: nuovo attributo', /attributo/i.test(await title())); await cancel();
@@ -65,7 +65,7 @@ await key('Enter'); ok('Invio su un metodo: apre il diagramma', (await page.eval
 await key('u'); ok('U: torna al diagramma delle classi', (await page.evaluate(() => FlowLab.state.uml)) === true);
 
 // vista e schede
-await page.evaluate(() => FlowLab.loadExample('tabellina')); await wait(200);
+await page.evaluate(() => FlowLab.loadExample('times_table')); await wait(200);
 await key('Control+Alt+o'); ok('Ctrl+Alt+O: vista Oggetti', (await page.evaluate(() => FlowLab.state.view)) === 'objects');
 await key('Control+Alt+f'); ok('Ctrl+Alt+F: vista Funzioni', (await page.evaluate(() => FlowLab.state.view)) === 'functions');
 await key('Alt+3'); ok('Alt+3: scheda Codice', (await page.locator('.tabw:has([aria-selected=true])').getAttribute('data-tab')) === 'code');

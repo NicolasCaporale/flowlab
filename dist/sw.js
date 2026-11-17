@@ -1,7 +1,7 @@
-/* FlowLab — service worker: funziona anche senza rete.
-   La pagina si chiede prima alla rete (così c'è sempre l'ultima versione) e, se manca, alla copia salvata. */
-const CACHE = 'flowlab-73e95dbe6ba0';
-const CORE = ['./FlowLab.html', './manifest.webmanifest', './icona-192.png', './icona-512.png'];
+/* FlowLab — service worker: it works also without a network.
+   The page is asked first to the network (so there is always the latest version) and, if missing, to the saved copy. */
+const CACHE = 'flowlab-d6cc41622c51';
+const CORE = ['./FlowLab.html', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 const FONTS = /^https:\/\/fonts\.(googleapis|gstatic)\.com\//;
 
 self.addEventListener('install', (e) => {
@@ -14,7 +14,7 @@ self.addEventListener('fetch', (e) => {
   const req = e.request;
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
-  // caratteri della pagina: dalla copia salvata, aggiornata in background
+  // fonts of the page: from the saved copy, updated in the background
   if (FONTS.test(req.url)) {
     e.respondWith(caches.open(CACHE).then((c) => c.match(req).then((hit) => {
       const net = fetch(req).then((res) => { if (res.ok || res.type === 'opaque') c.put(req, res.clone()); return res; }).catch(() => hit);
@@ -23,7 +23,7 @@ self.addEventListener('fetch', (e) => {
     return;
   }
   if (url.origin !== location.origin || !url.pathname.startsWith(new URL('./', location).pathname)) return;
-  // file di FlowLab: prima la rete, poi la copia salvata
+  // FlowLab files: first the network, then the saved copy
   e.respondWith(fetch(req).then((res) => {
     if (res.ok) { const copy = res.clone(); caches.open(CACHE).then((c) => c.put(req, copy)); }
     return res;

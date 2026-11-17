@@ -1,10 +1,10 @@
 import { chromium } from '/opt/npm-tools/node_modules/playwright/index.mjs';
-const browser = await chromium.launch(); const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+const browser = await chromium.launch(); const page = await browser.newPage({ locale: 'it-IT', viewport: { width: 1440, height: 900 } });
 const errs=[]; page.on('pageerror', e => errs.push(e.message));
 await page.goto('file://' + process.cwd() + '/dist/FlowLab.html'); await page.waitForTimeout(300);
 await page.evaluate(() => { localStorage.clear(); localStorage.setItem('flowlab:sideHidden', 'false'); });
 await page.reload(); await page.waitForTimeout(300);
-await page.evaluate(() => { const s=document.querySelector('#speed'); s.value=0; s.dispatchEvent(new Event('input')); FlowLab.loadExample('matrici'); });
+await page.evaluate(() => { const s=document.querySelector('#speed'); s.value=0; s.dispatchEvent(new Event('input')); FlowLab.loadExample('matrices'); });
 await page.click('.tabw[data-tab=vars] [role=tab]');
 // esegue passo-passo fino a dichiarare gli array
 for (let i = 0; i < 9; i++) { await page.click('#stepBtn'); await page.waitForTimeout(40); }
