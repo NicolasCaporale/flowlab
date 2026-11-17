@@ -233,7 +233,7 @@ body.side-empty #side, body.side-empty #grip { display: none; }
 body.panedrag #canvasWrap { outline: 2px dashed var(--accent); outline-offset: -8px; }
 
 /* Floating windows above the diagram area */
-.fwin { position: absolute; z-index: 30; pointer-events: auto; display: grid; grid-template-rows: auto minmax(0, 1fr); background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); overflow: hidden; resize: both; min-width: 260px; min-height: 160px; }
+.fwin { position: absolute; z-index: 30; pointer-events: auto; display: grid; grid-template-rows: auto minmax(0, 1fr); background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); overflow: hidden; min-width: 260px; min-height: 160px; }
 .fwin.active { border-color: var(--accent); }
 .fwin-head { display: flex; align-items: center; gap: 6px; padding: 3px 4px 3px 12px; cursor: move; user-select: none; touch-action: none; background: var(--bg); border-bottom: 1px solid var(--line); font-weight: 700; font-size: 13px; }
 .fwin.active .fwin-head { background: var(--accent-soft); }
@@ -242,7 +242,14 @@ body.panedrag #canvasWrap { outline: 2px dashed var(--accent); outline-offset: -
 .fwin-body > .pane { min-height: 0; }
 .fwin .dock, .fwin .minbtn { width: 28px; height: 28px; }
 .fwin .minbtn svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.fwin.min { height: auto !important; min-height: 0; resize: none; }
+.fwin.min { height: auto !important; min-height: 0; }
+/* resizing from the edges: the cursor of the edge everywhere while dragging */
+html[data-rs="ns"], html[data-rs="ns"] * { cursor: ns-resize !important; }
+html[data-rs="ew"], html[data-rs="ew"] * { cursor: ew-resize !important; }
+html[data-rs="nwse"], html[data-rs="nwse"] * { cursor: nwse-resize !important; }
+html[data-rs="nesw"], html[data-rs="nesw"] * { cursor: nesw-resize !important; }
+body.resizing { user-select: none; }
+body.resizing iframe, body.resizing .fwin-body { pointer-events: none; }
 .fwin.min .fwin-body { display: none; }
 .fwin.min .fwin-head { border-bottom: 0; }
 #floatLayer { position: fixed; inset: 0; z-index: 25; pointer-events: none; }
@@ -753,7 +760,9 @@ body.udragging .uml .umod { cursor: grabbing; }
 #viewAdd { position: relative; display: inline-flex; align-items: center; gap: 5px; padding: 0 8px 0 6px; font-size: 12px; font-weight: 600; }
 #viewAdd svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; }
 .auxwin { min-width: 320px; min-height: 180px; }
-.auxwin .fwin-head { padding: 3px 4px 3px 6px; gap: 4px; }
+.auxwin .fwin-head { padding: 3px 4px 3px 4px; gap: 4px; }
+/* grip on the left: the view can be dragged also from its top left corner */
+.auxwin .fwin-head::before { content: ''; flex: none; width: 14px; height: 22px; margin-right: 2px; opacity: 0.55; background: radial-gradient(circle, var(--muted) 1.2px, transparent 1.6px) 0 0 / 6px 6px; background-position: 1px 2px; }
 .auxwin.vactive { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft), var(--shadow); }
 .auxwin.vactive .fwin-head { background: var(--accent-soft); }
 .auxwin .fwin-body { position: relative; }
@@ -9075,9 +9084,64 @@ const ArrayView = (() => {
     buildTabs();
     setTab(id);
   }
+  /* every floating window (views, detached tabs, arrays, objects) is resized from all its edges and corners:
+     near the border the cursor changes and dragging moves that edge (a minimized window only left and right) */
+  function edgeResize() {
+    const OUT = 5, IN = 3, root = document.documentElement; // grip zone: a little outside and a little inside the border
+    const CUR = { n: 'ns', s: 'ns', e: 'ew', w: 'ew', ne: 'nesw', sw: 'nesw', nw: 'nwse', se: 'nwse' };
+    let drag = null;
+    const zOf = (w) => +getComputedStyle(w).zIndex || 0;
+    const edgeAt = (e) => {
+      const t = e.target;
+      if (!t || !t.closest || t.closest('.modal, .ctxmenu, .pop, .popover, select')) return null;
+      const own = t.closest('.fwin');
+      // just outside a window the border wins over the sheet, but not over a block, a button or a field
+      const out = own ? 0 : t.closest('.shape, .ins, .ubox, button, input, select, textarea, a, [role=tab]') ? 0 : OUT;
+      const x = e.clientX, y = e.clientY;
+      // the topmost window with the point in its border zone (a window above it hides it)
+      const wins = [...document.querySelectorAll('.fwin')].filter((w) => w.getClientRects().length)
+        .map((w) => ({ w, z: zOf(w), r: w.getBoundingClientRect() }))
+        .filter(({ r }) => x > r.left - out && x < r.right + out && y > r.top - out && y < r.bottom + out)
+        .sort((a, b) => b.z - a.z);
+      if (!wins.length) return null;
+      const { w: win, r } = wins[0];
+      if (own && own !== win) return null;
+      let ed = '';
+      if (!win.classList.contains('min')) { if (Math.abs(y - r.top) < (y < r.top ? out : IN)) ed = 'n'; else if (Math.abs(r.bottom - y) < (y > r.bottom ? out : IN)) ed = 's'; }
+      if (Math.abs(x - r.left) < (x < r.left ? out : IN)) ed += 'w'; else if (Math.abs(r.right - x) < (x > r.right ? out : IN)) ed += 'e';
+      return ed ? { win, ed } : null;
+    };
+    const setCursor = (ed) => { if (ed) root.dataset.rs = CUR[ed]; else delete root.dataset.rs; };
+    document.addEventListener('pointermove', (e) => { if (!drag) { const h = edgeAt(e); setCursor(h && h.ed); } }, true);
+    document.addEventListener('pointerdown', (e) => {
+      if (!e.isTrusted || e.button !== 0) return;
+      const h = edgeAt(e); if (!h) return;
+      e.preventDefault(); e.stopPropagation();
+      const { win, ed } = h;
+      // the window comes to the front as with any other click on it
+      win.dispatchEvent(new PointerEvent('pointerdown', { bubbles: false, button: 0, clientX: e.clientX, clientY: e.clientY }));
+      const cs = getComputedStyle(win), minW = parseFloat(cs.minWidth) || 160, minH = parseFloat(cs.minHeight) || 100;
+      drag = { win, ed, sx: e.clientX, sy: e.clientY, x: win.offsetLeft, y: win.offsetTop, w: win.offsetWidth, h: win.offsetHeight, minW, minH };
+      document.body.classList.add('resizing');
+      setCursor(ed);
+      const mv = (ev) => {
+        const d = drag, dx = ev.clientX - d.sx, dy = ev.clientY - d.sy, st = d.win.style;
+        if (d.ed.includes('e')) st.width = Math.max(d.minW, d.w + dx) + 'px';
+        if (d.ed.includes('s')) st.height = Math.max(d.minH, d.h + dy) + 'px';
+        if (d.ed.includes('w')) { const w = Math.max(d.minW, Math.min(d.w - dx, d.x + d.w)); st.width = w + 'px'; st.left = d.x + d.w - w + 'px'; }
+        if (d.ed.includes('n')) { const hh = Math.max(d.minH, Math.min(d.h - dy, d.y + d.h)); st.height = hh + 'px'; st.top = d.y + d.h - hh + 'px'; }
+      };
+      const up = () => {
+        window.removeEventListener('pointermove', mv, true); window.removeEventListener('pointerup', up, true); window.removeEventListener('pointercancel', up, true);
+        drag = null; document.body.classList.remove('resizing'); setCursor(null);
+      };
+      window.addEventListener('pointermove', mv, true); window.addEventListener('pointerup', up, true); window.addEventListener('pointercancel', up, true);
+    }, true);
+  }
   function initLayout() {
     for (const id of layout.order) if (isFloat(id)) mountWin(id);
     buildTabs();
+    edgeResize();
     window.addEventListener('resize', () => $$('.fwin').forEach(clampWin));
     // dragging a tab onto the diagram detaches it at that point
     const col = winHost();
