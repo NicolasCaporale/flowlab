@@ -19,7 +19,9 @@ console.log('stato prima:', await page.evaluate(() => FlowLab.run.state), await 
 await page.click('#runBtn'); await wait(400);
 console.log('stato:', await page.evaluate(() => FlowLab.run.state), '· output:', (await page.evaluate(() => document.querySelector('#conOut').textContent)).slice(0, 200));
 console.log('dopo la fine, la finestra aperta indica:', await page.locator('.ovwin .av-state').first().textContent());
-await page.locator('.ovwin .iconbtn').first().click();
+// la variabile è passata agli altri oggetti: le loro finestre si sono aperte accanto (si chiudono tutte)
+console.log('finestre aperte seguendo la variabile:', (await page.locator('.ovwin .fwin-title').allTextContents()).join(', '));
+while (await page.locator('.ovwin').count()) { await page.locator('.ovwin .fwin-head .iconbtn').first().click(); await wait(30); }
 await page.evaluate(() => FlowLab.setTab('vars')); // a fine esecuzione si torna alla console
 await page.click('#varsBody button.ov-link.obj'); await wait();
 const ov = page.locator('.ovwin').first();

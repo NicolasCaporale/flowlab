@@ -53,7 +53,7 @@ const ArrayView = (() => {
   }
   /* sorgente: un elemento della pagina trovato con un selettore (la scheda Variabili si ridisegna a ogni passo) */
   function domSrc(selector) {
-    return () => {
+    const f = () => {
       const el = document.querySelector(selector);
       if (!visible(el)) return null;
       const sc = el.closest('#varsBody, .ov-body, .fwin-body, .pane');
@@ -61,6 +61,8 @@ const ArrayView = (() => {
       const r = rectOf(el.closest('tr') || el);
       return sc ? clipTo(r, rectOf(sc)) : { r, out: false };
     };
+    f.sel = selector;
+    return f;
   }
   /* sorgente: una cella del visualizzatore di array (le celle fuori vista non esistono: si calcola la posizione) */
   function cellSrc(v, off) {
@@ -448,7 +450,7 @@ const ArrayView = (() => {
           val = h('button', { type: 'button', class: 'ov-link', 'data-src': k, title: 'Apri i valori dell\'array', onclick: () => open('@' + this.key, c, { label, fixed: true, src: domSrc(`.ovwin[data-key="${this.key}"] [data-src="${k}"]`) }) }, `${E.typeName(c.type)}[${(c.dims || [c.items.length]).join(' × ')}]`);
         } else if (c.value && c.value.t === 'Object' && c.value.v) {
           const target = c.value.v;
-          val = h('button', { type: 'button', class: 'ov-link obj', 'data-src': k, title: 'Apri l\'oggetto', onclick: () => openObject(target, domSrc(`.ovwin[data-key="${this.key}"] [data-src="${k}"]`)) }, E.literalOf(c.value));
+          val = h('button', { type: 'button', class: 'ov-link obj', 'data-src': k, 'data-uid': target.uid, title: 'Apri l\'oggetto', onclick: () => openObject(target, domSrc(`.ovwin[data-key="${this.key}"] [data-src="${k}"]`)) }, E.literalOf(c.value));
         } else val = c.value === undefined ? h('span', { class: 'undef' }, 'nessun valore') : h('span', { class: 'v-' + c.value.t }, E.literalOf(c.value));
         const vis = { public: '+', private: '-', protected: '#' }[c.visibility || 'public'];
         tb.append(h('tr', { class: chg ? 'changed' : '' },
@@ -469,6 +471,43 @@ const ArrayView = (() => {
     else { w = new ObjWin(obj, src); objWins.set(key, w); }
     if (src) { w.src = src; startLinks(); }
     return w;
+  }
+  /* un riferimento cambia: se la finestra di un oggetto era collegata a una riga (variabile o attributo)
+     e ora quella riga punta a un altro oggetto, si apre anche quello, collegato alla riga; la finestra
+     di prima resta aperta e si collega, se c'è, a un'altra riga che punta ancora al suo oggetto
+     (testa → Nodo#2 e Nodo#2.prossimo → Nodo#1) */
+  const selOf = (e) => { const ow = e.closest('.ovwin'); return ow ? `.ovwin[data-key="${ow.dataset.key}"] [data-src="${e.dataset.src}"]` : `#varsBody [data-src="${CSS.escape(e.dataset.src)}"]`; };
+  function findSrc(obj) {
+    const els = [...document.querySelectorAll(`.ovwin .ov-link.obj[data-uid="${obj.uid}"][data-src], #varsBody .ov-link.obj[data-uid="${obj.uid}"][data-src]`)]
+      .filter((e) => !e.closest(`.ovwin[data-key="obj:${obj.uid}"]`));
+    // prima gli attributi degli oggetti aperti, poi le variabili
+    const e = els.find((x) => x.closest('.ovwin')) || els[0];
+    return e ? domSrc(selOf(e)) : null;
+  }
+  const overlap = (a, b) => a.offsetLeft < b.offsetLeft + b.offsetWidth && b.offsetLeft < a.offsetLeft + a.offsetWidth && a.offsetTop < b.offsetTop + b.offsetHeight && b.offsetTop < a.offsetTop + a.offsetHeight;
+  /* sposta la finestra w sotto la finestra by, e così le altre che finisce per coprire */
+  function pushBelow(w, by, done) {
+    done.add(w);
+    const host = opts.host();
+    w.win.style.top = Math.min(by.win.offsetTop + by.win.offsetHeight + 14, Math.max(0, host.clientHeight - 40)) + 'px';
+    for (const o of objWins.values()) if (!done.has(o) && o.win.isConnected && overlap(o.win, w.win)) pushBelow(o, w, done);
+  }
+  function relink() {
+    let any = false;
+    for (const w of [...objWins.values()]) {
+      if (w.stale || !w.src || !w.src.sel || !w.win.isConnected) continue;
+      const el = document.querySelector(w.src.sel);
+      if (!el || el.dataset.uid === String(w.obj.uid)) continue;
+      any = true;
+      // il nuovo oggetto si apre al posto di quello di prima, che scende sotto (con quelli che tocca);
+      // poi la finestra di prima cerca un'altra riga che punta al suo oggetto
+      const nk = 'obj:' + el.dataset.uid, fresh = !objWins.has(nk);
+      if (el.dataset.uid && el.tagName === 'BUTTON') el.click();
+      const nw = objWins.get(nk);
+      if (fresh && nw && nw !== w) { nw.win.style.left = w.win.offsetLeft + 'px'; nw.win.style.top = w.win.offsetTop + 'px'; pushBelow(w, nw, new Set([nw])); }
+      w.src = findSrc(w.obj);
+    }
+    if (any) startLinks();
   }
   /* un nuovo avvio: le finestre degli oggetti e degli array contenuti si riferiscono all'esecuzione precedente */
   function markStale() {
@@ -497,5 +536,5 @@ const ArrayView = (() => {
       else v.update();
     }
   }
-  return { configure, open, openObject, domSrc, markStale, refresh, get count() { return allCount(); } };
+  return { configure, open, openObject, domSrc, markStale, refresh, relink, get count() { return allCount(); } };
 })();

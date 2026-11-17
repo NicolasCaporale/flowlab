@@ -2084,7 +2084,9 @@
   /* ---- Variabili ---- */
   const CARET = '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M4.5 2.5L8 6L4.5 9.5"/></svg>';
   const GRID_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M3 15h18M9 4v16M15 4v16"/></svg>';
-  function renderVars() {
+  /* dopo ogni aggiornamento: le finestre degli oggetti seguono i riferimenti che cambiano */
+  function renderVars() { renderVarsTable(); ArrayView.relink(); }
+  function renderVarsTable() {
     const box = $('#varsBody');
     const interp = run.interp;
     const stack = interp && isRunning() ? interp.stack : (run.mainFrame ? [run.mainFrame] : []);
@@ -2107,7 +2109,7 @@
     // src: chiave della riga, per collegare la finestra all'elemento cliccato
     const srcSel = (k) => `#varsBody [data-src="${CSS.escape(k)}"]`;
     const fmt = (v, k) => (v === undefined ? h('span', { class: 'undef' }, 'nessun valore')
-      : v.t === 'Object' && v.v ? h('button', { type: 'button', class: 'ov-link obj', 'data-src': k || null, title: 'Apri l\'oggetto in una finestra', onclick: () => ArrayView.openObject(v.v, k ? ArrayView.domSrc(srcSel(k)) : null) }, E.literalOf(v))
+      : v.t === 'Object' && v.v ? h('button', { type: 'button', class: 'ov-link obj', 'data-src': k || null, 'data-uid': v.v.uid, title: 'Apri l\'oggetto in una finestra', onclick: () => ArrayView.openObject(v.v, k ? ArrayView.domSrc(srcSel(k)) : null) }, E.literalOf(v))
       : h('span', { class: 'v-' + v.t }, E.literalOf(v)));
     const prev = run.prevVals; const next = new Map();
     const fkey = fname(frame.func);
