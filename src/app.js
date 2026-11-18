@@ -2677,7 +2677,7 @@
     const v = { id: ++viewSeq, main: false, sync: false, min: false, h: 0,
       state: { fi, uml: o.fi != null ? !!o.uml : st.uml, sel: null, usel: null, zoom: o.zoom || st.zoom, ins: [], edges: [], compact: o.fi != null ? !!o.compact : !!st.compact, compactFid: fidAt(fi), fid: fidAt(fi) } };
     v.sel = h('select', { class: 'vsel', 'aria-label': L('ui.diagramOfTheView') });
-    v.compactBtn = h('button', { class: 'iconbtn vcompact', type: 'button', 'aria-pressed': 'false', html: ICON_COMPACT });
+    v.compactBtn = h('button', { class: 'vcompact', type: 'button', 'aria-pressed': 'false', html: ICON_COMPACT + `<span class="lbl">${L('ui.compact')}</span>` });
     v.syncBtn = h('button', { class: 'vsync', type: 'button', 'aria-pressed': 'false', title: L('ui.continueTheMainSheetTheView') }, v.syncIco = h('span', { 'aria-hidden': 'true' }, '⇣'), L('ui.continue2'));
     v.zoomVal = h('button', { class: 'vzoomval', type: 'button', title: L('ui.backTo100') }, '100%');
     const zb = (label, title, fn) => h('button', { type: 'button', 'aria-label': title, title, onclick: () => { focusView(v); fn(); } }, label);
@@ -2686,14 +2686,16 @@
     v.chart = h('div', { class: 'vchart' });
     v.wrap = h('div', { class: 'vwrap' }, v.chart);
     v.done = h('div', { class: 'vdone', hidden: true }, L('ui.theRestOfTheDiagramIs'));
-    const head = h('div', { class: 'fwin-head' }, v.sel, v.compactBtn, v.syncBtn, h('span', { class: 'grow' }),
-      h('span', { class: 'vzoom', role: 'group', 'aria-label': L('ui.viewZoom') }, zb('−', L('ui.zoomOut'), () => setZoom(st.zoom / 1.15)), v.zoomVal, zb('+', L('ui.zoomIn'), () => setZoom(st.zoom * 1.15)), zb('⤢', L('ui.fitToWindow'), fitZoom)),
-      minBtn, closeBtn);
-    v.win = h('div', { class: 'fwin auxwin', role: 'region', 'aria-label': L('ui.auxiliaryView') }, head, h('div', { class: 'fwin-body' }, v.wrap, v.done));
-    // position: usually in the right half of the sheet, a little staggered from the other views
+    const head = h('div', { class: 'fwin-head' }, v.sel, v.syncBtn, h('span', { class: 'grow' }), minBtn, closeBtn);
+    // on the sheet of the view, as in the main one: Compact at the top left, the zoom at the bottom left
+    const tools = h('div', { class: 'vtools' }, v.compactBtn);
+    const zoom = h('div', { class: 'zoombar vzoombar', role: 'group', 'aria-label': L('ui.viewZoom') },
+      zb('−', L('ui.zoomOut'), () => setZoom(st.zoom / 1.15)), v.zoomVal, zb('+', L('ui.zoomIn'), () => setZoom(st.zoom * 1.15)), zb('⤢', L('ui.fitToWindow'), fitZoom));
+    v.win = h('div', { class: 'fwin auxwin', role: 'region', 'aria-label': L('ui.auxiliaryView') }, head, h('div', { class: 'fwin-body' }, v.wrap, tools, zoom, v.done));
+    // position: on the right, a little staggered from the other views; it can also cover the side panel
     const col = $('.canvas-col').getBoundingClientRect();
-    const w = o.w || Math.max(360, Math.min(520, col.width * 0.48)), hh = o.h || Math.max(260, col.height - 80);
-    Object.assign(v.win.style, { left: (o.x != null ? o.x : col.right - w - 16 - n * 28) + 'px', top: (o.y != null ? o.y : col.top + 12 + n * 28) + 'px', width: w + 'px', height: hh + 'px', zIndex: ++zTop });
+    const w = o.w || Math.round(Math.max(420, Math.min(600, window.innerWidth * 0.38))), hh = o.h || Math.max(260, col.height - 80);
+    Object.assign(v.win.style, { left: (o.x != null ? o.x : window.innerWidth - w - 16 - n * 28) + 'px', top: (o.y != null ? o.y : col.top + 12 + n * 28) + 'px', width: w + 'px', height: hh + 'px', zIndex: ++zTop });
     v.h = hh;
     winHost().append(v.win);
     clampWin(v.win);
@@ -2735,6 +2737,7 @@
     const cb = v.compactBtn, can = !isUml() && !(isOO() && func().abstract);
     cb.hidden = !can;
     cb.setAttribute('aria-pressed', String(!!st.compact && can));
+    cb.querySelector('.lbl').textContent = st.compact && can ? L('ui.expand') : L('ui.compact');
     cb.title = v.sync ? L('ui.compactOrExtendedViewAsIn') : st.compact ? L('ui.extendedViewArrowsBetweenAllBlocks2') : L('ui.compactViewBlocksInSequenceTouch2');
     cb.setAttribute('aria-label', cb.title);
     const o = v.sel.options[v.sel.selectedIndex];
