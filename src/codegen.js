@@ -13,7 +13,7 @@ const C = (id, p) => I18n.code(id, p);
 const _CE = (typeof module !== 'undefined') ? require('./expr.js') : ExprLib;
 const _CM = (typeof module !== 'undefined') ? require('./model.js') : ModelLib;
 
-const P = { or: 1, and: 2, notLow: 3, rel: 4, add: 5, mul: 6, un: 7, pow: 8, atom: 10 };
+const P = { or: 1, xor: 1.5, and: 2, notLow: 3, bxor: 3.5, rel: 4, add: 5, mul: 6, un: 7, pow: 8, atom: 10 };
 const REL = ['==', '!=', '<', '<=', '>', '>='];
 
 /* ------------------- Generics and native classes of the modules -------------------
@@ -547,6 +547,8 @@ function exprPrinter(L) {
     if (L.bin) { const r = L.bin(n, sc, pr, generic); if (r) return r; }
     if (op === 'or') return generic(n, sc, L.or, P.or, 'left');
     if (op === 'and') return generic(n, sc, L.and, P.and, 'left');
+    // xor: XOR in pseudocode, ^ in Java and C# (it binds tighter than && and ||), != between booleans elsewhere
+    if (op === 'xor') { const x = L.xor || { op: 'XOR', p: P.xor, a: 'left' }; return generic(n, sc, x.op, x.p, x.a); }
     if (REL.includes(op)) return generic(n, sc, L.rel[op], P.rel, 'none');
     if (op === '+' || op === '-') return generic(n, sc, op, P.add, 'left');
     if (op === '*') return generic(n, sc, '*', P.mul, 'left');
@@ -618,7 +620,7 @@ const PS = (id, p) => C('pseudo.' + id, p);
 LANGS.pseudo = {
   label: PS('label'), ext: 'txt', comment: '//',
   // keywords to highlight: the uppercase words of the pseudocode texts
-  get keywords() { return [...new Set(Object.keys((I18n.packs.en || {}).code || {}).filter((k) => k.startsWith('pseudo.')).flatMap((k) => (C(k).match(/\b[A-ZÀ-Ý]{2,}\b/g) || [])))].concat(['AND', 'OR', 'NOT', 'MOD']); },
+  get keywords() { return [...new Set(Object.keys((I18n.packs.en || {}).code || {}).filter((k) => k.startsWith('pseudo.')).flatMap((k) => (C(k).match(/\b[A-ZÀ-Ý]{2,}\b/g) || [])))].concat(['XOR', 'AND', 'OR', 'NOT', 'MOD']); },
   generate(prog) {
     const TIPO = { Integer: PS('type.Integer'), Real: PS('type.Real'), String: PS('type.String'), Boolean: PS('type.Boolean') };
     const L = {
@@ -729,7 +731,7 @@ LANGS.python = {
   generate(prog) {
     const used = new Set();
     const L = {
-      str: (s) => escStr(s, '"'), T: 'True', F: 'False', pi: 'math.pi', use: (x) => used.add(x === 'pi' ? 'math' : x), not: 'not ', notPrec: P.notLow, or: 'or', and: 'and', pow: '**',
+      str: (s) => escStr(s, '"'), T: 'True', F: 'False', pi: 'math.pi', use: (x) => used.add(x === 'pi' ? 'math' : x), not: 'not ', notPrec: P.notLow, or: 'or', and: 'and', xor: { op: '!=', p: P.rel, a: 'none' }, pow: '**',
       rel: { '==': '==', '!=': '!=', '<': '<', '<=': '<=', '>': '>', '>=': '>=' },
       lang: 'python', nul: 'None', self: 'self', newObj: (c, a) => `${c}(${a})`, superCtor: (a) => `super().__init__(${a})`, superMethod: (m, a) => `super().${m}(${a})`,
       excMsg: (o) => `str(${o})`,
@@ -986,6 +988,7 @@ function cFamily(cfg) {
         // indices checked only if the program catches IndexOutOfRange (C++ .at(), JavaScript checkIndex())
         idx: GEN.exc.idx && cfg.idxChk ? (nm, ix) => cfg.idxChk(nm, ix, used) : cfg.idx, str: (s) => cfg.strLit(s), T: 'true', F: 'false', pi: cfg.pi, use: () => used.add('pi'),
         not: '!', notPrec: P.un, or: '||', and: '&&', pow: '**',
+        xor: cfg.lang === 'java' || cfg.lang === 'csharp' ? { op: '^', p: P.bxor, a: 'left' } : { op: cfg.neq || '!=', p: P.rel, a: 'none' },
         rel: { '==': cfg.eq || '==', '!=': cfg.neq || '!=', '<': '<', '<=': '<=', '>': '>', '>=': '>=' },
         lang: cfg.lang, targ: cfg.targ, diamond: cfg.diamond, garg: cfg.garg, excMsg: cfg.excMsg,
         nul: cfg.nul, self: cfg.self, arrow: cfg.arrow, staticSep: cfg.staticSep, newObj: cfg.newObj, superCtor: cfg.superCtor, superMethod: cfg.superMethod, field: cfg.field,
@@ -1256,7 +1259,7 @@ LANGS.cpp = cFamily({
     if (s.kind === 'open') o.line(s.mode === 'read' ? `fileIn.open(${E(s.expression, sc)});` : `fileOut.open(${E(s.expression, sc)});`);
     if (s.kind === 'close') o.line(s.mode === 'read' ? 'fileIn.close();' : 'fileOut.close();');
     if (s.kind === 'read') { const t = lvInfo(s.variable, sc).type; if (t === 'String') o.line(`getline(fileIn, ${E(s.variable, sc)});`); else { o.line(`fileIn >> ${E(s.variable, sc)};`); o.line('fileIn >> ws;'); } }
-    if (s.kind === 'write') { const x = strip(tryParse(s.expression)); const low = x && x.k === 'bin' && (REL.includes(x.op) || x.op === 'and' || x.op === 'or'); o.line(`fileOut << ${low ? `(${E(s.expression, sc)})` : E(s.expression, sc)} << endl;`); }
+    if (s.kind === 'write') { const x = strip(tryParse(s.expression)); const low = x && x.k === 'bin' && (REL.includes(x.op) || x.op === 'and' || x.op === 'or' || x.op === 'xor'); o.line(`fileOut << ${low ? `(${E(s.expression, sc)})` : E(s.expression, sc)} << endl;`); }
   },
   multiAssign(o, tg, call, f, sc, used) { used.add('tuple'); o.line(`tie(${tg.join(', ')}) = ${call};`); },
   program(prog, g) {

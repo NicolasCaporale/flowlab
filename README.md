@@ -87,6 +87,7 @@ If the program uses one of the extended features of FlowLab, the file is saved i
 - classes and functions with Generic Types
 - imported modules
 - declarations with an initial value
+- the `xor` operator
 
 ### Verification
 
@@ -102,6 +103,7 @@ If the program uses one of the extended features of FlowLab, the file is saved i
 | `&` | concatenation of texts and numbers |
 | `=` `==` `!=` `<>` `<` `<=` `>` `>=` | comparisons |
 | `and` `&&` `or` `\|\|` `not` `!` | logical |
+| `xor` `⊕` | exclusive or: true when exactly one of the two is true (between `or` and `and` in precedence) |
 
 Built-in functions: `Abs, Arccos, Arcsin, Arctan, Cos, Sin, Tan, Cosh, Sinh, Tanh, Int, Ln, Log, Log10, Sgn, Sqrt, Random, Len, Char, ToChar, ToCode, ToFixed, ToInteger, ToReal, ToString, Size, EOF`, constant `Pi`.
 

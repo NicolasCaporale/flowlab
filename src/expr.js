@@ -64,12 +64,12 @@ const isBaseType = (t) => TYPES.includes(t);
 /* ---------------------------- Lexer ---------------------------------- */
 const SYM = [
   ['<=', '<='], ['>=', '>='], ['==', '=='], ['!=', '!='], ['<>', '!='], ['&&', 'and'], ['||', 'or'],
-  ['≤', '<='], ['≥', '>='], ['≠', '!='], ['∧', 'and'], ['∨', 'or'], ['¬', 'not'],
+  ['≤', '<='], ['≥', '>='], ['≠', '!='], ['∧', 'and'], ['∨', 'or'], ['⊕', 'xor'], ['⊻', 'xor'], ['¬', 'not'],
   ['×', '*'], ['∗', '*'], ['÷', '/'], ['⁄', '/'], ['∕', '/'], ['↑', '^'], ['⭡', '^'], ['−', '-'],
   ['(', '('], [')', ')'], ['[', '['], [']', ']'], [',', ','], ['<', '<'], ['>', '>'], ['=', '=='],
   ['&', '&'], ['+', '+'], ['-', '-'], ['*', '*'], ['/', '/'], ['%', '%'], ['^', '^'], ['!', 'not'], ['.', '.'],
 ];
-const WORD_OPS = { and: 'and', or: 'or', not: 'not', mod: '%' };
+const WORD_OPS = { and: 'and', or: 'or', xor: 'xor', not: 'not', mod: '%' };
 
 function tokenize(src) {
   const toks = [];
@@ -149,8 +149,14 @@ function parseExpr(src) {
   const node = (o, t) => { o.pos = t ? t.pos : 0; return o; };
 
   function orE() {
+    let l = xorE();
+    while (isOp('or')) { const t = toks[p++]; l = node({ k: 'bin', op: 'or', l, r: xorE() }, t); }
+    return l;
+  }
+  // xor: true when exactly one of the two is true; between or and and (a or b xor c and d = a or (b xor (c and d)))
+  function xorE() {
     let l = andE();
-    while (isOp('or')) { const t = toks[p++]; l = node({ k: 'bin', op: 'or', l, r: andE() }, t); }
+    while (isOp('xor')) { const t = toks[p++]; l = node({ k: 'bin', op: 'xor', l, r: andE() }, t); }
     return l;
   }
   function andE() {
@@ -321,7 +327,7 @@ function parseLValueList(src) {
 
 function validIdent(s) { return /^[\p{L}_][\p{L}\p{N}_]*$/u.test(s); }
 
-const RESERVED = new Set(['and', 'or', 'not', 'mod', 'true', 'false', 'pi', 'π', 'integer', 'real', 'string', 'boolean', 'if', 'while', 'do', 'for', 'main', 'new', 'this', 'super', 'null']);
+const RESERVED = new Set(['and', 'or', 'xor', 'not', 'mod', 'true', 'false', 'pi', 'π', 'integer', 'real', 'string', 'boolean', 'if', 'while', 'do', 'for', 'main', 'new', 'this', 'super', 'null']);
 
 /* ------------------------------ Values --------------------------------- */
 const V = {
@@ -521,6 +527,14 @@ function* evalBin(node, ctx) {
     if (r.t !== 'Boolean') throw new FlowError(L('expr.requiresBooleanValuesOnTheRight', { op, value: TYPE_IT[r.t] }), { node });
     return V.bool(r.v);
   }
+  if (op === 'xor') {
+    // both sides are always evaluated
+    const l = yield* evalE(node.l, ctx);
+    if (l.t !== 'Boolean') throw new FlowError(L('expr.requiresBooleanValuesOnTheLeft', { op, value: TYPE_IT[l.t] }), { node });
+    const r = yield* evalE(node.r, ctx);
+    if (r.t !== 'Boolean') throw new FlowError(L('expr.requiresBooleanValuesOnTheRight', { op, value: TYPE_IT[r.t] }), { node });
+    return V.bool(l.v !== r.v);
+  }
   const l = yield* evalE(node.l, ctx);
   const r = yield* evalE(node.r, ctx);
   if ((l.t === 'Object' || r.t === 'Object') && op !== '&') {
@@ -642,7 +656,7 @@ function inferType(node, scope) {
     case 'un': return node.op === 'not' ? 'Boolean' : inferType(node.e, scope);
     case 'bin': {
       const op = node.op;
-      if (['and', 'or', '==', '!=', '<', '<=', '>', '>='].includes(op)) return 'Boolean';
+      if (['and', 'or', 'xor', '==', '!=', '<', '<=', '>', '>='].includes(op)) return 'Boolean';
       if (op === '&') return 'String';
       if (op === '/') return 'Real';
       const a = inferType(node.l, scope), b = inferType(node.r, scope);

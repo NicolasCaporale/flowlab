@@ -3486,7 +3486,7 @@
     const ops = [
       ['+  -  *  /', L('ui.arithmeticDivisionAlwaysGivesAReal')], ['mod  %', L('ui.remainderOfTheDivision')], ['^', L('ui.power238')],
       ['&', L('ui.joinsTextsAndNumbersTotalT')], ['=  ==   !=  <>', L('ui.equalNotEqual')], ['<  <=  >  >=', L('ui.comparisons')],
-      ['and  &&   or  ||   not  !', L('ui.logicalOperators')], ['true  false  Pi', L('ui.constants')], ['v[i]', L('ui.elementIOfAnArrayFrom')],
+      ['and  &&   or  ||   not  !', L('ui.logicalOperators')], ['xor  ⊕', L('ui.xorTrueWhenExactlyOne')], ['true  false  Pi', L('ui.constants')], ['v[i]', L('ui.elementIOfAnArrayFrom')],
       ['v ← quadrati(10)', L('ui.functionThatReturnsAnArrayV')],
       ['Try  Catch  Finally', L('ui.exceptionsIfABlockOfThe')],
       ['Throw new Exception("…")', L('ui.throwsAnExceptionPredefinedTypesEccezione')],

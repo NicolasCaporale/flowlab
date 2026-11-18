@@ -572,7 +572,9 @@ function extendedFeatures(prog) {
       if (s.kind === 'const') out.add(L('model.constants'));
       if (s.kind === 'declare' && !s.array && String(s.init || '').trim()) out.add(L('model.declarationsWithAnInitialValue'));
       if (s.kind === 'declare' && s.array && _MX.splitTop(s.size).length > 1) out.add(L('model.multiDimensionalArrays'));
-      for (const k of ['variable', 'expression', 'start', 'end', 'step']) {
+      for (const k of ['variable', 'expression', 'start', 'end', 'step', 'size']) {
+        // xor is not part of the standard format
+        if (typeof s[k] === 'string' && /xor|⊕|⊻/i.test(s[k])) { try { if (_MX.tokenize(s[k]).some((t) => t.k === 'op' && t.v === 'xor')) out.add(L('model.theXorOperator')); } catch (e) { /* incomplete expression */ } }
         if (typeof s[k] !== 'string' || !s[k].includes('[')) continue;
         try { const visit = (n) => { if (!n || typeof n !== 'object') return; if (n.k === 'var' && n.indices && n.indices.length > 1) out.add(L('model.multiDimensionalArrays')); Object.values(n).forEach(visit); }; (k === 'variable' ? _MX.parseLValueList(s[k]) : [_MX.parseExpr(s[k])]).forEach(visit); } catch (e) { /* incomplete expression */ }
       }
