@@ -11,10 +11,22 @@ await wait(250);
 const nf = await page.evaluate(() => FlowLab.state.prog.functions.length);
 
 // 1. nuova vista dal pulsante accanto allo zoom
-const dot0 = (await page.locator('#viewAdd.notify').count()) === 1;
+// the dot: only when at least one whole block is cut off at the top (not for the part beyond the bottom)
+const dotOn = async () => (await page.locator('#viewAdd.notify').count()) === 1;
+const topBlock = async () => page.evaluate(() => { const w = document.querySelector('#canvasWrap'), s = document.querySelector('#chart svg'); const sh = [...s.querySelectorAll('.shape')].map((e) => e.getBoundingClientRect()).sort((a, b) => a.top - b.top); const t = s.getBoundingClientRect().top; return { start: w.getBoundingClientRect().top + w.clientTop - t, first: [Math.round(sh[0].top - t), Math.round(sh[0].bottom - t)] }; });
+const z0 = await page.evaluate(() => FlowLab.state.zoom);
+await page.evaluate(() => { document.querySelector('.canvas-col').style.height = '420px'; }); await page.click('#zoomVal'); await wait(200);
+const fb = (await topBlock()).first;
+ok('foglio in cima, il fondo non si vede: pallino spento', !(await dotOn()));
+await page.evaluate((y) => { document.querySelector('#canvasWrap').scrollTop += y; }, fb[1] - 6 - (await topBlock()).start); await wait(150);
+ok(`primo blocco tagliato solo in parte (${JSON.stringify(await topBlock())}): pallino spento`, !(await dotOn()));
+await page.evaluate((y) => { document.querySelector('#canvasWrap').scrollTop += y; }, fb[1] + 4 - (await topBlock()).start); await wait(150);
+ok(`primo blocco tutto fuori in alto (${JSON.stringify(await topBlock())}): pallino acceso`, await dotOn());
 await page.click('#viewAdd'); await wait(200);
-ok('pallino acceso: la vista si apre «Continua»', dot0 && (await page.locator('.auxwin.sync').count()) === 1);
+ok('pallino acceso: la vista si apre «Continua» e mostra l\'inizio; il pallino si spegne', (await page.locator('.auxwin.sync.above').count()) === 1 && !(await dotOn()));
 await page.click('.auxwin .vsync'); await wait(100); // vista libera
+ok('vista libera: il pallino si riaccende', await dotOn());
+await page.evaluate(() => { document.querySelector('#canvasWrap').scrollTop = 0; document.querySelector('.canvas-col').style.height = ''; document.querySelector('.auxwin').style.height = '771px'; }); await wait(150);
 ok('una vista aperta, attiva, con il diagramma', (await page.locator('.auxwin').count()) === 1 && (await page.locator('.auxwin.vactive').count()) === 1 && (await page.locator('.auxwin .vchart svg .shape').count()) > 3);
 // 2. un altro diagramma nella vista; il foglio principale resta sul Main
 const opts = await page.locator('.auxwin .vsel option').allTextContents();
@@ -49,8 +61,9 @@ await page.keyboard.press('Control+z'); await wait(200);
 await page.locator('.auxwin .vclose').click(); await wait(100);
 await page.evaluate(() => { document.querySelector('.canvas-col').style.height = '420px'; });
 await page.click('#zoomVal'); await wait(200);
-ok('pallino su «Nuova vista»: il diagramma non sta nel foglio', (await page.locator('#viewAdd.notify').count()) === 1);
-await page.click('#viewAdd'); await wait(250);
+ok('il diagramma non sta nel foglio, ma l\'inizio si vede: pallino spento', !(await dotOn()));
+await page.keyboard.press('Control+Alt+v'); await wait(250);
+await page.locator('.auxwin .vsync').click(); await wait(250);
 const geo = async () => page.evaluate(() => {
   const m = (x) => { const r = x.getBoundingClientRect(), s = x.querySelector('svg').getBoundingClientRect(); return { top: Math.round(r.top + x.clientTop - s.top), end: Math.round(r.top + x.clientTop + x.clientHeight - s.top) }; };
   const w = [...document.querySelectorAll('.auxwin .vwrap')].map(m);
@@ -77,8 +90,9 @@ ok(`rotella sulla vista: foglio ${st0} → ${await page.evaluate(() => document.
 await page.click('#zoomOut'); await wait(200);
 g = await geo();
 ok(`zoom del foglio: ${await page.locator('#zoomVal').textContent()}, allineata ${g.main.top} / ${g.w[0].end}`, Math.abs(g.main.top - g.w[0].end) <= 1 && (await page.evaluate(() => document.querySelector('.auxwin .vchart svg').getAttribute('height') === document.querySelector('#chart svg').getAttribute('height'))));
-// la parte in fondo non si vede ancora: pallino acceso; la seconda vista mostra il seguito
-ok('pallino ancora acceso (manca la parte in fondo)', (await page.locator('#viewAdd.notify').count()) === 1);
+// the top is shown by the view above: dot off even if the bottom is not seen; the second view shows the rest
+g = await geo();
+ok(`pallino solo se la vista sopra non mostra tutto l'inizio: inizio del foglio ${g.main.top}, vista alta ${g.w[0].end - g.w[0].top}`, (await dotOn()) === (g.main.top - (g.w[0].end - g.w[0].top) > 74));
 await page.keyboard.press('Control+Alt+v'); await wait(250);
 g = await geo();
 ok(`due viste: sopra (fine ${g.w[0].end} = inizio del foglio ${g.main.top}), sotto (inizio ${g.w[1].top} = fine del foglio ${g.main.end})`, g.above[0] && !g.above[1] && Math.abs(g.main.top - g.w[0].end) <= 1 && Math.abs(g.main.end - g.w[1].top) <= 1);

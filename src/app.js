@@ -2633,15 +2633,13 @@
   let needView = false;
   function syncScroll() {
     const ms = $('svg', MAIN.chart);
-    let mStart = 0, mEnd = 0, H = 0;
+    let mStart = 0;
     if (ms) {
       const pw = MAIN.wrap.getBoundingClientRect(), pr = ms.getBoundingClientRect();
       mStart = pw.top + MAIN.wrap.clientTop - pr.top;
-      mEnd = mStart + MAIN.wrap.clientHeight;
-      H = pr.height;
     }
     const topCut = !!ms && mStart > 4;
-    let coveredAbove = !topCut, coveredBelow = !ms || mEnd >= H - 4;
+    let shownFrom = mStart; // the drawing is seen from here down (in the sheet or in a «Continue» view above it)
     let prev = MAIN, first = true, n = 0;
     const marks = new Map(); // marks of the point in common: view → { top, bottom }
     const mark = (v, edge, m) => { if (!marks.has(v)) marks.set(v, {}); marks.get(v)[edge] = m; };
@@ -2662,7 +2660,7 @@
       if (above) {
         // at the bottom of the view, the point of the drawing where the main sheet starts
         v.wrap.scrollTop += vr.top - ww.top - v.wrap.clientTop + mStart - v.wrap.clientHeight;
-        coveredAbove = mStart <= v.wrap.clientHeight;
+        shownFrom = mStart - v.wrap.clientHeight;
         v.done.hidden = true;
         // point in common: the top edge of the sheet and the same point of the drawing in the view
         mark(MAIN, 'top', Object.assign({ y: 0 }, link));
@@ -2676,15 +2674,19 @@
       if ((v.padB || 0) < need) { v.padB = need + 400; v.chart.style.paddingBottom = v.padB + 'px'; }
       v.wrap.scrollTop += vr.top - ww.top - v.wrap.clientTop + endY;
       v.done.hidden = endY < pr.height - 4;
-      if (endY + v.wrap.clientHeight >= H - 4) coveredBelow = true;
       // point in common: the bottom edge of the previous view and the same point of the drawing in this one
       mark(prev, 'bottom', Object.assign({ y: prev.wrap.clientHeight }, link));
       mark(v, 'top', Object.assign({ y: vs.getBoundingClientRect().top + endY - ww.top - v.wrap.clientTop }, link));
       prev = v;
     }
     for (const v of views) drawLinks(v, marks.get(v) || {});
-    // dot on the «New view» button: a part of the diagram is not seen anywhere
-    needView = !(coveredAbove && coveredBelow);
+    // dot on the «New view» button: at least one whole block is above the top of the sheet and not
+    // seen in any view (the part beyond the bottom does not light it: one simply scrolls down to it)
+    needView = false;
+    if (ms && topCut) {
+      const top = ms.getBoundingClientRect().top;
+      needView = [...ms.querySelectorAll('.shape')].some((e) => { const r = e.getBoundingClientRect(); return r.height && r.bottom - top <= mStart && r.top - top < shownFrom; });
+    }
     const b = $('#viewAdd');
     b.classList.toggle('notify', needView);
     b.title = needView ? L('ui.newContinueViewShowsThePart') : L('ui.newViewAnotherWindowOnThe');
