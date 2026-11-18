@@ -7,10 +7,10 @@ await page.goto('file://' + process.cwd() + '/dist/FlowLab.html'); await page.wa
 await page.evaluate(() => { localStorage.clear(); const s = document.querySelector('#speed'); s.value = 0; s.dispatchEvent(new Event('input')); });
 const ok = (name, cond) => console.log(`${cond ? 'ok  ' : 'FAIL'} ${name}`);
 const out = async () => (await page.innerText('#conOut')).split('\n').filter((l) => l && !/^(▶|■)/.test(l)).join(' | ');
-await page.evaluate(() => { const S = ModelLib.makeStmt, p = FlowLab.state.prog; p.functions[0].body = [S('declare', { name: 'a, b', type: 'Boolean' }), S('assign', { variable: 'a', expression: 'true' }), S('assign', { variable: 'b', expression: 'false' }), S('output', { expression: 'a xor b' }), S('output', { expression: 'a xor not b' }), S('output', { expression: '1 xor b' })]; FlowLab.render(); });
+await page.evaluate(() => { const S = ModelLib.makeStmt, p = FlowLab.state.prog; p.functions[0].body = [S('declare', { name: 'a, b', type: 'Boolean' }), S('assign', { variable: 'a', expression: 'true' }), S('assign', { variable: 'b', expression: 'false' }), S('output', { expression: 'a xor b' }), S('output', { expression: 'a xor not b' }), S('output', { expression: '6 xor 3' }), S('output', { expression: '1 xor b' })]; FlowLab.render(); });
 await page.click('#runBtn'); await page.waitForTimeout(500);
 const o = await out();
-ok('esecuzione: ' + o, /^true \| false/i.test(o) && /xor/.test(o) && /Errore/.test(o));
+ok('esecuzione: ' + o, /^true \| false \| 5 \|/i.test(o) && /xor/.test(o) && /Errore/.test(o));
 await page.evaluate(() => FlowLab.setTab('code')); await page.selectOption('#langSel', 'java'); await page.waitForTimeout(200);
 ok('Java: ' + (await page.locator('#codeOut').innerText()).match(/.*\^.*/g), /a \^ b/.test(await page.locator('#codeOut').innerText()));
 ok('formato esteso: ' + await page.evaluate(() => ModelLib.extendedFeatures(FlowLab.state.prog)), (await page.evaluate(() => ModelLib.extendedFeatures(FlowLab.state.prog))).includes("l'operatore xor"));

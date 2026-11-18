@@ -103,7 +103,7 @@ If the program uses one of the extended features of FlowLab, the file is saved i
 | `&` | concatenation of texts and numbers |
 | `=` `==` `!=` `<>` `<` `<=` `>` `>=` | comparisons |
 | `and` `&&` `or` `\|\|` `not` `!` | logical |
-| `xor` `⊕` | exclusive or: true when exactly one of the two is true (between `or` and `and` in precedence) |
+| `xor` `⊕` | exclusive or: between Booleans true when exactly one of the two is true, between Integers bit by bit (`(6 xor 3) = 5`); in precedence between `or` and `and` |
 
 Built-in functions: `Abs, Arccos, Arcsin, Arctan, Cos, Sin, Tan, Cosh, Sinh, Tanh, Int, Ln, Log, Log10, Sgn, Sqrt, Random, Len, Char, ToChar, ToCode, ToFixed, ToInteger, ToReal, ToString, Size, EOF`, constant `Pi`.
 

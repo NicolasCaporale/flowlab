@@ -12,11 +12,11 @@ Object.assign(progs, { exc_fun: X.excfun(), exc_oo: X.excoo() });
 // xor operator: precedence with or, and, not and comparisons, in every language
 {
   const S = M.makeStmt, p = M.newProgram();
-  const exprs = ['a xor b', 'a xor c', 'not a xor b', 'a or b xor c', 'a and b xor c', 'b xor c and a', 'x < 3 xor x > 1', '(a xor b) xor c', 'a xor (b xor c)', 'not (a xor c)', 'a xor b = c', 'a ⊕ c'];
+  const exprs = ['a xor b', 'a xor c', 'not a xor b', 'a or b xor c', 'a and b xor c', 'b xor c and a', 'x < 3 xor x > 1', '(a xor b) xor c', 'a xor (b xor c)', 'not (a xor c)', 'a xor b = c', 'a ⊕ c', '(6 xor 3) = 5', '(x xor 7) + 1 = 6', '(x * 3 xor 1) = 7', '(-6 xor 3) = -7'];
   p.functions[0].body = [S('declare', { name: 'a, b, c', type: 'Boolean' }), S('declare', { name: 'x', type: 'Integer' }),
     S('assign', { variable: 'a', expression: 'true' }), S('assign', { variable: 'b', expression: 'false' }), S('assign', { variable: 'c', expression: 'true' }), S('assign', { variable: 'x', expression: '2' }),
     ...exprs.map((e) => S('if', { expression: e, then: [S('output', { expression: '"1"', newline: false })], else: [S('output', { expression: '"0"', newline: false })] })),
-    S('output', { expression: '""' })];
+    S('output', { expression: '""' }), S('output', { expression: '12 xor 10' }), S('output', { expression: 'x xor 2' }), S('output', { expression: 'a xor b' }), S('output', { expression: '"v: " & (a xor c) & " " & (5 xor 1)' })];
   progs.xor_ops = p;
 }
 // anche gli esempi a oggetti dell'applicazione

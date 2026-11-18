@@ -528,12 +528,12 @@ function* evalBin(node, ctx) {
     return V.bool(r.v);
   }
   if (op === 'xor') {
-    // both sides are always evaluated
+    // between booleans: true when exactly one is true; between integers: bit by bit (6 xor 3 = 5). Both sides are always evaluated
     const l = yield* evalE(node.l, ctx);
-    if (l.t !== 'Boolean') throw new FlowError(L('expr.requiresBooleanValuesOnTheLeft', { op, value: TYPE_IT[l.t] }), { node });
     const r = yield* evalE(node.r, ctx);
-    if (r.t !== 'Boolean') throw new FlowError(L('expr.requiresBooleanValuesOnTheRight', { op, value: TYPE_IT[r.t] }), { node });
-    return V.bool(l.v !== r.v);
+    if (l.t === 'Boolean' && r.t === 'Boolean') return V.bool(l.v !== r.v);
+    if (l.t === 'Integer' && r.t === 'Integer') return V.int(Number(BigInt(l.v) ^ BigInt(r.v)));
+    throw new FlowError(L('expr.xorNeedsTwoBooleansOrTwo', { left: TYPE_IT[l.t] || typeName(l.t), right: TYPE_IT[r.t] || typeName(r.t) }), { node });
   }
   const l = yield* evalE(node.l, ctx);
   const r = yield* evalE(node.r, ctx);
@@ -656,7 +656,8 @@ function inferType(node, scope) {
     case 'un': return node.op === 'not' ? 'Boolean' : inferType(node.e, scope);
     case 'bin': {
       const op = node.op;
-      if (['and', 'or', 'xor', '==', '!=', '<', '<=', '>', '>='].includes(op)) return 'Boolean';
+      if (op === 'xor') { const lt = inferType(node.l, scope); return lt === 'Integer' && inferType(node.r, scope) === 'Integer' ? 'Integer' : 'Boolean'; }
+      if (['and', 'or', '==', '!=', '<', '<=', '>', '>='].includes(op)) return 'Boolean';
       if (op === '&') return 'String';
       if (op === '/') return 'Real';
       const a = inferType(node.l, scope), b = inferType(node.r, scope);
