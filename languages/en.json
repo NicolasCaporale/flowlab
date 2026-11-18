@@ -23,8 +23,8 @@
   "throw": "Shift+T"
  },
  "code": {
-    "constant": "constant",
-    "cannotGenerate": "Cannot generate the code: {msg}",
+  "constant": "constant",
+  "cannotGenerate": "Cannot generate the code: {msg}",
   "pseudo.label": "Pseudocode",
   "pseudo.type.Integer": "integer",
   "pseudo.type.Real": "real",
@@ -121,6 +121,19 @@
   "unsupported": "{what}: not available in {lang}"
  },
  "strings": {
+  "run.aBreakpointConditionCannotRead": "the condition cannot ask for input",
+  "ui.runToHereAndConditionalBreakpoints": "on a block: «Run to here», breakpoint, breakpoint with condition",
+  "ui.rightClick": "Right click",
+  "ui.breakpointOnTheSelectedBlock": "breakpoint on the selected block (a red dot, only for this session); again to remove it",
+  "ui.breakpointConditionError": "Condition of the breakpoint «{cond}»: {msg}",
+  "ui.pausedAtTheBreakpointCondition": "Paused at the breakpoint: {cond}",
+  "ui.pausedAtTheChosenBlock": "Paused at the chosen block",
+  "ui.removeTheBreakpoint": "Remove the breakpoint",
+  "ui.theProgramStopsOnThisBlock": "The program stops on this block only when the condition is true, with the variables of the current call. The mark is not saved in the file.",
+  "ui.eGI5": "e.g. i = 5",
+  "ui.conditionalBreakpoint": "Breakpoint with condition…",
+  "ui.breakpointOnTheBlock": "Breakpoint",
+  "ui.runToHere": "Run to here",
   "expr.integer": "Integer",
   "expr.real": "Real",
   "expr.string": "String",
@@ -636,7 +649,6 @@
   "ui.pausesTheProgramToLookAt": "Pauses the program to look at the variables.",
   "ui.alwaysStop": "Always stop",
   "ui.stopOnlyIf": "Stop only if",
-  "ui.eGI5": "e.g. i = 5",
   "ui.filesAreInTheFilesTab": "Files are in the Files tab: you can upload them from your computer.",
   "ui.fileName": "File name",
   "ui.eGDataTxt": "e.g. \"data.txt\"",

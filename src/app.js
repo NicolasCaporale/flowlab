@@ -420,6 +420,7 @@
         g.classList.toggle('exec', id === litId && on);
         g.classList.toggle('err', id === run.errId);
         g.classList.toggle('linked', !!lk && lk.has(id));
+        markDot(g, bpMarks.get(id));
       });
     }
     decorateCode();
@@ -563,13 +564,85 @@
     if (st.clip) box.append(h('button', { class: 'pastebtn', type: 'button', onclick: () => { closePop(); paste(target); } }, L('ui.pasteHereCtrlV', { value: RenderLib.KIND_IT[st.clip.kind] })));
     openPop(x, y, box);
   }
+  /* ---- breakpoints marked on the blocks (only for this session, not in the file) and «Run to here» ----
+     bpMarks: block id → { cond } (empty condition: it always stops) */
+  const bpMarks = new Map();
+  let runTo = null;
+  function debugItems(id) {
+    const m = bpMarks.get(id);
+    const B = (text, fn, kbd, cls) => h('button', { type: 'button', class: cls || null, onclick: () => { closePop(); fn(); } }, h('span', null, text), kbd ? h('kbd', null, kbd) : null);
+    return [
+      B(L('ui.runToHere'), () => runToHere(id)),
+      B((m && !m.cond ? '✓ ' : '') + L('ui.breakpointOnTheBlock'), () => toggleMark(id), 'F9'),
+      B((m && m.cond ? '✓ ' : '') + L('ui.conditionalBreakpoint'), () => markDialog(id)),
+      h('hr'),
+    ];
+  }
+  // red dot on the left of a marked block (with «?» if it has a condition)
+  function markDot(g, m) {
+    let dot = g.querySelector(':scope > .bpmark');
+    const want = m ? (m.cond ? 'c:' + m.cond : 'a') : '';
+    if ((dot ? dot.dataset.m : '') === want) return;
+    if (dot) dot.remove();
+    if (!m) return;
+    const NS = 'http://www.w3.org/2000/svg', b = g.getBBox();
+    dot = document.createElementNS(NS, 'g'); dot.setAttribute('class', 'bpmark'); dot.dataset.m = want;
+    const cx = b.x - 9, cy = b.y + Math.min(b.height / 2, 14);
+    dot.innerHTML = `<title></title><circle cx="${cx}" cy="${cy}" r="6.5"/>` + (m.cond ? `<text x="${cx}" y="${cy + 3.5}">?</text>` : '');
+    dot.querySelector('title').textContent = m.cond ? L('ui.conditionalBreakpoint').replace(/…$/, '') + ': ' + m.cond : L('ui.breakpointOnTheBlock');
+    g.append(dot);
+  }
+  function toggleMark(id) {
+    if (!id) return;
+    if (bpMarks.has(id)) bpMarks.delete(id); else bpMarks.set(id, { cond: '' });
+    decorate();
+  }
+  function markDialog(id) {
+    const m = bpMarks.get(id);
+    const c = field({ key: 'bpcond', label: L('ui.condition'), type: 'expr', placeholder: L('ui.eGI5'), hint: L('ui.theProgramStopsOnThisBlock') }, m ? m.cond : '');
+    openModal({ title: L('ui.conditionalBreakpoint'), body: h('div', { class: 'fields' }, c), onOk: () => {
+      const cond = c._get().trim();
+      if (cond) { try { E.parseExpr(cond); } catch (e) { return e.message; } }
+      bpMarks.set(id, { cond });
+      decorate();
+      return true;
+    } });
+    if (m) {
+      // remove the mark from the same dialog
+      const foot = $$('.modal footer').pop();
+      if (foot) foot.prepend(h('button', { type: 'button', class: 'btn danger', style: 'margin-right:auto', onclick: () => { bpMarks.delete(id); modalStack[modalStack.length - 1](); decorate(); } }, L('ui.removeTheBreakpoint')));
+    }
+  }
+  // runs without animation up to the first time the block is reached (in any call); not running: it starts
+  function runToHere(id) {
+    if (run.state === 'input') return;
+    runTo = id;
+    if (run.state === 'paused') { run.mode = 'run'; run.state = 'running'; setStatus('running', L('ui.running')); run.fast = true; pump(); return; }
+    if (run.state === 'running') { run.fast = true; return; }
+    run.errId = null; run.fast = true;
+    startRun('run');
+  }
+  // a block reached while running: stop at a marked block (if its condition holds) or at the «Run to here» block
+  function stopHere(ev) {
+    const id = ev.stmt.id;
+    if (runTo === id) { runTo = null; run.fast = false; return L('ui.pausedAtTheChosenBlock'); }
+    const m = bpMarks.get(id);
+    if (!m) return null;
+    if (!m.cond) { runTo = null; run.fast = false; return L('ui.pausedAtTheBreakpoint'); }
+    let v;
+    try { v = run.interp.evalNow(m.cond); } catch (e) { runTo = null; run.fast = false; conWrite(L('ui.breakpointConditionError', { cond: m.cond, msg: e.message }), true, 'error'); return L('ui.pausedAtTheBreakpoint'); }
+    if (v.t !== 'Boolean') { runTo = null; run.fast = false; conWrite(L('ui.breakpointConditionError', { cond: m.cond, msg: L('run.theBreakpointConditionMustBeBoolean') }), true, 'error'); return L('ui.pausedAtTheBreakpoint'); }
+    if (!v.v) return null;
+    runTo = null; run.fast = false;
+    return L('ui.pausedAtTheBreakpointCondition', { cond: m.cond });
+  }
   function shapeMenu(id, x, y) {
     if (id.startsWith('start:') || id.startsWith('end:')) {
-      const box = h('div', { class: 'ctxmenu' },
+      const box = h('div', { class: 'ctxmenu' }, ...debugItems(id),
         h('button', { type: 'button', onclick: () => { closePop(); st.fi === 0 ? editProgram() : editFunction(st.fi); } }, h('span', null, st.fi === 0 ? L('ui.programProperties') : isOO() ? L('ui.editTheMethod') : L('ui.editTheFunction')), h('kbd', null, 'F2')));
       openPop(x, y, box); return;
     }
-    const box = h('div', { class: 'ctxmenu' },
+    const box = h('div', { class: 'ctxmenu' }, ...debugItems(id),
       h('button', { type: 'button', onclick: () => { closePop(); editStmt(id); } }, h('span', null, L('ui.edit')), h('kbd', null, L('ui.enter'))),
       h('button', { type: 'button', onclick: () => { closePop(); copySel(false); } }, h('span', null, L('ui.copy')), h('kbd', null, 'Ctrl+C')),
       h('button', { type: 'button', onclick: () => { closePop(); copySel(true); } }, h('span', null, L('ui.cut')), h('kbd', null, 'Ctrl+X')),
@@ -1776,6 +1849,15 @@
       run.trail = { from: ev.frame._last || null, to: ev.stmt.id, frame: ev.frame, branch: ev.frame._branch || null, step: run.steps, exc: ev.exc || null };
       ev.frame._last = ev.stmt.id;
       if (!run.mainFrame) run.mainFrame = ev.frame;
+      if (run.state === 'running' && (runTo || bpMarks.size)) {
+        const why = stopHere(ev);
+        if (why) {
+          run.state = 'paused'; run.mode = 'step';
+          showCurrent(); setStatus('paused', why);
+          conWrite(why, true, 'sys');
+          return null;
+        }
+      }
       return ev;
     }
     if (ev.type === 'input') { onInput(ev); return null; }
@@ -1791,7 +1873,7 @@
   function pump() {
     run.timer = null;
     if (run.state !== 'running') return;
-    const ms = SPEEDS[st.speed].ms;
+    const ms = run.fast ? 0 : SPEEDS[st.speed].ms; // «Run to here»: without animation
     const t0 = performance.now();
     while (run.state === 'running') {
       const ev = advance();
@@ -2046,7 +2128,7 @@
 
   function onFinish() {
     flushStreams();
-    run.state = 'done';
+    run.state = 'done'; runTo = null; run.fast = false;
     conWrite(L('ui.endOfProgramSteps', { toLocaleStringNaN: run.steps.toLocaleString('it-IT') }), true, 'sys');
     run.curId = null; run.curFrame = null; clearTrail();
     decorate(); renderVars();
@@ -2059,7 +2141,7 @@
   }
   function onError(e) {
     flushStreams();
-    run.state = 'done';
+    run.state = 'done'; runTo = null; run.fast = false;
     run.errId = e.stmtId || null;
     const fi = e.funcId ? st.prog.functions.findIndex((f) => f.id === e.funcId) : -1;
     if (fi >= 0 && (fi !== st.fi || st.uml)) { st.fi = fi; st.uml = false; render(); }
@@ -2081,7 +2163,7 @@
   }
   function stopRun() {
     if (!isRunning()) return;
-    stopTimer();
+    stopTimer(); runTo = null; run.fast = false;
     try { run.gen.return(); } catch (e) { /* ignore */ }
     flushStreams();
     run.state = 'done';
@@ -2685,7 +2767,7 @@
     scheduleSync(); saveViewsSoon();
   }
   /* another program: the views close */
-  function resetViews() { focusView(MAIN); for (const v of views.slice(1)) closeView(v); }
+  function resetViews() { focusView(MAIN); for (const v of views.slice(1)) closeView(v); bpMarks.clear(); }
   let syncRaf = 0;
   function scheduleSync() {
     if (syncRaf) return;
@@ -3585,7 +3667,7 @@
       ['Alt+Enter', L('ui.programProperties2')],
     ]],
     [L('ui.execution'), [
-      ['F5  ·  Ctrl+Enter', L('ui.runContinue')], ['F10', L('ui.nextStepEntersTheCalledFunctions')], ['F8', L('ui.stepOverRunsTheCallWithout')], ['Shift+F8', L('ui.stepOutRunsTheRestAnd')],
+      ['F5  ·  Ctrl+Enter', L('ui.runContinue')], ['F10', L('ui.nextStepEntersTheCalledFunctions')], ['F8', L('ui.stepOverRunsTheCallWithout')], ['Shift+F8', L('ui.stepOutRunsTheRestAnd')], ['F9', L('ui.breakpointOnTheSelectedBlock')], [L('ui.rightClick'), L('ui.runToHereAndConditionalBreakpoints')],
       ['F6', L('chart.pause')], ['Shift+F5', L('ui.stop')],
     ]],
     [L('ui.edit4'), [
@@ -3648,6 +3730,7 @@
       if (e.key === 'F5' || (ctrl && e.key === 'Enter')) return go(onRunBtn);
       if (e.key === 'F6') return go(() => { if (!$('#pauseBtn').disabled) onPauseBtn(); });
       if (e.key === 'F10') return go(onStepBtn);
+      if (e.key === 'F9') return go(() => { if (!st.uml) toggleMark(vget(V, 'sel')); });
       if (e.key === 'F8' && shift) return go(onOutBtn);
       if (e.key === 'F8') return go(onOverBtn);
       // file

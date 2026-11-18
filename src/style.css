@@ -307,6 +307,9 @@ table.vars tr.changed td { background: var(--exec-soft); }
 #codeOut .cl.linked { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--sel); }
 #codeOut .cl.exec { background: var(--exec-soft); box-shadow: inset 3px 0 0 var(--exec); }
 .chart .shape.linked > path:not(.inner), .chart .shape.linked > rect { stroke: var(--sel); stroke-width: 3; }
+/* breakpoint marked on a block (only for the session) */
+.chart .bpmark circle { fill: var(--err); stroke: var(--paper); stroke-width: 1.5; }
+.chart .bpmark text { fill: #fff; font: 700 10px/1 var(--font-ui, sans-serif); text-anchor: middle; pointer-events: none; }
 .tk { color: var(--s-call); font-weight: 600; }
 .ts { color: var(--s-out); }
 .tn { color: var(--s-loop); }

@@ -30,8 +30,8 @@
   "throw": "Shift+T"
  },
  "code": {
-    "constant": "costante",
-    "cannotGenerate": "Impossibile generare il codice: {msg}",
+  "constant": "costante",
+  "cannotGenerate": "Impossibile generare il codice: {msg}",
   "pseudo.label": "Pseudocodice",
   "pseudo.type.Integer": "intero",
   "pseudo.type.Real": "reale",
@@ -128,6 +128,19 @@
   "unsupported": "{what}: non disponibile in {lang}"
  },
  "strings": {
+  "run.aBreakpointConditionCannotRead": "la condizione non può chiedere un input",
+  "ui.runToHereAndConditionalBreakpoints": "su un blocco: «Esegui fino a qui», punto di interruzione, punto di interruzione con condizione",
+  "ui.rightClick": "Tasto destro",
+  "ui.breakpointOnTheSelectedBlock": "punto di interruzione sul blocco selezionato (un pallino rosso, solo per questa sessione); di nuovo per toglierlo",
+  "ui.breakpointConditionError": "Condizione del punto di interruzione «{cond}»: {msg}",
+  "ui.pausedAtTheBreakpointCondition": "In pausa al punto di interruzione: {cond}",
+  "ui.pausedAtTheChosenBlock": "In pausa sul blocco scelto",
+  "ui.removeTheBreakpoint": "Togli il punto di interruzione",
+  "ui.theProgramStopsOnThisBlock": "Il programma si ferma su questo blocco solo quando la condizione è vera, con le variabili della chiamata in corso. Il segno non si salva nel file.",
+  "ui.eGI5": "es. i = 5",
+  "ui.conditionalBreakpoint": "Punto di interruzione con condizione…",
+  "ui.breakpointOnTheBlock": "Punto di interruzione",
+  "ui.runToHere": "Esegui fino a qui",
   "expr.integer": "Intero",
   "expr.real": "Reale",
   "expr.string": "Stringa",
@@ -643,7 +656,6 @@
   "ui.pausesTheProgramToLookAt": "Mette in pausa il programma per osservare le variabili.",
   "ui.alwaysStop": "Fermati sempre",
   "ui.stopOnlyIf": "Fermati solo se",
-  "ui.eGI5": "es. i = 5",
   "ui.filesAreInTheFilesTab": "I file stanno nella scheda File: puoi caricarli dal computer.",
   "ui.fileName": "Nome del file",
   "ui.eGDataTxt": "es. \"dati.txt\"",

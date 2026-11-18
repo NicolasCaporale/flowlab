@@ -548,6 +548,15 @@ class Interpreter {
 
   get frame() { return this.stack[this.stack.length - 1]; }
 
+  /* value of an expression in the current call, all at once (condition of a breakpoint marked on a block);
+     functions called by the expression run without steps */
+  evalNow(src) {
+    const g = _E.evalE(this.parse(src, 'e'), this.ctx);
+    for (let r = g.next(); ; r = g.next()) {
+      if (r.done) return r.value;
+      if (r.value && r.value.type === 'input') throw new _E.FlowError(L('run.aBreakpointConditionCannotRead'));
+    }
+  }
   parse(src, what) {
     const key = what + '\u0000' + src;
     if (this.cache.has(key)) return this.cache.get(key);
