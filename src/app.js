@@ -404,6 +404,9 @@
     render();
   }
   function decorate() {
+    // blocks of the clicked code line (until the selection changes elsewhere)
+    if (link && link.from === 'code' && vget(V, 'sel') !== link.sel) link = null;
+    const lk = link && link.from === 'code' ? link.ids : null;
     // during the cursor's trip the starting block stays lit
     const litId = run.hold ? run.holdFrom : run.curId;
     const on = run.state !== 'idle' && run.state !== 'done';
@@ -416,8 +419,10 @@
         // the block lights up only when the cursor has reached it
         g.classList.toggle('exec', id === litId && on);
         g.classList.toggle('err', id === run.errId);
+        g.classList.toggle('linked', !!lk && lk.has(id));
       });
     }
+    decorateCode();
   }
   function applyZoom() {
     const svg = $('svg', V.chart); if (!svg) return;
@@ -1534,7 +1539,9 @@
       const g = e.target.closest('.shape');
       const gid = g ? ownerOf(g.dataset.id) : null;
       st.sel = gid && !gid.includes(':') ? gid : null;
+      link = g ? { from: 'chart', raw: g.dataset.id } : null;
       decorate();
+      decorateCode(true);
     });
     chart.addEventListener('dblclick', (e) => {
       focusView(v);
@@ -1745,7 +1752,8 @@
     const prog = JSON.parse(JSON.stringify(st.prog));
     run.interp = new Interpreter(prog, env);
     run.gen = run.interp.run();
-    if (!paneVisible('console') && !paneVisible('vars')) showPane('console');
+    // the Code tab, if in view, stays: it follows the running block
+    if (!paneVisible('console') && !paneVisible('vars') && !paneVisible('code')) showPane('console');
     if (mode === 'run') { run.state = 'running'; setStatus('running', L('ui.running')); pump(); }
     else { run.state = 'paused'; stepOnce(); }
   }
@@ -2226,11 +2234,66 @@
   }
 
   /* ---- Code ---- */
+  /* link between code and flowchart: every line knows the blocks it comes from (codeMap); a click on a
+     block lights its lines, a click on a line lights its blocks, during execution the line of the current block */
+  let codeMap = [];
+  let link = null; // { from: 'chart', raw } or { from: 'code', ids, sel }
   function renderCode() {
     if (!paneVisible('code')) return;
-    const code = CodeGen.generate(st.prog, st.lang);
-    $('#codeOut').innerHTML = highlight(code, st.lang);
+    const { code, map } = CodeGen.generateMapped(st.prog, st.lang);
+    codeMap = map;
+    $('#codeOut').innerHTML = highlight(code, st.lang, map);
     $('#codeOut').dataset.raw = code;
+    decorateCode();
+  }
+  // blocks the code follows: those of the clicked line, otherwise the selected block (and the clicked header)
+  function codeFocus() {
+    if (link && link.from === 'code') return link.ids;
+    const sel = st.uml ? null : vget(V, 'sel'), out = new Set();
+    if (sel) out.add(sel);
+    if (link && link.from === 'chart' && link.raw && (!sel || ownerOf(link.raw) === sel)) out.add(link.raw);
+    return out;
+  }
+  let codeExecLine = -1;
+  function decorateCode(scroll) {
+    const box = $('#codeOut'); if (!box || !paneVisible('code')) return;
+    const rows = box.children; if (!rows.length) return;
+    const focus = codeFocus();
+    const litId = run.hold ? run.holdFrom : run.curId;
+    const on = run.state !== 'idle' && run.state !== 'done' && litId;
+    let firstLinked = -1, firstExec = -1;
+    for (let i = 0; i < rows.length; i++) {
+      const ids = codeMap[i]; let lk = false, ex = false;
+      if (ids && ids.size) { for (const id of ids) { if (focus.has(id)) lk = true; if (on && id === litId) ex = true; } }
+      rows[i].classList.toggle('linked', lk); rows[i].classList.toggle('exec', ex);
+      if (lk && firstLinked < 0) firstLinked = i;
+      if (ex && firstExec < 0) firstExec = i;
+    }
+    // the line of the current block is brought into view when it changes; the linked ones when asked
+    if (firstExec >= 0 && firstExec !== codeExecLine) showCodeRow(rows[firstExec]);
+    codeExecLine = firstExec;
+    if (scroll && firstLinked >= 0) showCodeRow(rows[firstLinked]);
+  }
+  function showCodeRow(row) {
+    const box = $('#codeOut'), r = row.getBoundingClientRect(), b = box.getBoundingClientRect();
+    if (r.top < b.top + 8 || r.bottom > b.bottom - 8) box.scrollTop += r.top - b.top - b.height / 3;
+  }
+  // click on a line: its blocks light up in the flowchart (the sheet goes to their function if no view shows it)
+  function onCodeClick(e) {
+    const row = e.target.closest('.cl'); if (!row) return;
+    const i = [...row.parentNode.children].indexOf(row), ids = codeMap[i];
+    if (!ids || !ids.size || getSelection().toString()) return;
+    const fidOf = (id) => { const m = /^(start|end):(.+)$/.exec(id); if (m) return m[2]; const f = M.findStmt(st.prog, ownerOf(id)); return f && f.func.id; };
+    const first = [...ids][0], fid = fidOf(first); if (!fid) return;
+    const sel = [...ids].map(ownerOf).find((x) => !x.includes(':')) || null;
+    const shown = views.find((v) => v.chart && $(`.shape[data-id="${CSS.escape(first)}"]`, v.chart));
+    if (shown) focusView(shown);
+    else { focusView(MAIN); const fi = st.prog.functions.findIndex((f) => f.id === fid); if (fi >= 0) showFunc(fi); }
+    st.sel = sel;
+    link = { from: 'code', ids, sel };
+    decorate();
+    const el = $(`.shape[data-id="${CSS.escape(first)}"]`, V.chart);
+    if (el) scrollIntoViewIfNeeded(el);
   }
   /* the code in rows of pieces [class, text]: tk keyword, ts string, tn number, tc comment */
   function codeTokens(code, lang) {
@@ -2251,12 +2314,13 @@
     }
     return lines;
   }
-  function highlight(code, lang) {
+  function highlight(code, lang, map) {
     const escH = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const lines = codeTokens(code, lang);
     // a final newline does not open an empty numbered row
-    const tail = lines.length > 1 && !lines[lines.length - 1].length ? (lines.pop(), '\n') : '';
-    return lines.map((ln) => '<span class="ln"></span>' + ln.map(([c, t]) => c ? `<span class="${c}">${escH(t)}</span>` : escH(t)).join('')).join('\n') + tail;
+    if (lines.length > 1 && !lines[lines.length - 1].length) lines.pop();
+    // one row per line; the rows that come from blocks can be clicked
+    return lines.map((ln, i) => `<span class="cl${map && map[i] && map[i].size ? ' src' : ''}"><span class="ln"></span>` + ln.map(([c, t]) => c ? `<span class="${c}">${escH(t)}</span>` : escH(t)).join('') + '</span>').join('');
   }
 
   /* ------------------------- Tabs and floating windows --------------------- */
@@ -3702,6 +3766,7 @@
     const ls = $('#langSel');
     for (const [k, L] of Object.entries(CodeGen.LANGS)) ls.append(h('option', { value: k, selected: k === st.lang }, L.label));
     ls.addEventListener('change', () => { st.lang = ls.value; store.set('lang', st.lang); renderCode(); });
+    $('#codeOut').addEventListener('click', onCodeClick);
     $('#codeCopy').addEventListener('click', async () => {
       try { await navigator.clipboard.writeText($('#codeOut').dataset.raw || ''); toast(L('ui.codeCopied'), 'ok'); }
       catch (e) { const r = document.createRange(); r.selectNodeContents($('#codeOut')); const s = getSelection(); s.removeAllRanges(); s.addRange(r); toast(L('ui.pressCtrlCToCopyThe')); }

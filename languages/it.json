@@ -30,6 +30,8 @@
   "throw": "Shift+T"
  },
  "code": {
+    "constant": "costante",
+    "cannotGenerate": "Impossibile generare il codice: {msg}",
   "pseudo.label": "Pseudocodice",
   "pseudo.type.Integer": "intero",
   "pseudo.type.Real": "reale",

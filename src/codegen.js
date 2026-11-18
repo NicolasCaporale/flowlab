@@ -616,9 +616,44 @@ function concatParts(n) {
 }
 
 /* ------------------------------ Emitter ------------------------------- */
+/* link between the code and the blocks: with SRC.on every line carries, at its end, the ids of the blocks
+   it comes from (between \uE000 and \uE001); generateMapped takes them away and returns them line by line.
+   SRC.cur: block being written; SRC.end: the lines after a function body (return, closing) go to its End */
+const SRC = { on: false, cur: null, end: null, fn: new Map(), closers: new Set() };
+const MARK_RE = /\uE000([^\uE001]*)\uE001/g;
+const untag = (l) => l.replace(MARK_RE, '');
+function srcEndId(out, s) {
+  const e = SRC.end;
+  if (!e || e.out !== out) return null;
+  if (out.lvl >= e.lvl) return e.id;
+  SRC.end = null;
+  const t = s.trim();
+  return out.lvl === e.lvl - 1 && (t === '}' || t === '};' || SRC.closers.has(t)) ? e.id : null;
+}
+/* entering a list of blocks; a function body also gives its header line (just above, less indented) to the Start block */
+function srcEnter(o, stmts) {
+  if (!SRC.on) return null;
+  const st = { prev: SRC.cur, f: SRC.fn.get(stmts) };
+  SRC.end = null;
+  if (st.f) {
+    const i = o.lines.length - 1, l = o.lines[i];
+    if (l && !MARK_RE.test(l) && l.length - l.trimStart().length < o.ind.length * o.lvl) o.lines[i] = l + '\uE000start:' + st.f.id + '\uE001';
+    MARK_RE.lastIndex = 0;
+  }
+  return st;
+}
+function srcLeave(st, o) {
+  if (!st) return;
+  SRC.cur = st.prev;
+  if (st.f) { SRC.cur = null; SRC.end = { out: o, lvl: o.lvl, id: 'end:' + st.f.id }; }
+}
 class Out {
   constructor(ind) { this.lines = []; this.lvl = 0; this.ind = ind || '    '; }
-  line(s) { this.lines.push(s === '' ? '' : this.ind.repeat(this.lvl) + s); }
+  line(s) {
+    let t = s === '' ? '' : this.ind.repeat(this.lvl) + s;
+    if (SRC.on && s !== '') { const id = SRC.cur || srcEndId(this, s); if (id) t += '\uE000' + id + '\uE001'; }
+    this.lines.push(t);
+  }
   in() { this.lvl++; } out() { this.lvl--; }
   text() { return this.lines.join('\n') + '\n'; }
 }
@@ -647,7 +682,9 @@ LANGS.pseudo = {
     const RT = (r) => shape(r) + TP(r.type);
     const E = (src, sc) => { const t = tryParse(src); return t ? pr(t, sc).s : src; };
     const block = (stmts, sc) => {
+      const src = srcEnter(o, stmts);
       for (const s of stmts) {
+        SRC.cur = s.id;
         switch (s.kind) {
           case 'const': o.line(`${PS('const')} ${s.name} : ${TP(s.type)} = ${E(s.expression, sc)}`); break;
           case 'declare': o.line(`${PS('declare')} ${s.array ? PS('declareArray', { names: s.name.split(',').map((x) => x.trim() + '[' + dimsOf(s, E, sc).join(', ') + ']').join(', '), type: TP(s.type) }) : `${s.name} : ${TP(s.type)}${String(s.init || '').trim() ? ' = ' + E(s.init, sc) : ''}`}`); break;
@@ -675,11 +712,12 @@ LANGS.pseudo = {
           case 'throw': o.line(`THROW ${E(s.expression, sc)}`); break;
           case 'try':
             o.line('TRY'); o.in(); block(s.body, sc); o.out();
-            for (const c of s.catches || []) { o.line(`CATCH ${c.type} ${c.variable}`); o.in(); block(c.body, sc); o.out(); }
-            if (s.hasFinally) { o.line('FINALLY'); o.in(); block(s.finally || [], sc); o.out(); }
-            o.line(PS('endTry')); break;
+            for (const c of s.catches || []) { SRC.cur = s.id + ':catch:' + c.id; o.line(`CATCH ${c.type} ${c.variable}`); o.in(); block(c.body, sc); o.out(); }
+            if (s.hasFinally) { SRC.cur = s.id + ':finally'; o.line('FINALLY'); o.in(); block(s.finally || [], sc); o.out(); }
+            SRC.cur = s.id; o.line(PS('endTry')); break;
         }
       }
+      srcLeave(src, o);
     };
     const T = TP;
     const psig = (f) => f.params.map((p) => `${p.name} : ${shape(p)}${T(p.type)}`).join(', ');
@@ -795,14 +833,16 @@ LANGS.python = {
     const body = new Out();
     const block = (stmts, sc, o) => {
       const start = o.lines.length;
+      const src = srcEnter(o, stmts);
       for (let si = 0; si < stmts.length; si++) {
         const s = stmts[si];
+        SRC.cur = s.id;
         switch (s.kind) {
-          case 'const': o.line(`${vname(s.name.trim(), sc)} = ${E(s.expression, sc)}  # costante`); break;
+          case 'const': o.line(`${vname(s.name.trim(), sc)} = ${E(s.expression, sc)}  # ${C('constant')}`); break;
           case 'declare': {
             if (!s.array && String(s.init || '').trim()) { for (const nm of s.name.split(',').map((x) => x.trim()).filter(Boolean)) o.line(`${nm} = ${asReal(s.init, s.type, E, sc)}`); break; }
             const init = initOf(s, stmts[si + 1]);
-            if (init != null) { o.line(`${s.name.trim()} = ${withExpect(sc, s.type, () => asReal(init, s.type, E, sc))}`); si++; break; }
+            if (init != null) { SRC.cur = s.id + ',' + stmts[si + 1].id; o.line(`${s.name.trim()} = ${withExpect(sc, s.type, () => asReal(init, s.type, E, sc))}`); si++; break; }
             for (const nm of s.name.split(',').map((x) => x.trim()).filter(Boolean)) {
               if (!s.array) { o.line(`${nm} = ${DEFT(s.type)}`); continue; }
               const D = dimsOf(s, E, sc);
@@ -868,11 +908,12 @@ LANGS.python = {
           case 'throw': o.line(`raise ${E(s.expression, sc)}`); break;
           case 'try':
             o.line('try:'); o.in(); block(s.body, sc, o); o.out();
-            for (const c of s.catches || []) { o.line(`except ${excL('python', c.type)} as ${c.variable}:`); o.in(); block(c.body, sc, o); o.out(); }
-            if (s.hasFinally) { o.line('finally:'); o.in(); block(s.finally || [], sc, o); o.out(); }
+            for (const c of s.catches || []) { SRC.cur = s.id + ':catch:' + c.id; o.line(`except ${excL('python', c.type)} as ${c.variable}:`); o.in(); block(c.body, sc, o); o.out(); }
+            if (s.hasFinally) { SRC.cur = s.id + ':finally'; o.line('finally:'); o.in(); block(s.finally || [], sc, o); o.out(); }
             break;
         }
       }
+      srcLeave(src, o);
       if (o.lines.length === start) o.line('pass');
     };
     const pyArr = (D, def) => { let init = `[${def}] * (${D[D.length - 1]})`; for (let k = D.length - 2; k >= 0; k--) init = `[${init} for _ in range(${D[k]})]`; return init; };
@@ -912,7 +953,7 @@ LANGS.python = {
           else if (c.parent) out.line('super().__init__()');
           fieldLines(out);
           block(sp.rest, sc, out);
-          if (out.lines[out.lines.length - 1].trim() === 'pass' && out.lines.length > 1 && /self\.|super\(\)/.test(out.lines[out.lines.length - 2])) out.lines.pop();
+          if (untag(out.lines[out.lines.length - 1]).trim() === 'pass' && out.lines.length > 1 && /self\.|super\(\)/.test(out.lines[out.lines.length - 2])) out.lines.pop();
         };
         const methodBody = (f, out) => {
           if (f.abstract) { out.line(`raise NotImplementedError("${f.name}() è astratto: lo definiscono le sottoclassi")`); return; }
@@ -921,7 +962,7 @@ LANGS.python = {
           block(f.body, msc, out);
           const rl = _CM.rets(f);
           if (rl.length) {
-            if (out.lines.length === before + 1 && out.lines[out.lines.length - 1].trim() === 'pass') out.lines.pop();
+            if (out.lines.length === before + 1 && untag(out.lines[out.lines.length - 1]).trim() === 'pass') out.lines.pop();
             out.line(`return ${rl.map((r) => retName(r.name, msc, 'self')).join(', ')}`);
           }
         };
@@ -976,7 +1017,7 @@ LANGS.python = {
       block(f.body, sc, funcs);
       const rl = _CM.rets(f);
       if (rl.length) {
-        if (funcs.lines.length === before + 1 && funcs.lines[funcs.lines.length - 1].trim() === 'pass') funcs.lines.pop();
+        if (funcs.lines.length === before + 1 && untag(funcs.lines[funcs.lines.length - 1]).trim() === 'pass') funcs.lines.pop();
         funcs.line(`return ${rl.map((r) => r.name).join(', ')}`);
       }
       funcs.out(); funcs.line(''); funcs.line('');
@@ -1049,14 +1090,16 @@ function cFamily(cfg) {
       const blk = (o, stmts, sc) => { o.in(); block(o, stmts, sc); o.out(); };
       const unsupported = (o, what) => o.line(`// [${C('unsupported', { what, lang: cfg.label })}]`);
       function block(o, stmts, sc) {
+        const src = srcEnter(o, stmts);
         for (let si = 0; si < stmts.length; si++) {
           const s = stmts[si];
+          SRC.cur = s.id;
           switch (s.kind) {
             case 'const': o.line(cfg.constDecl(s.name.trim(), s.type, E(s.expression, sc), isLiteralExpr(s.expression))); break;
             case 'declare': {
               if (!s.array && String(s.init || '').trim() && cfg.declareInit) { for (const nm of s.name.split(',').map((x) => x.trim()).filter(Boolean)) o.line(cfg.declareInit(nm, s.type, withExpect(sc, s.type, () => asReal(s.init, s.type, E, sc)))); break; }
               const init = initOf(s, stmts[si + 1]);
-              if (init != null && cfg.declareInit) { o.line(cfg.declareInit(s.name.trim(), s.type, withExpect(sc, s.type, () => asReal(init, s.type, E, sc)))); si++; break; }
+              if (init != null && cfg.declareInit) { SRC.cur = s.id + ',' + stmts[si + 1].id; o.line(cfg.declareInit(s.name.trim(), s.type, withExpect(sc, s.type, () => asReal(init, s.type, E, sc)))); si++; break; }
               for (const nm of s.name.split(',').map((x) => x.trim()).filter(Boolean)) o.line(cfg.declare(nm, s.type, s.array, s.array ? dimsOf(s, E, sc) : null, used, sc));
               break;
             }
@@ -1104,13 +1147,14 @@ function cFamily(cfg) {
             case 'try': {
               if (cfg.tryStmt) { cfg.tryStmt(o, s, sc, blk, used); break; }
               o.line('try {'); blk(o, s.body, sc);
-              for (const c of s.catches || []) { o.line(`} catch (${excL(cfg.lang, c.type)} ${c.variable}) {`); blk(o, c.body, sc); }
-              if (s.hasFinally) { o.line('} finally {'); blk(o, s.finally || [], sc); }
-              o.line('}');
+              for (const c of s.catches || []) { SRC.cur = s.id + ':catch:' + c.id; o.line(`} catch (${excL(cfg.lang, c.type)} ${c.variable}) {`); blk(o, c.body, sc); }
+              if (s.hasFinally) { SRC.cur = s.id + ':finally'; o.line('} finally {'); blk(o, s.finally || [], sc); }
+              SRC.cur = s.id; o.line('}');
               break;
             }
           }
         }
+        srcLeave(src, o);
       }
       const g = { block, E, pr, buildScope: (f) => buildScope(prog, f), used, Out };
       if (_CM.hasClasses(prog) && cfg.programOO) return cfg.programOO(prog, g);
@@ -1207,11 +1251,11 @@ LANGS.cpp = cFamily({
       o.line('try {'); blk(o, s.body, sc);
       for (const c of cats) {
         const T = _CM.excClass(c.type) && _CM.excClass(c.type).name === 'Exception' ? 'exception' : excL('cpp', c.type);
-        o.line(`} catch (${T}& exc_) {`);
+        SRC.cur = s.id + ':catch:' + c.id; o.line(`} catch (${T}& exc_) {`);
         if (new RegExp('\\b' + c.variable + '\\b', 'i').test(JSON.stringify(c.body))) { o.in(); o.line(`${T}* ${c.variable} = &exc_;`); o.out(); }
         blk(o, c.body, sc);
       }
-      o.line('}');
+      SRC.cur = s.id; o.line('}');
     };
     if (!s.hasFinally) { inner(); return; }
     used.add('excptr');
@@ -1219,8 +1263,8 @@ LANGS.cpp = cFamily({
     o.line('exception_ptr pending = nullptr; // ' + C('finallyPending'));
     if (cats.length) { o.line('try {'); o.in(); inner(); o.out(); } else { o.line('try {'); blk(o, s.body, sc); }
     o.line('} catch (...) {'); o.in(); o.line('pending = current_exception();'); o.out(); o.line('}');
-    o.line('// Finally'); o.out(); blk(o, s.finally || [], sc); o.in();
-    o.line('if (pending) rethrow_exception(pending);');
+    SRC.cur = s.id + ':finally'; o.line('// Finally'); o.out(); blk(o, s.finally || [], sc); o.in();
+    SRC.cur = s.id; o.line('if (pending) rethrow_exception(pending);');
     o.out(); o.line('}');
   },
   // generic functions: "text" is a const char*, with string("text") T becomes string
@@ -1909,7 +1953,40 @@ const CodeGen = {
   /* variables and types visible in a function (used by the editor's autocompletion) */
   scopeFor: (prog, f) => buildScope(prog, f),
   generate(prog, lang) {
-    try { setupGen(prog, lang); return LANGS[lang].generate(prog); } catch (e) { return `// Impossibile generare il codice: ${e.message}\n`; }
+    try { setupGen(prog, lang); return LANGS[lang].generate(prog); } catch (e) { return `// ${C('cannotGenerate', { msg: e.message })}\n`; }
+  },
+  /* code and, for each line, the ids of the blocks it comes from (Start and End of the functions: start:id, end:id) */
+  generateMapped(prog, lang) {
+    Object.assign(SRC, { on: true, cur: null, end: null, fn: new Map(prog.functions.map((f) => [f.body, f])),
+      closers: new Set(['end', 'endProcedure', 'endFunction', 'endMethod', 'endConstructor', 'endClass'].map((k) => PS(k))) });
+    let text;
+    try { text = this.generate(prog, lang); } finally { Object.assign(SRC, { on: false, cur: null, end: null, fn: new Map() }); }
+    const map = [];
+    const code = text.split('\n').map((l) => {
+      const ids = new Set();
+      const bare = l.replace(MARK_RE, (m, x) => { x.split(',').forEach((id) => ids.add(id)); return ''; });
+      map.push(ids);
+      return bare;
+    }).join('\n');
+    // a header or a closing written elsewhere (the Main in Java, C#, C++): the line just above the first line
+    // of the function and the closing just below the last one, if less indented
+    const lines = code.split('\n'), ind = (l) => l.length - l.trimStart().length;
+    for (const f of prog.functions) {
+      const own = new Set(); _CM.walk(f.body, (x) => own.add(x.id));
+      const hits = map.map((ids, i) => ([...ids].some((id) => own.has(id.split(':')[0])) ? i : -1)).filter((i) => i >= 0);
+      if (!hits.length) continue;
+      const a = hits[0], z = hits[hits.length - 1];
+      if (!map.some((ids) => ids.has('start:' + f.id))) {
+        // above, skipping lines written for the function itself (initial values of the attributes in a constructor)
+        let i = a - 1; while (i >= 0 && (!lines[i].trim() || (!map[i].size && ind(lines[i]) >= ind(lines[a])))) i--;
+        if (i >= 0 && !map[i].size && ind(lines[i]) < ind(lines[a])) map[i].add('start:' + f.id);
+      }
+      if (!map.some((ids) => ids.has('end:' + f.id))) {
+        let i = z + 1; while (i < lines.length && !lines[i].trim()) i++;
+        if (i < lines.length && !map[i].size && ind(lines[i]) < ind(lines[a]) && /^(\}|end\b)/i.test(lines[i].trim())) map[i].add('end:' + f.id);
+      }
+    }
+    return { code, map };
   },
 };
 if (typeof module !== 'undefined') module.exports = CodeGen;

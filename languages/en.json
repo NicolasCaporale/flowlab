@@ -23,6 +23,8 @@
   "throw": "Shift+T"
  },
  "code": {
+    "constant": "constant",
+    "cannotGenerate": "Cannot generate the code: {msg}",
   "pseudo.label": "Pseudocode",
   "pseudo.type.Integer": "integer",
   "pseudo.type.Real": "real",

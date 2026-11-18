@@ -300,6 +300,13 @@ table.vars tr.changed td { background: var(--exec-soft); }
 #codeOut { margin: 0; overflow: auto; padding: 12px 0; font: 13px/1.6 var(--font-mono); background: var(--paper); min-height: 0; counter-reset: ln; tab-size: 4; }
 #codeOut .ln { counter-increment: ln; display: inline-block; width: 3.4em; padding-right: 1em; text-align: right; color: var(--faint); user-select: none; }
 #codeOut .ln::before { content: counter(ln); }
+/* link with the flowchart: one row per line; the lines of the selected block (or of the clicked line) and of the running block */
+#codeOut .cl { display: block; min-height: 1.6em; padding-right: 12px; min-width: 100%; width: max-content; box-sizing: border-box; }
+#codeOut .cl.src { cursor: pointer; }
+#codeOut .cl.src:hover { background: var(--line-soft); }
+#codeOut .cl.linked { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--sel); }
+#codeOut .cl.exec { background: var(--exec-soft); box-shadow: inset 3px 0 0 var(--exec); }
+.chart .shape.linked > path:not(.inner), .chart .shape.linked > rect { stroke: var(--sel); stroke-width: 3; }
 .tk { color: var(--s-call); font-weight: 600; }
 .ts { color: var(--s-out); }
 .tn { color: var(--s-loop); }
