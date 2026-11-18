@@ -1202,6 +1202,10 @@
   "ui.cannotLoadLanguage": "Impossibile caricare la lingua {code}: {message}",
   "ui.languagesLoading": "Cerco altre lingue su GitHub…",
   "ui.languagesHint": "Le lingue sono file JSON nella cartella languages del progetto su GitHub: per aggiungerne una basta un nuovo file.",
-  "ui.languagesOffline": "GitHub non risponde: ci sono solo le lingue incluse in FlowLab."
+  "ui.languagesOffline": "GitHub non risponde: ci sono solo le lingue incluse in FlowLab.",
+  "ui.codeTextSize": "Grandezza del testo",
+  "ui.smallerText": "Testo più piccolo (anche Ctrl + rotella sul codice)",
+  "ui.biggerText": "Testo più grande (anche Ctrl + rotella sul codice)",
+  "ui.backToTheNormalSize": "Grandezza del testo: clic per tornare a 13"
  }
 }

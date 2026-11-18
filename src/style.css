@@ -297,9 +297,12 @@ table.vars tr.changed td { background: var(--exec-soft); }
 .ptag { font: 700 9.5px var(--font-ui); letter-spacing: .05em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; margin-left: 6px; vertical-align: 1px; }
 
 /* Code */
-#codeOut { margin: 0; overflow: auto; padding: 12px 0; font: 13px/1.6 var(--font-mono); background: var(--paper); min-height: 0; counter-reset: ln; tab-size: 4; }
+#codeOut { margin: 0; overflow: auto; padding: 12px 0; font: var(--code-size, 13px)/1.6 var(--font-mono); background: var(--paper); min-height: 0; counter-reset: ln; tab-size: 4; }
 #codeOut .ln { counter-increment: ln; display: inline-block; width: 3.4em; padding-right: 1em; text-align: right; color: var(--faint); user-select: none; }
 #codeOut .ln::before { content: counter(ln); }
+.codesize { margin-right: 6px; border: 1px solid var(--line); border-radius: 8px; padding: 1px; }
+.codesize button { min-width: 30px; }
+.codesize #codeSizeVal { min-width: 26px; color: var(--muted); }
 /* link with the flowchart: one row per line; the lines of the selected block (or of the clicked line) and of the running block */
 #codeOut .cl { display: block; min-height: 1.6em; padding-right: 12px; min-width: 100%; width: max-content; box-sizing: border-box; }
 #codeOut .cl.src { cursor: pointer; }

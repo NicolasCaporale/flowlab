@@ -3852,6 +3852,19 @@
     for (const [k, L] of Object.entries(CodeGen.LANGS)) ls.append(h('option', { value: k, selected: k === st.lang }, L.label));
     ls.addEventListener('change', () => { st.lang = ls.value; store.set('lang', st.lang); renderCode(); });
     $('#codeOut').addEventListener('click', onCodeClick);
+    // size of the code text: buttons A− A+ (the number brings it back to 13), Ctrl + wheel on the code; remembered
+    const setCodeSize = (px) => {
+      const v = Math.max(9, Math.min(28, Math.round(px)));
+      document.documentElement.style.setProperty('--code-size', v + 'px');
+      $('#codeSizeVal').textContent = v;
+      store.set('codeSize', v);
+    };
+    const codeSize = () => +store.get('codeSize', 13) || 13;
+    setCodeSize(codeSize());
+    $('#codeSmaller').addEventListener('click', () => setCodeSize(codeSize() - 1));
+    $('#codeBigger').addEventListener('click', () => setCodeSize(codeSize() + 1));
+    $('#codeSizeVal').addEventListener('click', () => setCodeSize(13));
+    $('#codeOut').addEventListener('wheel', (e) => { if (!e.ctrlKey) return; e.preventDefault(); setCodeSize(codeSize() + (e.deltaY < 0 ? 1 : -1)); }, { passive: false });
     $('#codeCopy').addEventListener('click', async () => {
       try { await navigator.clipboard.writeText($('#codeOut').dataset.raw || ''); toast(L('ui.codeCopied'), 'ok'); }
       catch (e) { const r = document.createRange(); r.selectNodeContents($('#codeOut')); const s = getSelection(); s.removeAllRanges(); s.addRange(r); toast(L('ui.pressCtrlCToCopyThe')); }
