@@ -568,7 +568,9 @@
      bpMarks: block id → { cond } (empty condition: it always stops) */
   const bpMarks = new Map();
   let runTo = null;
+  // only while the program runs (or is paused)
   function debugItems(id) {
+    if (!isRunning()) return [];
     const m = bpMarks.get(id);
     const B = (text, fn, kbd, cls) => h('button', { type: 'button', class: cls || null, onclick: () => { closePop(); fn(); } }, h('span', null, text), kbd ? h('kbd', null, kbd) : null);
     return [

@@ -129,7 +129,7 @@
  },
  "strings": {
   "run.aBreakpointConditionCannotRead": "la condizione non può chiedere un input",
-  "ui.runToHereAndConditionalBreakpoints": "su un blocco: «Esegui fino a qui», punto di interruzione, punto di interruzione con condizione",
+  "ui.runToHereAndConditionalBreakpoints": "su un blocco, mentre il programma è in esecuzione o in pausa: «Esegui fino a qui», punto di interruzione, punto di interruzione con condizione",
   "ui.rightClick": "Tasto destro",
   "ui.breakpointOnTheSelectedBlock": "punto di interruzione sul blocco selezionato (un pallino rosso, solo per questa sessione); di nuovo per toglierlo",
   "ui.breakpointConditionError": "Condizione del punto di interruzione «{cond}»: {msg}",

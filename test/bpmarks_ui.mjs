@@ -29,6 +29,11 @@ ok(`Continua: si ferma di nuovo (righe ${n1} → ${(await out()).length})`, (awa
 await page.locator(outBlock).last().click(); await page.keyboard.press('F9'); await wait(80);
 ok('F9 di nuovo: pallino tolto', (await page.locator('#chart .bpmark').count()) === 0);
 await page.click('#stopBtn'); await wait(200);
+await page.locator(outBlock).last().click({ button: 'right' }); await wait(120);
+ok('programma fermo: niente voci di debug nel menu', (await page.locator('.ctxmenu button', { hasText: 'Esegui fino a qui' }).count()) === 0);
+await page.keyboard.press('Escape'); await wait(80);
+// started step by step (paused at the first block): the debug items are there
+await page.click('#stepBtn'); await wait(300);
 await menu(outBlock, 'con condizione');
 await page.locator('.modal input, .modal textarea').first().fill('i = 7'); await page.locator('.modal .btn.primary').click(); await wait(150);
 ok('pallino con ?: ' + await page.locator('#chart .bpmark text').count(), (await page.locator('#chart .bpmark text').count()) === 1);
@@ -37,19 +42,21 @@ const vars = await page.evaluate(() => { const f = FlowLab.state && document.que
 ok('condizione i = 7: ' + vars + ' · ' + await status(), /7/.test(vars) && /i = 7/.test(await status()));
 await page.click('#stopBtn'); await wait(200);
 // wrong condition: it stops and says why
+await page.click('#stepBtn'); await wait(300);
 await menu(outBlock, 'con condizione');
 await page.locator('.modal input, .modal textarea').first().fill('nonesiste > 1'); await page.locator('.modal .btn.primary').click(); await wait(150);
 await page.click('#runBtn'); await wait(300); await page.evaluate(() => FlowLab.submitInput('3')).catch(() => {}); await wait(500);
 ok('condizione con errore: ' + (await out()).slice(-2).join(' / '), (await out()).slice(-2).join(' ').includes('nonesiste') && (await page.evaluate(() => !!document.querySelector('#chart .shape.exec'))));
 await page.click('#stopBtn'); await wait(200);
 // remove from the dialog
+await page.click('#stepBtn'); await wait(300);
 await menu(outBlock, 'con condizione');
 await page.locator('.modal footer button', { hasText: 'Togli' }).click(); await wait(150);
 ok('tolto dal dialogo', (await page.locator('#chart .bpmark').count()) === 0);
-// 3. «Run to here» from stopped: starts and stops on the block
+// 3. «Run to here» while paused at the start: runs and stops on the block
 await menu(outBlock, 'Esegui fino a qui');
 await wait(300); await page.evaluate(() => FlowLab.submitInput('3')).catch(() => {}); await wait(1500);
-ok('Esegui fino a qui (da fermo): ' + await status(), (await page.evaluate(() => document.querySelector('#chart .shape.exec')?.dataset.id)) === lastOut && /scelto/.test(await status()));
+ok('Esegui fino a qui: ' + await status(), (await page.evaluate(() => document.querySelector('#chart .shape.exec')?.dataset.id)) === lastOut && /scelto/.test(await status()));
 // inside a loop, paused: run to the block after the loop
 const after = await page.evaluate(() => { const g = [...document.querySelectorAll('#chart .shape')]; return g[g.length - 2].dataset.id; });
 await page.locator(`#chart .shape[data-id="${after}"]`).click({ button: 'right' }); await wait(100);

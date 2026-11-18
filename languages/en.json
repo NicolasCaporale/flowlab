@@ -122,7 +122,7 @@
  },
  "strings": {
   "run.aBreakpointConditionCannotRead": "the condition cannot ask for input",
-  "ui.runToHereAndConditionalBreakpoints": "on a block: «Run to here», breakpoint, breakpoint with condition",
+  "ui.runToHereAndConditionalBreakpoints": "on a block, while the program runs or is paused: «Run to here», breakpoint, breakpoint with condition",
   "ui.rightClick": "Right click",
   "ui.breakpointOnTheSelectedBlock": "breakpoint on the selected block (a red dot, only for this session); again to remove it",
   "ui.breakpointConditionError": "Condition of the breakpoint «{cond}»: {msg}",
