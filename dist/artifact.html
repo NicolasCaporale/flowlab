@@ -175,6 +175,8 @@ body.side-hidden #sideToggle { left: auto; right: 3px; transform: translateY(-50
 .c-brk > path, .c-brk > rect { fill: var(--f-brk); stroke: var(--s-brk); }
 .c-exc > path, .c-exc > rect { fill: var(--f-exc); stroke: var(--s-exc); }
 .c-exc > path.inner { fill: none; }
+/* frame of the Finally: its header and its blocks */
+.chart .fframe { pointer-events: none; fill: var(--f-exc); fill-opacity: 0.35; stroke: var(--s-exc); stroke-width: 1.4; stroke-dasharray: 6 4; }
 .chart path.flow.exc { stroke: var(--s-exc); stroke-dasharray: 5 4; }
 .c-file > path, .c-file > rect { fill: var(--f-file); stroke: var(--s-file); }
 .c-inc > path, .c-inc > rect { fill: var(--f-inc); stroke: var(--s-inc); }
@@ -5318,7 +5320,7 @@ const CAT_OF = {
 
 class Renderer {
   constructor() { this.reset(); }
-  reset() { this.ins = []; this.sh = []; this.ln = []; this.hit = []; this.hitTop = []; this.lbl = []; this.edges = []; }
+  reset() { this.ins = []; this.sh = []; this.ln = []; this.bg = []; this.hit = []; this.hitTop = []; this.lbl = []; this.edges = []; }
 
   /* ---- graph of the paths (for the cursor that follows the arrows) ----
      Each drawing receives "head" = {node, pts, tag}: the pending path that arrives
@@ -5559,9 +5561,12 @@ class Renderer {
     for (const k of cats) { k.dx = x + Math.max(k.w / 2, k.S.L); x = k.dx + Math.max(k.w / 2, k.S.R) + GX; }
     const ctop = TH + DROP; // headers of the Catches
     const jrel = TH + Math.max(B.h, ...cats.map((k) => DROP + TH + k.S.h)) + 10;
-    const h = jrel + (F ? 14 + TH + F.h : 0);
-    const lw = Math.max(tw / 2, B.L, F ? Math.max(fw / 2, F.L) : 0) + 4;
-    const R = Math.max(cats.length ? x - GX : Math.max(tw / 2, B.R), F ? Math.max(fw / 2, F.R) : 0) + 4;
+    // the Finally is closed in a frame: header and its blocks, so it is clear where it ends
+    const FGAP = 22, FPX = 10, FPT = 7, FPB = 8;
+    const fl = F ? Math.max(fw / 2, F.L) + FPX : 0, fr = F ? Math.max(fw / 2, F.R) + FPX : 0;
+    const h = jrel + (F ? FGAP + TH + F.h + FPB : 0);
+    const lw = Math.max(tw / 2, B.L, fl) + 4;
+    const R = Math.max(cats.length ? x - GX : Math.max(tw / 2, B.R), fr) + 4;
     return {
       L: lw, R, h,
       draw: (cx, y, head) => {
@@ -5587,12 +5592,14 @@ class Renderer {
           this.ln.push(`<circle class="joint" cx="${cx}" cy="${j}" r="3.5"/>`);
         }
         if (!F) return { node: J, pts: [[cx, j]] };
-        const fy = j + 14, FID = s.id + ':finally';
+        const fy = j + FGAP, FID = s.id + ':finally', fe = fy + TH + F.h;
+        this.bg.push(`<rect class="fframe" x="${cx - fl}" y="${fy - FPT}" width="${fl + fr}" height="${TH + F.h + FPT + FPB / 2}" rx="10"/>`);
         this.line([[cx, j], [cx, fy]], true);
         this.edge(J, FID, [[cx, j], [cx, fy]]);
         this.shape(FID, 'finally', cat, 'exchead', cx, fy, fw, TH, 'Finally', L('chart.finallyAlwaysRunsWhetherThereWas'));
         const tF = F.draw(cx, fy + TH, { node: FID, pts: [[cx, fy + TH]] });
-        return { node: tF.node, pts: tF.pts, tag: tF.tag };
+        this.line([[cx, fe], [cx, fe + FPB]]);
+        return { node: tF.node, pts: cat2(tF.pts, [[cx, fe], [cx, fe + FPB]]), tag: tF.tag };
       },
     };
   }
@@ -5664,7 +5671,7 @@ class Renderer {
     this.shape('end:' + f.id, '', 'term', 'term', cx, y0 + R_.H + B.h, ew, R_.H, endText, rsl.length ? L('chart.returns', { text: o.owner ? L('run.theMethod') : L('run.theFunction'), list: rsl.map((x) => `${x.name}: ${ExprLib.typeName(x.type)}`).join(', ') }) : (f.ctor ? L('chart.endOfTheConstructorTheObject') : L('chart.end2', { text: o.owner ? L('chart.ofTheMethod') : L('chart.ofTheFunction') })));
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" class="chart" viewBox="0 0 ${W} ${Hh}" width="${W}" height="${Hh}" data-w="${W}" data-h="${Hh}">`
       + '<defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" class="ahead"/></marker></defs>'
-      + `<g class="lines">${this.ln.join('')}</g><g class="hits">${this.hit.join('')}</g><g class="trail"></g><g class="shapes">${this.sh.join('')}</g><g class="hits hits-top">${this.hitTop.join('')}</g><g class="labels">${this.lbl.join('')}</g></svg>`;
+      + `<g class="frames">${this.bg.join('')}</g><g class="lines">${this.ln.join('')}</g><g class="hits">${this.hit.join('')}</g><g class="trail"></g><g class="shapes">${this.sh.join('')}</g><g class="hits hits-top">${this.hitTop.join('')}</g><g class="labels">${this.lbl.join('')}</g></svg>`;
     return { svg, W, H: Hh, ins: this.ins, edges: this.edges };
   }
 }
@@ -9991,7 +9998,7 @@ const ArrayView = (() => {
     const v = (n) => cs.getPropertyValue(n).trim();
     let css = `text{font:${RenderLib.R_.font};fill:${v('--sh-text')};text-anchor:middle}.cline-t{text-anchor:start}.comment text{font-weight:400;font-style:italic}.badge{font-size:10px}.c-in .badge{fill:${v('--s-in')}}.c-out .badge{fill:${v('--s-out')}}.c-decl .badge{fill:${v('--s-decl')}}.blabel{font-size:11px;font-weight:600;fill:${v('--muted')}}.flow{fill:none;stroke:${v('--flow')};stroke-width:1.6}.ahead{fill:${v('--flow')}}.joint{fill:${v('--flow')}}.shape>path,.shape>rect{stroke-width:1.6}.inner{fill:none!important}.note{stroke-dasharray:4 3}svg{background:${v('--paper')}}`;
     for (const c of ['term', 'decl', 'assign', 'in', 'out', 'cond', 'loop', 'call', 'comment', 'brk', 'file', 'inc', 'exc']) css += `.c-${c}>path,.c-${c}>rect{fill:${v('--f-' + c)};stroke:${v('--s-' + c)}}`;
-    css += `.flow.exc{stroke:${v('--s-exc')};stroke-dasharray:5 4}`;
+    css += `.flow.exc{stroke:${v('--s-exc')};stroke-dasharray:5 4}.fframe{fill:${v('--f-exc')};fill-opacity:.35;stroke:${v('--s-exc')};stroke-width:1.4;stroke-dasharray:6 4}`;
     // class diagram
     css += `.exc .ubg{stroke:${v('--s-exc')}}.exc .uheadbg{fill:${v('--f-exc')}}.exc .usep{stroke:${v('--s-exc')}}.builtin .ubg{stroke-dasharray:6 3}.builtin .uheadbg{fill-opacity:.55}`;
     css += `.ubg{fill:${v('--paper')};stroke:${v('--s-call')};stroke-width:1.6}.uheadbg{fill:${v('--f-call')}}.main .uheadbg{fill:${v('--f-term')}}.main .ubg{stroke:${v('--s-term')}}.usep{stroke:${v('--s-call')};stroke-width:1.2}.uname{font:700 14px "Atkinson Hyperlegible",sans-serif;text-anchor:middle}.ustereo{font:italic 11.5px "Atkinson Hyperlegible",sans-serif;fill:${v('--muted')};text-anchor:middle}.umem{font:400 12.5px "JetBrains Mono",monospace;text-anchor:start}.urel{fill:none;stroke:${v('--flow')};stroke-width:1.6}.minh{fill:${v('--paper')};stroke:${v('--flow')};stroke-width:1.6}.mopen{fill:none;stroke:${v('--flow')};stroke-width:1.6}.ulab{font:600 11.5px "JetBrains Mono",monospace;fill:${v('--muted')};text-anchor:start}`;

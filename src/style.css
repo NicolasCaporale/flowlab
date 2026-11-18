@@ -171,6 +171,8 @@ body.side-hidden #sideToggle { left: auto; right: 3px; transform: translateY(-50
 .c-brk > path, .c-brk > rect { fill: var(--f-brk); stroke: var(--s-brk); }
 .c-exc > path, .c-exc > rect { fill: var(--f-exc); stroke: var(--s-exc); }
 .c-exc > path.inner { fill: none; }
+/* frame of the Finally: its header and its blocks */
+.chart .fframe { pointer-events: none; fill: var(--f-exc); fill-opacity: 0.35; stroke: var(--s-exc); stroke-width: 1.4; stroke-dasharray: 6 4; }
 .chart path.flow.exc { stroke: var(--s-exc); stroke-dasharray: 5 4; }
 .c-file > path, .c-file > rect { fill: var(--f-file); stroke: var(--s-file); }
 .c-inc > path, .c-inc > rect { fill: var(--f-inc); stroke: var(--s-inc); }

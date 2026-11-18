@@ -149,7 +149,7 @@ const CAT_OF = {
 
 class Renderer {
   constructor() { this.reset(); }
-  reset() { this.ins = []; this.sh = []; this.ln = []; this.hit = []; this.hitTop = []; this.lbl = []; this.edges = []; }
+  reset() { this.ins = []; this.sh = []; this.ln = []; this.bg = []; this.hit = []; this.hitTop = []; this.lbl = []; this.edges = []; }
 
   /* ---- graph of the paths (for the cursor that follows the arrows) ----
      Each drawing receives "head" = {node, pts, tag}: the pending path that arrives
@@ -390,9 +390,12 @@ class Renderer {
     for (const k of cats) { k.dx = x + Math.max(k.w / 2, k.S.L); x = k.dx + Math.max(k.w / 2, k.S.R) + GX; }
     const ctop = TH + DROP; // headers of the Catches
     const jrel = TH + Math.max(B.h, ...cats.map((k) => DROP + TH + k.S.h)) + 10;
-    const h = jrel + (F ? 14 + TH + F.h : 0);
-    const lw = Math.max(tw / 2, B.L, F ? Math.max(fw / 2, F.L) : 0) + 4;
-    const R = Math.max(cats.length ? x - GX : Math.max(tw / 2, B.R), F ? Math.max(fw / 2, F.R) : 0) + 4;
+    // the Finally is closed in a frame: header and its blocks, so it is clear where it ends
+    const FGAP = 22, FPX = 10, FPT = 7, FPB = 8;
+    const fl = F ? Math.max(fw / 2, F.L) + FPX : 0, fr = F ? Math.max(fw / 2, F.R) + FPX : 0;
+    const h = jrel + (F ? FGAP + TH + F.h + FPB : 0);
+    const lw = Math.max(tw / 2, B.L, fl) + 4;
+    const R = Math.max(cats.length ? x - GX : Math.max(tw / 2, B.R), fr) + 4;
     return {
       L: lw, R, h,
       draw: (cx, y, head) => {
@@ -418,12 +421,14 @@ class Renderer {
           this.ln.push(`<circle class="joint" cx="${cx}" cy="${j}" r="3.5"/>`);
         }
         if (!F) return { node: J, pts: [[cx, j]] };
-        const fy = j + 14, FID = s.id + ':finally';
+        const fy = j + FGAP, FID = s.id + ':finally', fe = fy + TH + F.h;
+        this.bg.push(`<rect class="fframe" x="${cx - fl}" y="${fy - FPT}" width="${fl + fr}" height="${TH + F.h + FPT + FPB / 2}" rx="10"/>`);
         this.line([[cx, j], [cx, fy]], true);
         this.edge(J, FID, [[cx, j], [cx, fy]]);
         this.shape(FID, 'finally', cat, 'exchead', cx, fy, fw, TH, 'Finally', L('chart.finallyAlwaysRunsWhetherThereWas'));
         const tF = F.draw(cx, fy + TH, { node: FID, pts: [[cx, fy + TH]] });
-        return { node: tF.node, pts: tF.pts, tag: tF.tag };
+        this.line([[cx, fe], [cx, fe + FPB]]);
+        return { node: tF.node, pts: cat2(tF.pts, [[cx, fe], [cx, fe + FPB]]), tag: tF.tag };
       },
     };
   }
@@ -495,7 +500,7 @@ class Renderer {
     this.shape('end:' + f.id, '', 'term', 'term', cx, y0 + R_.H + B.h, ew, R_.H, endText, rsl.length ? L('chart.returns', { text: o.owner ? L('run.theMethod') : L('run.theFunction'), list: rsl.map((x) => `${x.name}: ${ExprLib.typeName(x.type)}`).join(', ') }) : (f.ctor ? L('chart.endOfTheConstructorTheObject') : L('chart.end2', { text: o.owner ? L('chart.ofTheMethod') : L('chart.ofTheFunction') })));
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" class="chart" viewBox="0 0 ${W} ${Hh}" width="${W}" height="${Hh}" data-w="${W}" data-h="${Hh}">`
       + '<defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" class="ahead"/></marker></defs>'
-      + `<g class="lines">${this.ln.join('')}</g><g class="hits">${this.hit.join('')}</g><g class="trail"></g><g class="shapes">${this.sh.join('')}</g><g class="hits hits-top">${this.hitTop.join('')}</g><g class="labels">${this.lbl.join('')}</g></svg>`;
+      + `<g class="frames">${this.bg.join('')}</g><g class="lines">${this.ln.join('')}</g><g class="hits">${this.hit.join('')}</g><g class="trail"></g><g class="shapes">${this.sh.join('')}</g><g class="hits hits-top">${this.hitTop.join('')}</g><g class="labels">${this.lbl.join('')}</g></svg>`;
     return { svg, W, H: Hh, ins: this.ins, edges: this.edges };
   }
 }
