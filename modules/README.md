@@ -7,9 +7,9 @@ Anyone can write a module, even a student: it is enough to save a program with t
 
 | Topic | Module | Classes or functions | Description |
 |---|---|---|---|
-| Data structures | [ArrayList](data_structures/ArrayList.fprg) | `ArrayList<T>` | List of items of type T that grows by itself, like java.util.ArrayList. Internally it uses an array: when it is full it creates one one and a half times bigger and copies the items. |
-| Data structures | [Stack](data_structures/Stack.fprg) | `Stack<T>` | Stack (LIFO) of items of type T, like java.util.Stack: the last item inserted with push is the first removed with pop. It uses an array that grows when it is full. |
-| Data structures | [Queue](data_structures/Queue.fprg) | `Queue<T>`, `Node<T>` | Queue (FIFO) of items of type T, like java.util.Queue: the items leave in the order they entered. It is a linked list of Node<T> nodes. |
+| Data structures | [ArrayList](data_structures/ArrayList.fprg) | `ArrayList<T>` | List of items of type T that grows by itself, like java.util.ArrayList. Internally it uses an array: when it is full it creates one one and a half times bigger and copies the items. A position outside the list throws IndexOutOfRange, a negative capacity InvalidArgument, as in Java. |
+| Data structures | [Stack](data_structures/Stack.fprg) | `Stack<T>` | Stack (LIFO) of items of type T, like java.util.Stack: the last item inserted with push is the first removed with pop. It uses an array that grows when it is full. pop and peek on an empty stack throw EmptyStack, as in Java. |
+| Data structures | [Queue](data_structures/Queue.fprg) | `Queue<T>`, `Node<T>` | Queue (FIFO) of items of type T, like java.util.Queue: the items leave in the order they entered. It is a linked list of Node<T> nodes. remove and peek on an empty queue throw NoSuchElement, as remove() and element() in Java. |
 | Sorting algorithms | [Sorting](sorting_algorithms/Sorting.fprg) | `bubbleSort()`, `selectionSort()`, `insertionSort()` | Functions to sort an array of integers in increasing order: bubbleSort(v, n), selectionSort(v, n) and insertionSort(v, n), where n is the number of items to sort. |
 | Searching algorithms | [Search](searching_algorithms/Search.fprg) | `linearSearch()`, `binarySearch()` | Functions to search for a value x in an array of integers: linearSearch(v, n, x) for any array and binarySearch(v, n, x) for a sorted array. They return the position of the value or -1 if it is not there. |
 

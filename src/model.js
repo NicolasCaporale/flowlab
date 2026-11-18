@@ -40,9 +40,13 @@ const EXCEPTIONS = [
   ['Exception', '', L('model.anyException')],
   ['DivisionByZero', 'Exception', L('model.divisionOrModByZero')],
   ['IndexOutOfRange', 'Exception', L('model.indexOutsideTheArray')],
-  ['InvalidConversion', 'Exception', L('model.textThatIsNotANumber')],
+  // as in Java, a conversion error is a wrong argument (NumberFormatException is an IllegalArgumentException)
+  ['InvalidArgument', 'Exception', L('model.invalidArgument')],
+  ['InvalidConversion', 'InvalidArgument', L('model.textThatIsNotANumber')],
   ['NullReference', 'Exception', L('model.useOfAnObjectThatIs')],
   ['FileError', 'Exception', L('model.fileError')],
+  ['EmptyStack', 'Exception', L('model.emptyStack')],
+  ['NoSuchElement', 'Exception', L('model.noSuchElement')],
 ];
 const EXC_CLASSES = EXCEPTIONS.map(([name, parent, doc]) => ({
   id: 'exc:' + name, name, parent, doc, abstract: false, tparams: [], module: null, builtin: true, x: 0, y: 0,

@@ -118,7 +118,9 @@
   "vis.public": "public",
   "vis.private": "private",
   "vis.protected": "protected",
-  "unsupported": "{what}: not available in {lang}"
+  "unsupported": "{what}: not available in {lang}",
+  "emptyStackClass": "EmptyStack: the EmptyStackException of Java, with the message",
+  "checksComment": "checks of the collections, as in the modules (and in Java)"
  },
  "strings": {
   "run.aBreakpointConditionCannotRead": "the condition cannot ask for input",
@@ -1064,7 +1066,7 @@
   "ui.elementIOfAnArrayFrom": "Element i of an array (from 0)",
   "ui.functionThatReturnsAnArrayV": "Function that returns an array: v becomes the returned array («array» shape in the return value)",
   "ui.exceptionsIfABlockOfThe": "Exceptions: if a block of the Try (or a function it calls) throws an exception, the first Catch of the right type runs; the Finally always runs",
-  "ui.throwsAnExceptionPredefinedTypesEccezione": "Throws an exception. Predefined types: Exception, DivisionByZero, IndexOutOfRange, InvalidConversion, NullReference, FileError; in the Objects view also the classes inheriting from Exception",
+  "ui.throwsAnExceptionPredefinedTypesEccezione": "Throws an exception. Predefined types: Exception, DivisionByZero, IndexOutOfRange, InvalidArgument, InvalidConversion, NullReference, FileError, EmptyStack, NoSuchElement; in the Objects view also the classes inheriting from Exception",
   "ui.inTheCatchTheMessageOf": "In the Catch: the message of the caught exception e",
   "ui.genericTypeTAnyTypeInferred": "Generic Type T: any type, inferred from the arguments of the call. Choose «New Generic Type» in the type menu of a parameter",
   "ui.createsAnObjectRunsTheConstructor": "Creates an object: runs the constructor with those parameters",
@@ -1199,6 +1201,9 @@
   "ui.codeTextSize": "Text size",
   "ui.smallerText": "Smaller text (also Ctrl + wheel on the code)",
   "ui.biggerText": "Bigger text (also Ctrl + wheel on the code)",
-  "ui.backToTheNormalSize": "Text size: click to go back to 13"
+  "ui.backToTheNormalSize": "Text size: click to go back to 13",
+  "model.invalidArgument": "a value not allowed for a parameter (e.g. a negative capacity); InvalidConversion is one of them",
+  "model.emptyStack": "pop or peek on an empty stack",
+  "model.noSuchElement": "the element asked for does not exist (e.g. remove or peek on an empty queue)"
  }
 }

@@ -125,7 +125,9 @@
   "vis.public": "pubblico",
   "vis.private": "privato",
   "vis.protected": "protetto",
-  "unsupported": "{what}: non disponibile in {lang}"
+  "unsupported": "{what}: non disponibile in {lang}",
+  "emptyStackClass": "EmptyStack: la EmptyStackException di Java, con il messaggio",
+  "checksComment": "controlli delle collezioni, come nei moduli (e in Java)"
  },
  "strings": {
   "run.aBreakpointConditionCannotRead": "la condizione non può chiedere un input",
@@ -1071,7 +1073,7 @@
   "ui.elementIOfAnArrayFrom": "Elemento i di un array (da 0)",
   "ui.functionThatReturnsAnArrayV": "Funzione che restituisce un array: v diventa l'array restituito (forma «array» nel valore restituito)",
   "ui.exceptionsIfABlockOfThe": "Eccezioni: se un blocco del Try (o una funzione che chiama) lancia un'eccezione, si esegue il primo Catch del tipo giusto; il Finally si esegue sempre",
-  "ui.throwsAnExceptionPredefinedTypesEccezione": "Lancia un'eccezione. Tipi predefiniti: Exception, DivisionByZero, IndexOutOfRange, InvalidConversion, NullReference, FileError; nella vista Oggetti anche le classi che ereditano da Exception",
+  "ui.throwsAnExceptionPredefinedTypesEccezione": "Lancia un'eccezione. Tipi predefiniti: Exception, DivisionByZero, IndexOutOfRange, InvalidArgument, InvalidConversion, NullReference, FileError, EmptyStack, NoSuchElement; nella vista Oggetti anche le classi che ereditano da Exception",
   "ui.inTheCatchTheMessageOf": "Nel Catch: il messaggio dell'eccezione catturata e",
   "ui.genericTypeTAnyTypeInferred": "Tipo Generico T: un tipo qualsiasi, ricavato dagli argomenti della chiamata. Si sceglie «Nuovo Tipo Generico» nel menu del tipo di un parametro",
   "ui.createsAnObjectRunsTheConstructor": "Crea un oggetto: esegue il costruttore con quei parametri",
@@ -1206,6 +1208,9 @@
   "ui.codeTextSize": "Grandezza del testo",
   "ui.smallerText": "Testo più piccolo (anche Ctrl + rotella sul codice)",
   "ui.biggerText": "Testo più grande (anche Ctrl + rotella sul codice)",
-  "ui.backToTheNormalSize": "Grandezza del testo: clic per tornare a 13"
+  "ui.backToTheNormalSize": "Grandezza del testo: clic per tornare a 13",
+  "model.invalidArgument": "un valore non ammesso per un parametro (es. una capacità negativa); InvalidConversion è uno di questi",
+  "model.emptyStack": "pop o peek su una pila vuota",
+  "model.noSuchElement": "l'elemento richiesto non esiste (es. remove o peek su una coda vuota)"
  }
 }

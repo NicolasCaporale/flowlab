@@ -3,7 +3,7 @@
     <attributes>
         <attribute name="name" value="Stack"/>
         <attribute name="authors" value="FlowLab"/>
-        <attribute name="about" value="Stack (LIFO) of items of type T, like java.util.Stack: the last item inserted with push is the first removed with pop. It uses an array that grows when it is full."/>
+        <attribute name="about" value="Stack (LIFO) of items of type T, like java.util.Stack: the last item inserted with push is the first removed with pop. It uses an array that grows when it is full. pop and peek on an empty stack throw EmptyStack, as in Java."/>
         <attribute name="saved" value="2026-11-17 08:00:00 AM"/>
         <attribute name="created" value="Zmxvd2xhYjttb2R1bGVzOzIwMjYtMTEtMTcgMDg6MDA6MDAgQU07MQ=="/>
         <attribute name="edited" value="Zmxvd2xhYjttb2R1bGVzOzIwMjYtMTEtMTcgMDg6MDA6MDAgQU07MQ=="/>
@@ -28,6 +28,15 @@
             <while expression="not tower.isEmpty()">
                 <output expression="tower.pop()" newline="True"/>
             </while>
+            <comment text="pop on the empty stack: EmptyStack, as in Java"/>
+            <try>
+                <body>
+                    <output expression="tower.pop()" newline="True"/>
+                </body>
+                <catch type="EmptyStack" variable="e">
+                    <output expression="&quot;The stack is empty: nothing to pop&quot;" newline="True"/>
+                </catch>
+            </try>
         </body>
     </function>
     <function name="Stack" type="None" variable="" flowlab-class="Stack" flowlab-visibility="public" flowlab-static="False" flowlab-ctor="True">
@@ -54,6 +63,12 @@
     <function name="pop" type="T" variable="top" flowlab-class="Stack" flowlab-visibility="public" flowlab-static="False">
         <parameters/>
         <body>
+            <if expression="count = 0">
+                <then>
+                    <throw expression="new EmptyStack(&quot;The stack is empty&quot;)"/>
+                </then>
+                <else/>
+            </if>
             <declare name="top" type="T" array="False" size=""/>
             <assign variable="count" expression="count - 1"/>
             <assign variable="top" expression="items[count]"/>
@@ -62,6 +77,12 @@
     <function name="peek" type="T" variable="top" flowlab-class="Stack" flowlab-visibility="public" flowlab-static="False">
         <parameters/>
         <body>
+            <if expression="count = 0">
+                <then>
+                    <throw expression="new EmptyStack(&quot;The stack is empty&quot;)"/>
+                </then>
+                <else/>
+            </if>
             <declare name="top" type="T" array="False" size=""/>
             <assign variable="top" expression="items[count - 1]"/>
         </body>

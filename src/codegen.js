@@ -30,51 +30,135 @@ const deref = (a) => (/^[\w.>-]+$/.test(a) ? '*' + a : `*(${a})`);
 /* constructor with an integer: initial capacity; with an object: copy */
 const isCap = (ty) => ty[0] === 'Integer';
 const rel = (s) => ({ s, p: P.rel });
+/* checks of the native classes, as in the modules (and in Java): written only if the program catches that
+   exception (GEN.exc). The messages are those of Java and of the modules, in English like the modules */
+const MSG_IDX = (i, n) => `"Index " + ${i} + " out of bounds for length " + ${n}`;
+const CHK = {
+  python: {
+    list_get: ['def list_get(v, i):', '    if i < 0 or i >= len(v):', `        raise IndexError(${MSG_IDX('str(i)', 'str(len(v))')})`, '    return v[i]'],
+    list_set: ['def list_set(v, i, x):', '    if i < 0 or i >= len(v):', `        raise IndexError(${MSG_IDX('str(i)', 'str(len(v))')})`, '    v[i] = x'],
+    list_remove: ['def list_remove(v, i):', '    if i < 0 or i >= len(v):', `        raise IndexError(${MSG_IDX('str(i)', 'str(len(v))')})`, '    return v.pop(i)'],
+    list_insert: ['def list_insert(v, i, x):', '    if i < 0 or i > len(v):', '        raise IndexError("Index: " + str(i) + ", Size: " + str(len(v)))', '    v.insert(i, x)'],
+    new_list: ['def new_list(n):', '    if n < 0:', '        raise ValueError("Illegal Capacity: " + str(n))', '    return []'],
+    stack_pop: ['def stack_pop(s):', '    if not s:', '        raise EmptyStack("The stack is empty")', '    return s.pop()'],
+    stack_peek: ['def stack_peek(s):', '    if not s:', '        raise EmptyStack("The stack is empty")', '    return s[-1]'],
+    queue_remove: ['def queue_remove(q):', '    if not q:', '        raise NoSuchElement("The queue is empty")', '    return q.popleft()'],
+    queue_peek: ['def queue_peek(q):', '    if not q:', '        raise NoSuchElement("The queue is empty")', '    return q[0]'],
+  },
+  cpp: {
+    listGet: [`template <typename T> T& listGet(vector<T>* v, int i) { if (i < 0 || i >= (int) v->size()) throw out_of_range(${MSG_IDX('to_string(i)', 'to_string(v->size())')}); return (*v)[i]; }`],
+    listRemove: [`template <typename T> T listRemove(vector<T>* v, int i) { if (i < 0 || i >= (int) v->size()) throw out_of_range(${MSG_IDX('to_string(i)', 'to_string(v->size())')}); T x = (*v)[i]; v->erase(v->begin() + i); return x; }`],
+    listInsert: ['template <typename T> void listInsert(vector<T>* v, int i, const T& x) { if (i < 0 || i > (int) v->size()) throw out_of_range("Index: " + to_string(i) + ", Size: " + to_string(v->size())); v->insert(v->begin() + i, x); }'],
+    newList: ['template <typename T> vector<T>* newList(int n) { if (n < 0) throw invalid_argument("Illegal Capacity: " + to_string(n)); return new vector<T>(); }'],
+    stackPop: ['template <typename T> T stackPop(stack<T>* s) { if (s->empty()) throw EmptyStack("The stack is empty"); T x = s->top(); s->pop(); return x; }'],
+    stackPeek: ['template <typename T> T stackPeek(stack<T>* s) { if (s->empty()) throw EmptyStack("The stack is empty"); return s->top(); }'],
+    queueRemove: ['template <typename T> T queueRemove(queue<T>* q) { if (q->empty()) throw NoSuchElement("The queue is empty"); T x = q->front(); q->pop(); return x; }'],
+    queuePeek: ['template <typename T> T queuePeek(queue<T>* q) { if (q->empty()) throw NoSuchElement("The queue is empty"); return q->front(); }'],
+  },
+  csharp: {
+    ListGet: [`public static T ListGet<T>(List<T> v, int i) { if (i < 0 || i >= v.Count) throw new IndexOutOfRangeException(${MSG_IDX('i', 'v.Count')}); return v[i]; }`],
+    ListSet: [`public static void ListSet<T>(List<T> v, int i, T x) { if (i < 0 || i >= v.Count) throw new IndexOutOfRangeException(${MSG_IDX('i', 'v.Count')}); v[i] = x; }`],
+    ListRemove: [`public static T ListRemove<T>(List<T> v, int i) { if (i < 0 || i >= v.Count) throw new IndexOutOfRangeException(${MSG_IDX('i', 'v.Count')}); T x = v[i]; v.RemoveAt(i); return x; }`],
+    ListInsert: ['public static void ListInsert<T>(List<T> v, int i, T x) { if (i < 0 || i > v.Count) throw new IndexOutOfRangeException("Index: " + i + ", Size: " + v.Count); v.Insert(i, x); }'],
+    NewList: ['public static List<T> NewList<T>(int n) { if (n < 0) throw new ArgumentException("Illegal Capacity: " + n); return new List<T>(); }'],
+    StackPop: ['public static T StackPop<T>(Stack<T> s) { if (s.Count == 0) throw new EmptyStack("The stack is empty"); return s.Pop(); }'],
+    StackPeek: ['public static T StackPeek<T>(Stack<T> s) { if (s.Count == 0) throw new EmptyStack("The stack is empty"); return s.Peek(); }'],
+    QueueRemove: ['public static T QueueRemove<T>(Queue<T> q) { if (q.Count == 0) throw new NoSuchElement("The queue is empty"); return q.Dequeue(); }'],
+    QueuePeek: ['public static T QueuePeek<T>(Queue<T> q) { if (q.Count == 0) throw new NoSuchElement("The queue is empty"); return q.Peek(); }'],
+  },
+  javascript: {
+    listGet: [`function listGet(v, i) { if (i < 0 || i >= v.length) throw new IndexOutOfRange(${MSG_IDX('i', 'v.length')}); return v[i]; }`],
+    listSet: [`function listSet(v, i, x) { if (i < 0 || i >= v.length) throw new IndexOutOfRange(${MSG_IDX('i', 'v.length')}); v[i] = x; }`],
+    listRemove: [`function listRemove(v, i) { if (i < 0 || i >= v.length) throw new IndexOutOfRange(${MSG_IDX('i', 'v.length')}); return v.splice(i, 1)[0]; }`],
+    listInsert: ['function listInsert(v, i, x) { if (i < 0 || i > v.length) throw new IndexOutOfRange("Index: " + i + ", Size: " + v.length); v.splice(i, 0, x); }'],
+    newList: ['function newList(n) { if (n < 0) throw new InvalidArgument("Illegal Capacity: " + n); return []; }'],
+    stackPop: ['function stackPop(s) { if (!s.length) throw new EmptyStack("The stack is empty"); return s.pop(); }'],
+    stackPeek: ['function stackPeek(s) { if (!s.length) throw new EmptyStack("The stack is empty"); return s[s.length - 1]; }'],
+    queueRemove: ['function queueRemove(q) { if (!q.length) throw new NoSuchElement("The queue is empty"); return q.shift(); }'],
+    queuePeek: ['function queuePeek(q) { if (!q.length) throw new NoSuchElement("The queue is empty"); return q[0]; }'],
+  },
+};
+// exceptions used by the checks of each language
+const CHK_EXC = { list: { cpp: null, javascript: 'IndexOutOfRange' }, cap: { javascript: 'InvalidArgument' }, stack: 'EmptyStack', queue: 'NoSuchElement' };
+/* a checked call: the helper (and the class of its exception) are written in the code */
+function chk(lang, name, kind, call) {
+  need('chk:' + lang + ':' + name);
+  const e = typeof CHK_EXC[kind] === 'string' ? CHK_EXC[kind] : (CHK_EXC[kind] || {})[lang];
+  if (e) need('exc:' + e);
+  return call;
+}
+const chkList = () => GEN.exc.idx || GEN.exc.arg;
+/* the helpers used, as lines of code */
+const chkLines = (lang) => Object.entries(CHK[lang]).filter(([k]) => GEN.helpers.has('chk:' + lang + ':' + k)).flatMap(([, l]) => l);
 /* for each module: type, constructor and methods in the various languages (o = object, a = arguments {s, p}) */
 const NATIVE = {
   'data_structures/ArrayList': {
     cls: 'ArrayList',
     java: { type: (t) => `ArrayList<${t[0]}>`, ctor: (t, a) => `new ArrayList<>(${a})` },
-    python: { ctor: (t, a, ty) => (!a || isCap(ty) ? '[]' : `list(${a})`), m: {
-      add: (o, a) => (a.length === 2 ? `${o}.insert(${a[0].s}, ${a[1].s})` : `${o}.append(${a[0].s})`),
-      get: (o, a) => `${o}[${a[0].s}]`, set: (o, a) => `${o}[${a[0].s}] = ${a[1].s}`, remove: (o, a) => `${o}.pop(${a[0].s})`,
+    python: { ctor: (t, a, ty) => (a && isCap(ty) && GEN.exc.arg ? chk('python', 'new_list', 'cap', `new_list(${a})`) : !a || isCap(ty) ? '[]' : `list(${a})`), m: {
+      add: (o, a) => (a.length === 2 ? (GEN.exc.idx ? chk('python', 'list_insert', 'list', `list_insert(${o}, ${a[0].s}, ${a[1].s})`) : `${o}.insert(${a[0].s}, ${a[1].s})`) : `${o}.append(${a[0].s})`),
+      get: (o, a) => (GEN.exc.idx ? chk('python', 'list_get', 'list', `list_get(${o}, ${a[0].s})`) : `${o}[${a[0].s}]`),
+      set: (o, a) => (GEN.exc.idx ? chk('python', 'list_set', 'list', `list_set(${o}, ${a[0].s}, ${a[1].s})`) : `${o}[${a[0].s}] = ${a[1].s}`),
+      remove: (o, a) => (GEN.exc.idx ? chk('python', 'list_remove', 'list', `list_remove(${o}, ${a[0].s})`) : `${o}.pop(${a[0].s})`),
       size: (o) => `len(${o})`, isEmpty: (o) => rel(`len(${o}) == 0`), clear: (o) => `${o}.clear()`,
       indexOf: (o, a) => `(${o}.index(${Wp(a[0])}) if ${Wp(a[0])} in ${o} else -1)`, contains: (o, a) => rel(`${Wp(a[0])} in ${o}`) } },
-    cpp: { type: (t) => `vector<${t[0]}>*`, ctor: (t, a, ty) => `new vector<${t ? t[0] : 'int'}>(${!a || isCap(ty) ? '' : deref(a)})`, m: {
-      add: (o, a) => (a.length === 2 ? `${o}->insert(${o}->begin() + ${Wp(a[0])}, ${a[1].s})` : `${o}->push_back(${a[0].s})`),
-      get: (o, a) => `(*${o})[${a[0].s}]`, set: (o, a) => `(*${o})[${a[0].s}] = ${a[1].s}`, remove: (o, a) => { need('removeAt'); return `removeAt(${o}, ${a[0].s})`; },
+    cpp: { type: (t) => `vector<${t[0]}>*`, ctor: (t, a, ty) => (a && isCap(ty) && GEN.exc.arg ? chk('cpp', 'newList', 'cap', `newList<${t ? t[0] : 'int'}>(${a})`) : `new vector<${t ? t[0] : 'int'}>(${!a || isCap(ty) ? '' : deref(a)})`), m: {
+      add: (o, a) => (a.length === 2 ? (GEN.exc.idx ? chk('cpp', 'listInsert', 'list', `listInsert(${o}, ${a[0].s}, ${a[1].s})`) : `${o}->insert(${o}->begin() + ${Wp(a[0])}, ${a[1].s})`) : `${o}->push_back(${a[0].s})`),
+      get: (o, a) => (GEN.exc.idx ? chk('cpp', 'listGet', 'list', `listGet(${o}, ${a[0].s})`) : `(*${o})[${a[0].s}]`),
+      set: (o, a) => (GEN.exc.idx ? chk('cpp', 'listGet', 'list', `listGet(${o}, ${a[0].s}) = ${a[1].s}`) : `(*${o})[${a[0].s}] = ${a[1].s}`),
+      remove: (o, a) => { if (GEN.exc.idx) return chk('cpp', 'listRemove', 'list', `listRemove(${o}, ${a[0].s})`); need('removeAt'); return `removeAt(${o}, ${a[0].s})`; },
       size: (o) => ({ s: `(int) ${o}->size()`, p: P.un }), isEmpty: (o) => `${o}->empty()`, clear: (o) => `${o}->clear()`,
       indexOf: (o, a) => { need('indexOfItem'); return `indexOfItem(${o}, ${a[0].s})`; }, contains: (o, a) => { need('indexOfItem'); return rel(`indexOfItem(${o}, ${a[0].s}) >= 0`); } } },
-    csharp: { type: (t) => `List<${t[0]}>`, ctor: (t, a) => `new List<${t ? t[0] : 'int'}>(${a})`, m: {
-      add: (o, a) => (a.length === 2 ? `${o}.Insert(${a[0].s}, ${a[1].s})` : `${o}.Add(${a[0].s})`),
-      get: (o, a) => `${o}[${a[0].s}]`, set: (o, a) => `${o}[${a[0].s}] = ${a[1].s}`, remove: (o, a) => { need('Helpers'); return `Helpers.RemoveAt(${o}, ${a[0].s})`; },
+    csharp: { type: (t) => `List<${t[0]}>`, ctor: (t, a, ty) => (a && isCap(ty) && GEN.exc.arg ? (need('Helpers'), chk('csharp', 'NewList', 'cap', `Helpers.NewList<${t ? t[0] : 'int'}>(${a})`)) : `new List<${t ? t[0] : 'int'}>(${a})`), m: {
+      // in C# a wrong index of a List is an ArgumentOutOfRangeException (an ArgumentException): checked also when InvalidArgument is caught
+      add: (o, a) => (a.length === 2 ? (chkList() ? (need('Helpers'), chk('csharp', 'ListInsert', 'list', `Helpers.ListInsert(${o}, ${a[0].s}, ${a[1].s})`)) : `${o}.Insert(${a[0].s}, ${a[1].s})`) : `${o}.Add(${a[0].s})`),
+      get: (o, a) => (chkList() ? (need('Helpers'), chk('csharp', 'ListGet', 'list', `Helpers.ListGet(${o}, ${a[0].s})`)) : `${o}[${a[0].s}]`),
+      set: (o, a) => (chkList() ? (need('Helpers'), chk('csharp', 'ListSet', 'list', `Helpers.ListSet(${o}, ${a[0].s}, ${a[1].s})`)) : `${o}[${a[0].s}] = ${a[1].s}`),
+      remove: (o, a) => { need('Helpers'); return chkList() ? chk('csharp', 'ListRemove', 'list', `Helpers.ListRemove(${o}, ${a[0].s})`) : `Helpers.RemoveAt(${o}, ${a[0].s})`; },
       size: (o) => `${o}.Count`, isEmpty: (o) => rel(`${o}.Count == 0`), clear: (o) => `${o}.Clear()`,
       indexOf: (o, a) => `${o}.IndexOf(${a[0].s})`, contains: (o, a) => `${o}.Contains(${a[0].s})` } },
-    javascript: { ctor: (t, a, ty) => (!a || isCap(ty) ? '[]' : `[...${a}]`), m: {
-      add: (o, a) => (a.length === 2 ? `${o}.splice(${a[0].s}, 0, ${a[1].s})` : `${o}.push(${a[0].s})`),
-      get: (o, a) => `${o}[${a[0].s}]`, set: (o, a) => `${o}[${a[0].s}] = ${a[1].s}`, remove: (o, a) => `${o}.splice(${a[0].s}, 1)[0]`,
+    javascript: { ctor: (t, a, ty) => (a && isCap(ty) && GEN.exc.arg ? chk('javascript', 'newList', 'cap', `newList(${a})`) : !a || isCap(ty) ? '[]' : `[...${a}]`), m: {
+      add: (o, a) => (a.length === 2 ? (GEN.exc.idx ? chk('javascript', 'listInsert', 'list', `listInsert(${o}, ${a[0].s}, ${a[1].s})`) : `${o}.splice(${a[0].s}, 0, ${a[1].s})`) : `${o}.push(${a[0].s})`),
+      get: (o, a) => (GEN.exc.idx ? chk('javascript', 'listGet', 'list', `listGet(${o}, ${a[0].s})`) : `${o}[${a[0].s}]`),
+      set: (o, a) => (GEN.exc.idx ? chk('javascript', 'listSet', 'list', `listSet(${o}, ${a[0].s}, ${a[1].s})`) : `${o}[${a[0].s}] = ${a[1].s}`),
+      remove: (o, a) => (GEN.exc.idx ? chk('javascript', 'listRemove', 'list', `listRemove(${o}, ${a[0].s})`) : `${o}.splice(${a[0].s}, 1)[0]`),
       size: (o) => `${o}.length`, isEmpty: (o) => rel(`${o}.length === 0`), clear: (o) => `${o}.length = 0`,
       indexOf: (o, a) => `${o}.indexOf(${a[0].s})`, contains: (o, a) => `${o}.includes(${a[0].s})` } },
   },
   'data_structures/Stack': {
     cls: 'Stack',
     java: { type: (t) => `Stack<${t[0]}>`, ctor: () => 'new Stack<>()' },
-    python: { ctor: () => '[]', m: { push: (o, a) => `${o}.append(${a[0].s})`, pop: (o) => `${o}.pop()`, peek: (o) => `${o}[-1]`, size: (o) => `len(${o})`, isEmpty: (o) => rel(`len(${o}) == 0`) } },
+    python: { ctor: () => '[]', m: { push: (o, a) => `${o}.append(${a[0].s})`,
+      pop: (o) => (GEN.exc.stack ? chk('python', 'stack_pop', 'stack', `stack_pop(${o})`) : `${o}.pop()`),
+      peek: (o) => (GEN.exc.stack ? chk('python', 'stack_peek', 'stack', `stack_peek(${o})`) : `${o}[-1]`), size: (o) => `len(${o})`, isEmpty: (o) => rel(`len(${o}) == 0`) } },
     cpp: { type: (t) => { need('stack'); return `stack<${t[0]}>*`; }, ctor: (t) => { need('stack'); return `new stack<${t ? t[0] : 'int'}>()`; }, m: {
-      push: (o, a) => `${o}->push(${a[0].s})`, pop: (o) => { need('popTop'); return `popTop(${o})`; }, peek: (o) => `${o}->top()`,
+      push: (o, a) => `${o}->push(${a[0].s})`, pop: (o) => { if (GEN.exc.stack) return chk('cpp', 'stackPop', 'stack', `stackPop(${o})`); need('popTop'); return `popTop(${o})`; },
+      peek: (o) => (GEN.exc.stack ? chk('cpp', 'stackPeek', 'stack', `stackPeek(${o})`) : `${o}->top()`),
       size: (o) => ({ s: `(int) ${o}->size()`, p: P.un }), isEmpty: (o) => `${o}->empty()` } },
-    csharp: { type: (t) => `Stack<${t[0]}>`, ctor: (t) => `new Stack<${t ? t[0] : 'int'}>()`, m: { push: (o, a) => `${o}.Push(${a[0].s})`, pop: (o) => `${o}.Pop()`, peek: (o) => `${o}.Peek()`, size: (o) => `${o}.Count`, isEmpty: (o) => rel(`${o}.Count == 0`) } },
-    javascript: { ctor: () => '[]', m: { push: (o, a) => `${o}.push(${a[0].s})`, pop: (o) => `${o}.pop()`, peek: (o) => `${o}[${o}.length - 1]`, size: (o) => `${o}.length`, isEmpty: (o) => rel(`${o}.length === 0`) } },
+    csharp: { type: (t) => `Stack<${t[0]}>`, ctor: (t) => `new Stack<${t ? t[0] : 'int'}>()`, m: { push: (o, a) => `${o}.Push(${a[0].s})`,
+      pop: (o) => (GEN.exc.stack ? (need('Helpers'), chk('csharp', 'StackPop', 'stack', `Helpers.StackPop(${o})`)) : `${o}.Pop()`),
+      peek: (o) => (GEN.exc.stack ? (need('Helpers'), chk('csharp', 'StackPeek', 'stack', `Helpers.StackPeek(${o})`)) : `${o}.Peek()`), size: (o) => `${o}.Count`, isEmpty: (o) => rel(`${o}.Count == 0`) } },
+    javascript: { ctor: () => '[]', m: { push: (o, a) => `${o}.push(${a[0].s})`,
+      pop: (o) => (GEN.exc.stack ? chk('javascript', 'stackPop', 'stack', `stackPop(${o})`) : `${o}.pop()`),
+      peek: (o) => (GEN.exc.stack ? chk('javascript', 'stackPeek', 'stack', `stackPeek(${o})`) : `${o}[${o}.length - 1]`), size: (o) => `${o}.length`, isEmpty: (o) => rel(`${o}.length === 0`) } },
   },
   'data_structures/Queue': {
     cls: 'Queue',
-    java: { type: (t) => `Queue<${t[0]}>`, ctor: (t, a) => `new LinkedList<>(${a})` },
-    python: { ctor: (t, a) => { need('deque'); return `deque(${a})`; }, m: { add: (o, a) => `${o}.append(${a[0].s})`, remove: (o) => `${o}.popleft()`, peek: (o) => `${o}[0]`, size: (o) => `len(${o})`, isEmpty: (o) => rel(`len(${o}) == 0`) } },
+    // peek of an empty queue throws NoSuchElement, as in the module: in Java it is element() (peek() would give null)
+    java: { type: (t) => `Queue<${t[0]}>`, ctor: (t, a) => `new LinkedList<>(${a})`, m: { peek: (o) => `${o}.element()` } },
+    python: { ctor: (t, a) => { need('deque'); return `deque(${a})`; }, m: { add: (o, a) => `${o}.append(${a[0].s})`,
+      remove: (o) => (GEN.exc.queue ? chk('python', 'queue_remove', 'queue', `queue_remove(${o})`) : `${o}.popleft()`),
+      peek: (o) => (GEN.exc.queue ? chk('python', 'queue_peek', 'queue', `queue_peek(${o})`) : `${o}[0]`), size: (o) => `len(${o})`, isEmpty: (o) => rel(`len(${o}) == 0`) } },
     cpp: { type: (t) => { need('queue'); return `queue<${t[0]}>*`; }, ctor: (t, a) => { need('queue'); return `new queue<${t ? t[0] : 'int'}>(${a ? deref(a) : ''})`; }, m: {
-      add: (o, a) => `${o}->push(${a[0].s})`, remove: (o) => { need('popFront'); return `popFront(${o})`; }, peek: (o) => `${o}->front()`,
+      add: (o, a) => `${o}->push(${a[0].s})`, remove: (o) => { if (GEN.exc.queue) return chk('cpp', 'queueRemove', 'queue', `queueRemove(${o})`); need('popFront'); return `popFront(${o})`; },
+      peek: (o) => (GEN.exc.queue ? chk('cpp', 'queuePeek', 'queue', `queuePeek(${o})`) : `${o}->front()`),
       size: (o) => ({ s: `(int) ${o}->size()`, p: P.un }), isEmpty: (o) => `${o}->empty()` } },
-    csharp: { type: (t) => `Queue<${t[0]}>`, ctor: (t, a) => `new Queue<${t ? t[0] : 'int'}>(${a})`, m: { add: (o, a) => `${o}.Enqueue(${a[0].s})`, remove: (o) => `${o}.Dequeue()`, peek: (o) => `${o}.Peek()`, size: (o) => `${o}.Count`, isEmpty: (o) => rel(`${o}.Count == 0`) } },
-    javascript: { ctor: (t, a) => (a ? `[...${a}]` : '[]'), m: { add: (o, a) => `${o}.push(${a[0].s})`, remove: (o) => `${o}.shift()`, peek: (o) => `${o}[0]`, size: (o) => `${o}.length`, isEmpty: (o) => rel(`${o}.length === 0`) } },
+    csharp: { type: (t) => `Queue<${t[0]}>`, ctor: (t, a) => `new Queue<${t ? t[0] : 'int'}>(${a})`, m: { add: (o, a) => `${o}.Enqueue(${a[0].s})`,
+      remove: (o) => (GEN.exc.queue ? (need('Helpers'), chk('csharp', 'QueueRemove', 'queue', `Helpers.QueueRemove(${o})`)) : `${o}.Dequeue()`),
+      peek: (o) => (GEN.exc.queue ? (need('Helpers'), chk('csharp', 'QueuePeek', 'queue', `Helpers.QueuePeek(${o})`)) : `${o}.Peek()`), size: (o) => `${o}.Count`, isEmpty: (o) => rel(`${o}.Count == 0`) } },
+    javascript: { ctor: (t, a) => (a ? `[...${a}]` : '[]'), m: { add: (o, a) => `${o}.push(${a[0].s})`,
+      remove: (o) => (GEN.exc.queue ? chk('javascript', 'queueRemove', 'queue', `queueRemove(${o})`) : `${o}.shift()`),
+      peek: (o) => (GEN.exc.queue ? chk('javascript', 'queuePeek', 'queue', `queuePeek(${o})`) : `${o}[0]`), size: (o) => `${o}.length`, isEmpty: (o) => rel(`${o}.length === 0`) } },
   },
 };
 /* prepares GEN for a program and a language */
@@ -98,14 +182,35 @@ function setupGen(prog, lang) {
    throws nothing (division between reals by zero, checkIndex outside the array in JavaScript…) the code
    uses small check functions, only if the program catches that type of exception. */
 const EXC_LANG = {
-  java: { Exception: 'Exception', DivisionByZero: 'ArithmeticException', IndexOutOfRange: 'IndexOutOfBoundsException', InvalidConversion: 'NumberFormatException', NullReference: 'NullPointerException', FileError: 'java.io.IOException' },
-  csharp: { Exception: 'Exception', DivisionByZero: 'DivideByZeroException', IndexOutOfRange: 'IndexOutOfRangeException', InvalidConversion: 'FormatException', NullReference: 'NullReferenceException', FileError: 'System.IO.IOException' },
-  python: { Exception: 'Exception', DivisionByZero: 'ZeroDivisionError', IndexOutOfRange: 'IndexError', InvalidConversion: 'ValueError', NullReference: 'AttributeError', FileError: 'OSError' },
-  cpp: { Exception: 'runtime_error', DivisionByZero: 'DivisionByZero', IndexOutOfRange: 'out_of_range', InvalidConversion: 'invalid_argument', NullReference: 'NullReference', FileError: 'FileError' },
-  javascript: { Exception: 'Error', DivisionByZero: 'DivisionByZero', IndexOutOfRange: 'IndexOutOfRange', InvalidConversion: 'InvalidConversion', NullReference: 'NullReference', FileError: 'FileError' },
+  java: { Exception: 'Exception', DivisionByZero: 'ArithmeticException', IndexOutOfRange: 'IndexOutOfBoundsException', InvalidArgument: 'IllegalArgumentException', InvalidConversion: 'NumberFormatException', NullReference: 'NullPointerException', FileError: 'java.io.IOException', EmptyStack: 'EmptyStack', NoSuchElement: 'NoSuchElementException' },
+  csharp: { Exception: 'Exception', DivisionByZero: 'DivideByZeroException', IndexOutOfRange: 'IndexOutOfRangeException', InvalidArgument: 'ArgumentException', InvalidConversion: 'FormatException', NullReference: 'NullReferenceException', FileError: 'System.IO.IOException', EmptyStack: 'EmptyStack', NoSuchElement: 'NoSuchElement' },
+  python: { Exception: 'Exception', DivisionByZero: 'ZeroDivisionError', IndexOutOfRange: 'IndexError', InvalidArgument: 'ValueError', InvalidConversion: 'ValueError', NullReference: 'AttributeError', FileError: 'OSError', EmptyStack: 'EmptyStack', NoSuchElement: 'NoSuchElement' },
+  cpp: { Exception: 'runtime_error', DivisionByZero: 'DivisionByZero', IndexOutOfRange: 'out_of_range', InvalidArgument: 'invalid_argument', InvalidConversion: 'invalid_argument', NullReference: 'NullReference', FileError: 'FileError', EmptyStack: 'EmptyStack', NoSuchElement: 'NoSuchElement' },
+  javascript: { Exception: 'Error', DivisionByZero: 'DivisionByZero', IndexOutOfRange: 'IndexOutOfRange', InvalidArgument: 'InvalidArgument', InvalidConversion: 'InvalidConversion', NullReference: 'NullReference', FileError: 'FileError', EmptyStack: 'EmptyStack', NoSuchElement: 'NoSuchElement' },
 };
-/* name of the exception in the language (the classes of the program stay as they are) */
-const excL = (lang, name) => { const b = _CM.excClass(name); if (!b) return name; if ((lang === 'cpp' || lang === 'javascript') && EXC_LANG[lang][b.name] === b.name) need('exc:' + b.name); return EXC_LANG[lang][b.name]; };
+/* name of the exception in the language (the classes of the program stay as they are); a predefined
+   exception the language does not have becomes a small class written in the code */
+const excL = (lang, name) => { const b = _CM.excClass(name); if (!b) return name; if (EXC_LANG[lang][b.name] === b.name) need('exc:' + b.name); return EXC_LANG[lang][b.name]; };
+/* type of a Catch: Java catches also the EmptyStackException of java.util.Stack; in C# InvalidArgument
+   (ArgumentException) also catches the conversions (FormatException), as in Java */
+const excCatch = (lang, name, v) => {
+  const b = _CM.excClass(name);
+  if (b && lang === 'java' && b.name === 'EmptyStack') return `EmptyStackException ${v}`;
+  if (b && lang === 'csharp' && b.name === 'InvalidArgument') return `Exception ${v}) when (${v} is ArgumentException || ${v} is FormatException`;
+  return `${excL(lang, name)} ${v}`;
+};
+/* small classes for the predefined exceptions the language does not have */
+function excClassLines(lang) {
+  const out = [];
+  for (const b of _CM.EXC_CLASSES) {
+    if (!GEN.helpers.has('exc:' + b.name)) continue;
+    const par = b.parent && b.parent !== 'Exception' && GEN.helpers.has('exc:' + b.parent) ? b.parent : null;
+    if (lang === 'python') out.push(`class ${b.name}(${par || 'Exception'}):`, '    pass', '');
+    if (lang === 'csharp') out.push(`class ${b.name} : ${par || 'Exception'} { public ${b.name}() { } public ${b.name}(string message) : base(message) { } }`);
+    if (lang === 'java' && b.name === 'EmptyStack') out.push('// ' + C('emptyStackClass'), 'class EmptyStack extends EmptyStackException { private final String msg; EmptyStack() { this(null); } EmptyStack(String msg) { this.msg = msg; } @Override public String getMessage() { return msg; } }');
+  }
+  return out;
+}
 /* parent class in the language (a class of the program can inherit from a predefined exception) */
 const parentL = (lang, c) => (c.parent && _CM.excClass(c.parent) ? excL(lang, c.parent) : c.parent);
 /* what the program uses: Try/Throw, and which runtime errors are caught */
@@ -117,7 +222,8 @@ function excInfo(prog) {
     used = true;
     for (const c of st.catches || []) { const k = _CM.classByName(prog, c.type); for (const b of _CM.EXC_CLASSES) if (k && _CM.isSubclass(prog, b, k)) caught.add(b.name); }
   });
-  return { used, div: caught.has('DivisionByZero'), idx: caught.has('IndexOutOfRange'), conv: caught.has('InvalidConversion') };
+  return { used, div: caught.has('DivisionByZero'), idx: caught.has('IndexOutOfRange'), conv: caught.has('InvalidConversion'),
+    arg: caught.has('InvalidArgument'), stack: caught.has('EmptyStack'), queue: caught.has('NoSuchElement') };
 }
 /* type of the thrown exception: new X(...) or the type of the variable */
 function thrownType(node, sc) { const n = strip(node); if (!n) return null; if (n.k === 'new') return n.cls; const t = _CE.inferType(n, sc); return t && t !== 'Unknown' ? _CE.splitType(t).base : null; }
@@ -925,6 +1031,8 @@ LANGS.python = {
       if (used.has('abc')) hd.push('from abc import ABC, abstractmethod');
       if (GEN.helpers.has('deque')) hd.push('from collections import deque');
       if (hd.length) hd.push('');
+      hd.push(...excClassLines('python'));
+      for (const [k, l] of Object.entries(CHK.python)) if (GEN.helpers.has('chk:python:' + k)) hd.push(...l, '', '');
       if (used.has('checkIndex')) hd.push('def checkIndex(v, i):', `    # ${C('indexCheckComment')}`, '    if i < 0 or i >= len(v):', `        raise IndexError("${C('index')}" + str(i) + "${C('outOfBounds')}")`, '    return i', '', '');
       if (used.has('eof')) hd.push('def end_of_file():', '    pos = file_in.tell()', '    line = file_in.readline()', '    file_in.seek(pos)', '    return line == ""', '', '');
       return hd.join('\n') + (hd.length ? '\n' : '');
@@ -1147,7 +1255,7 @@ function cFamily(cfg) {
             case 'try': {
               if (cfg.tryStmt) { cfg.tryStmt(o, s, sc, blk, used); break; }
               o.line('try {'); blk(o, s.body, sc);
-              for (const c of s.catches || []) { SRC.cur = s.id + ':catch:' + c.id; o.line(`} catch (${excL(cfg.lang, c.type)} ${c.variable}) {`); blk(o, c.body, sc); }
+              for (const c of s.catches || []) { SRC.cur = s.id + ':catch:' + c.id; o.line(`} catch (${excCatch(cfg.lang, c.type, c.variable)}) {`); blk(o, c.body, sc); }
               if (s.hasFinally) { SRC.cur = s.id + ':finally'; o.line('} finally {'); blk(o, s.finally || [], sc); }
               SRC.cur = s.id; o.line('}');
               break;
@@ -1196,6 +1304,7 @@ function cppExcIncludes(o, u) {
 function cppExcHelpers(o, u) {
   const lines = [];
   for (const b of _CM.EXC_CLASSES) if (GEN.helpers.has('exc:' + b.name)) lines.push(`class ${b.name} : public runtime_error { public: using runtime_error::runtime_error; };`);
+  const ck = chkLines('cpp'); if (ck.length) lines.push('// ' + C('checksComment'), ...ck);
   if (u.has('divide')) lines.push('// ' + C('divRemComment'), `double divide(double a, double b) { if (b == 0) throw DivisionByZero("${C('divisionByZero')}"); return a / b; }`);
   if (u.has('remainderOf')) lines.push(`int remainderOf(int a, int b) { if (b == 0) throw DivisionByZero("${C('moduloByZero')}"); return a % b; }`);
   if (u.has('conv')) lines.push('// ' + C('convIntComment'),
@@ -1207,7 +1316,9 @@ function cppExcHelpers(o, u) {
 function jsExcHelpers(u) {
   const lines = [];
   const add = (...l) => { if (lines.length) lines.push(''); lines.push(...l); };
-  for (const b of _CM.EXC_CLASSES) if (GEN.helpers.has('exc:' + b.name)) add(`class ${b.name} extends Error {}`);
+  // the classes follow the hierarchy of FlowLab (InvalidConversion is an InvalidArgument)
+  for (const b of _CM.EXC_CLASSES) if (GEN.helpers.has('exc:' + b.name)) add(`class ${b.name} extends ${b.parent && b.parent !== 'Exception' && GEN.helpers.has('exc:' + b.parent) ? b.parent : 'Error'} {}`);
+  const ck = chkLines('javascript'); if (ck.length) add('// ' + C('checksComment'), ...ck);
   if (u.has('divide')) add('// ' + C('divRemComment'), `function divide(a, b) { if (b === 0) throw new DivisionByZero("${C('divisionByZero')}"); return a / b; }`);
   if (u.has('remainderOf')) add(`function remainderOf(a, b) { if (b === 0) throw new DivisionByZero("${C('moduloByZero')}"); return a % b; }`);
   if (u.has('checkIndex')) add('// ' + C('indexCheckComment'), `function checkIndex(v, i) { if (i < 0 || i >= v.length) throw new IndexOutOfRange("${C('index')}" + i + "${C('outOfBounds')}"); return i; }`);
@@ -1578,6 +1689,7 @@ LANGS.java = cFamily({
     if (g.used.has('divide')) { o.line(''); o.line('    // ' + C('divisionComment')); o.line(`    static double divide(double a, double b) { if (b == 0) throw new ArithmeticException("${C('divisionByZero')}"); return a / b; }`); }
     o.lines.push(...inner.lines);
     o.line('}');
+    { const xs = excClassLines('java'); if (xs.length) { o.line(''); xs.forEach((l) => o.line(l)); } }
     return o.text();
   },
   programOO(prog, g) {
@@ -1634,6 +1746,7 @@ LANGS.java = cFamily({
       if (c === main && g.used.has('divide')) { o.line(''); o.line('    // ' + C('divisionComment')); o.line(`    static double divide(double a, double b) { if (b == 0) throw new ArithmeticException("${C('divisionByZero')}"); return a / b; }`); }
       o.line('}');
     }
+    { const xs = excClassLines('java'); if (xs.length) { o.line(''); xs.forEach((l) => o.line(l)); } }
     return o.text();
   },
 });
@@ -1726,6 +1839,7 @@ LANGS.csharp = cFamily({
       inner.out(); inner.line('}');
     }
     o.line('using System;'); o.line('');
+    { const xs = excClassLines('csharp'); if (xs.length) { xs.forEach((l) => o.line(l)); o.line(''); } }
     o.line('class Program {');
     if (g.used.has('divide')) o.line(`    static double Divide(double a, double b) { if (b == 0) throw new DivideByZeroException("${C('divisionByZero')}"); return a / b; }`);
     if (g.used.has('rnd')) o.line('    static Random rnd = new Random();');
@@ -1781,8 +1895,10 @@ LANGS.csharp = cFamily({
       o.line(''); o.line('static class Helpers {');
       o.line('    // ' + C('removeAtComment'));
       o.line('    public static T RemoveAt<T>(List<T> lista, int i) { T x = lista[i]; lista.RemoveAt(i); return x; }');
+      const ck = chkLines('csharp'); if (ck.length) { o.line('    // ' + C('checksComment')); ck.forEach((l) => o.line('    ' + l)); }
       o.line('}');
     }
+    { const xs = excClassLines('csharp'); if (xs.length) { o.line(''); xs.forEach((l) => o.line(l)); } }
     for (const { c, lines } of parts) {
       o.line('');
       o.line(`${c.abstract ? 'abstract ' : ''}class ${_CM.classTitle(c)}${c.parent ? ' : ' + parentL('csharp', c) : ''}${csWhereC(c)} {`);

@@ -16,7 +16,11 @@ const X = {
   while: (expression, body) => S('while', { expression, body }),
   for: (variable, start, end, body, dec) => S('for', { variable, start, end, direction: dec ? 'dec' : 'inc', step: '1', body }),
   note: (text) => S('comment', { text }),
+  throw: (expression) => S('throw', { expression }),
+  try: (body, catches) => S('try', { body, catches: catches.map(([type, variable, b]) => M.makeCatch({ type, variable, body: b })), hasFinally: false, finally: [] }),
 };
+/* checks with exceptions, as in Java: a position outside the list, an empty stack or queue */
+const badIndex = () => X.if('i < 0 or i >= count', [X.throw('new IndexOutOfRange("Index " & i & " out of bounds for length " & count)')]);
 
 /* module: name, about, classes { Name: { tparams, attrs: [[name, type, vis, opts]], x, y } }, methods, test Main */
 function module_({ name, about, mainClass, main, classes, methods }) {
@@ -66,13 +70,14 @@ const MODULES = [
     topic: 'data_structures', id: 'ArrayList',
     make: () => module_({
       name: 'ArrayList',
-      about: 'List of items of type T that grows by itself, like java.util.ArrayList. Internally it uses an array: when it is full it creates one one and a half times bigger and copies the items.',
+      about: 'List of items of type T that grows by itself, like java.util.ArrayList. Internally it uses an array: when it is full it creates one one and a half times bigger and copies the items. A position outside the list throws IndexOutOfRange, a negative capacity InvalidArgument, as in Java.',
       mainClass: 'ArrayListTest',
       classes: { ArrayList: { tparams: ['T'], x: 40, y: 40, attrs: [['items', 'T', 'private', { array: true, size: '10' }], ['count', 'Integer', 'private', { init: '0' }]] } },
       methods: [
         { cls: 'ArrayList', ctor: true, body: [X.note('Empty list with initial capacity 10, like new ArrayList<>() in Java')] },
         { cls: 'ArrayList', ctor: true, params: [['initialCapacity', 'Integer']], body: [
           X.note('Empty list with an internal array of initialCapacity places, like new ArrayList<>(n) in Java'),
+          X.if('initialCapacity < 0', [X.throw('new InvalidArgument("Illegal Capacity: " & initialCapacity)')]),
           X.decl('bigger', 'T', 'initialCapacity'), X.set('items', 'bigger')] },
         { cls: 'ArrayList', ctor: true, params: [['other', 'ArrayList<T>']], body: [
           X.note('Copy of the items of another list, like new ArrayList<>(other) in Java'),
@@ -84,14 +89,16 @@ const MODULES = [
           X.set('items[count]', 'x'), X.set('count', 'count + 1')] },
         { cls: 'ArrayList', name: 'add', params: [['i', 'Integer'], ['x', 'T']], body: [
           X.note('Inserts x at position i: the items from i on move one place forward'),
+          X.if('i < 0 or i > count', [X.throw('new IndexOutOfRange("Index: " & i & ", Size: " & count)')]),
           X.decl('k', 'Integer'),
           X.if('count = Size(items)', [X.call('grow()')]),
           X.for('k', 'count - 1', 'i', [X.set('items[k + 1]', 'items[k]')], true),
           X.set('items[i]', 'x'), X.set('count', 'count + 1')] },
-        { cls: 'ArrayList', name: 'get', params: [['i', 'Integer']], ret: ['item', 'T'], body: [X.decl('item', 'T'), X.set('item', 'items[i]')] },
-        { cls: 'ArrayList', name: 'set', params: [['i', 'Integer'], ['x', 'T']], body: [X.set('items[i]', 'x')] },
+        { cls: 'ArrayList', name: 'get', params: [['i', 'Integer']], ret: ['item', 'T'], body: [badIndex(), X.decl('item', 'T'), X.set('item', 'items[i]')] },
+        { cls: 'ArrayList', name: 'set', params: [['i', 'Integer'], ['x', 'T']], body: [badIndex(), X.set('items[i]', 'x')] },
         { cls: 'ArrayList', name: 'remove', params: [['i', 'Integer']], ret: ['removed', 'T'], body: [
           X.note('Removes the item at position i: the following ones move one place back'),
+          badIndex(),
           X.decl('removed', 'T'), X.decl('k', 'Integer'),
           X.set('removed', 'items[i]'),
           X.for('k', 'i', 'count - 2', [X.set('items[k]', 'items[k + 1]')]),
@@ -120,6 +127,9 @@ const MODULES = [
         X.decl('copyList', 'ArrayList<Integer>'), X.set('copyList', 'new ArrayList<Integer>(squares)'),
         X.call('copyList.set(0, -1)'),
         X.out('"Copy: " & copyList.get(0) & " " & copyList.get(1) & ", original: " & squares.get(0) & ", items " & copyList.size()'),
+        X.note('A position outside the list and a negative capacity: exceptions, as in Java'),
+        X.try([X.out('squares.get(20)')], [['IndexOutOfRange', 'e', [X.out('"Error: " & e.message')]]]),
+        X.try([X.set('names', 'new ArrayList<String>(-1)')], [['InvalidArgument', 'e', [X.out('"Error: " & e.message')]]]),
       ],
     }),
   },
@@ -127,14 +137,14 @@ const MODULES = [
     topic: 'data_structures', id: 'Stack',
     make: () => module_({
       name: 'Stack',
-      about: 'Stack (LIFO) of items of type T, like java.util.Stack: the last item inserted with push is the first removed with pop. It uses an array that grows when it is full.',
+      about: 'Stack (LIFO) of items of type T, like java.util.Stack: the last item inserted with push is the first removed with pop. It uses an array that grows when it is full. pop and peek on an empty stack throw EmptyStack, as in Java.',
       mainClass: 'StackTest',
       classes: { Stack: { tparams: ['T'], x: 40, y: 40, attrs: [['items', 'T', 'private', { array: true, size: '10' }], ['count', 'Integer', 'private', { init: '0' }]] } },
       methods: [
         { cls: 'Stack', ctor: true, body: [X.note('Empty stack, like new Stack<>() in Java')] },
         { cls: 'Stack', name: 'push', params: [['x', 'T']], body: [X.if('count = Size(items)', [X.call('grow()')]), X.set('items[count]', 'x'), X.set('count', 'count + 1')] },
-        { cls: 'Stack', name: 'pop', ret: ['top', 'T'], body: [X.decl('top', 'T'), X.set('count', 'count - 1'), X.set('top', 'items[count]')] },
-        { cls: 'Stack', name: 'peek', ret: ['top', 'T'], body: [X.decl('top', 'T'), X.set('top', 'items[count - 1]')] },
+        { cls: 'Stack', name: 'pop', ret: ['top', 'T'], body: [X.if('count = 0', [X.throw('new EmptyStack("The stack is empty")')]), X.decl('top', 'T'), X.set('count', 'count - 1'), X.set('top', 'items[count]')] },
+        { cls: 'Stack', name: 'peek', ret: ['top', 'T'], body: [X.if('count = 0', [X.throw('new EmptyStack("The stack is empty")')]), X.decl('top', 'T'), X.set('top', 'items[count - 1]')] },
         { cls: 'Stack', name: 'size', ret: ['n', 'Integer'], body: [X.decl('n', 'Integer'), X.set('n', 'count')] },
         { cls: 'Stack', name: 'isEmpty', ret: ['empty', 'Boolean'], body: [X.decl('empty', 'Boolean'), X.set('empty', 'count = 0')] },
         grow('Stack'),
@@ -145,6 +155,8 @@ const MODULES = [
         X.call('tower.push("first")'), X.call('tower.push("second")'), X.call('tower.push("third")'),
         X.out('"On top: " & tower.peek()'),
         X.while('not tower.isEmpty()', [X.out('tower.pop()')]),
+        X.note('pop on the empty stack: EmptyStack, as in Java'),
+        X.try([X.out('tower.pop()')], [['EmptyStack', 'e', [X.out('"The stack is empty: nothing to pop"')]]]),
       ],
     }),
   },
@@ -152,7 +164,7 @@ const MODULES = [
     topic: 'data_structures', id: 'Queue',
     make: () => module_({
       name: 'Queue',
-      about: 'Queue (FIFO) of items of type T, like java.util.Queue: the items leave in the order they entered. It is a linked list of Node<T> nodes.',
+      about: 'Queue (FIFO) of items of type T, like java.util.Queue: the items leave in the order they entered. It is a linked list of Node<T> nodes. remove and peek on an empty queue throw NoSuchElement, as remove() and element() in Java.',
       mainClass: 'QueueTest',
       classes: {
         Queue: { tparams: ['T'], x: 40, y: 40, attrs: [['head', 'Node<T>'], ['last', 'Node<T>'], ['count', 'Integer', 'private', { init: '0' }]] },
@@ -171,9 +183,12 @@ const MODULES = [
           X.set('last', 'n'), X.set('count', 'count + 1')] },
         { cls: 'Queue', name: 'remove', ret: ['first', 'T'], body: [
           X.note('Removes and returns the first item of the line'),
+          X.if('count = 0', [X.throw('new NoSuchElement("The queue is empty")')]),
           X.decl('first', 'T'), X.set('first', 'head.value'), X.set('head', 'head.next'),
           X.if('head = null', [X.set('last', 'null')]), X.set('count', 'count - 1')] },
-        { cls: 'Queue', name: 'peek', ret: ['first', 'T'], body: [X.decl('first', 'T'), X.set('first', 'head.value')] },
+        { cls: 'Queue', name: 'peek', ret: ['first', 'T'], body: [
+          X.note('First item, without removing it; on an empty queue NoSuchElement, like element() in Java'),
+          X.if('count = 0', [X.throw('new NoSuchElement("The queue is empty")')]), X.decl('first', 'T'), X.set('first', 'head.value')] },
         { cls: 'Queue', name: 'size', ret: ['n', 'Integer'], body: [X.decl('n', 'Integer'), X.set('n', 'count')] },
         { cls: 'Queue', name: 'isEmpty', ret: ['empty', 'Boolean'], body: [X.decl('empty', 'Boolean'), X.set('empty', 'count = 0')] },
       ],
@@ -186,6 +201,8 @@ const MODULES = [
         X.out('"The copy has " & copyList.size() & " items, the queue " & line.size()'),
         X.while('not line.isEmpty()', [X.out('line.remove() & " "', false)]),
         X.out('""'),
+        X.note('remove on the empty queue: NoSuchElement, as in Java'),
+        X.try([X.out('line.remove()')], [['NoSuchElement', 'e', [X.out('"The queue is empty: nothing to remove"')]]]),
       ],
     }),
   },

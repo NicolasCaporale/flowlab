@@ -3,7 +3,7 @@
     <attributes>
         <attribute name="name" value="Queue"/>
         <attribute name="authors" value="FlowLab"/>
-        <attribute name="about" value="Queue (FIFO) of items of type T, like java.util.Queue: the items leave in the order they entered. It is a linked list of Node&lt;T&gt; nodes."/>
+        <attribute name="about" value="Queue (FIFO) of items of type T, like java.util.Queue: the items leave in the order they entered. It is a linked list of Node&lt;T&gt; nodes. remove and peek on an empty queue throw NoSuchElement, as remove() and element() in Java."/>
         <attribute name="saved" value="2026-11-17 08:00:00 AM"/>
         <attribute name="created" value="Zmxvd2xhYjttb2R1bGVzOzIwMjYtMTEtMTcgMDg6MDA6MDAgQU07MQ=="/>
         <attribute name="edited" value="Zmxvd2xhYjttb2R1bGVzOzIwMjYtMTEtMTcgMDg6MDA6MDAgQU07MQ=="/>
@@ -39,6 +39,15 @@
                 <output expression="line.remove() &amp; &quot; &quot;" newline="False"/>
             </while>
             <output expression="&quot;&quot;" newline="True"/>
+            <comment text="remove on the empty queue: NoSuchElement, as in Java"/>
+            <try>
+                <body>
+                    <output expression="line.remove()" newline="True"/>
+                </body>
+                <catch type="NoSuchElement" variable="e">
+                    <output expression="&quot;The queue is empty: nothing to remove&quot;" newline="True"/>
+                </catch>
+            </try>
         </body>
     </function>
     <function name="Node" type="None" variable="" flowlab-class="Node" flowlab-visibility="public" flowlab-static="False" flowlab-ctor="True">
@@ -93,6 +102,12 @@
         <parameters/>
         <body>
             <comment text="Removes and returns the first item of the line"/>
+            <if expression="count = 0">
+                <then>
+                    <throw expression="new NoSuchElement(&quot;The queue is empty&quot;)"/>
+                </then>
+                <else/>
+            </if>
             <declare name="first" type="T" array="False" size=""/>
             <assign variable="first" expression="head.value"/>
             <assign variable="head" expression="head.next"/>
@@ -108,6 +123,13 @@
     <function name="peek" type="T" variable="first" flowlab-class="Queue" flowlab-visibility="public" flowlab-static="False">
         <parameters/>
         <body>
+            <comment text="First item, without removing it; on an empty queue NoSuchElement, like element() in Java"/>
+            <if expression="count = 0">
+                <then>
+                    <throw expression="new NoSuchElement(&quot;The queue is empty&quot;)"/>
+                </then>
+                <else/>
+            </if>
             <declare name="first" type="T" array="False" size=""/>
             <assign variable="first" expression="head.value"/>
         </body>

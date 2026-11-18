@@ -3,7 +3,7 @@
     <attributes>
         <attribute name="name" value="ArrayList"/>
         <attribute name="authors" value="FlowLab"/>
-        <attribute name="about" value="List of items of type T that grows by itself, like java.util.ArrayList. Internally it uses an array: when it is full it creates one one and a half times bigger and copies the items."/>
+        <attribute name="about" value="List of items of type T that grows by itself, like java.util.ArrayList. Internally it uses an array: when it is full it creates one one and a half times bigger and copies the items. A position outside the list throws IndexOutOfRange, a negative capacity InvalidArgument, as in Java."/>
         <attribute name="saved" value="2026-11-17 08:00:00 AM"/>
         <attribute name="created" value="Zmxvd2xhYjttb2R1bGVzOzIwMjYtMTEtMTcgMDg6MDA6MDAgQU07MQ=="/>
         <attribute name="edited" value="Zmxvd2xhYjttb2R1bGVzOzIwMjYtMTEtMTcgMDg6MDA6MDAgQU07MQ=="/>
@@ -39,6 +39,23 @@
             <assign variable="copyList" expression="new ArrayList&lt;Integer&gt;(squares)"/>
             <call expression="copyList.set(0, -1)"/>
             <output expression="&quot;Copy: &quot; &amp; copyList.get(0) &amp; &quot; &quot; &amp; copyList.get(1) &amp; &quot;, original: &quot; &amp; squares.get(0) &amp; &quot;, items &quot; &amp; copyList.size()" newline="True"/>
+            <comment text="A position outside the list and a negative capacity: exceptions, as in Java"/>
+            <try>
+                <body>
+                    <output expression="squares.get(20)" newline="True"/>
+                </body>
+                <catch type="IndexOutOfRange" variable="e">
+                    <output expression="&quot;Error: &quot; &amp; e.message" newline="True"/>
+                </catch>
+            </try>
+            <try>
+                <body>
+                    <assign variable="names" expression="new ArrayList&lt;String&gt;(-1)"/>
+                </body>
+                <catch type="InvalidArgument" variable="e">
+                    <output expression="&quot;Error: &quot; &amp; e.message" newline="True"/>
+                </catch>
+            </try>
         </body>
     </function>
     <function name="ArrayList" type="None" variable="" flowlab-class="ArrayList" flowlab-visibility="public" flowlab-static="False" flowlab-ctor="True">
@@ -53,6 +70,12 @@
         </parameters>
         <body>
             <comment text="Empty list with an internal array of initialCapacity places, like new ArrayList&lt;&gt;(n) in Java"/>
+            <if expression="initialCapacity &lt; 0">
+                <then>
+                    <throw expression="new InvalidArgument(&quot;Illegal Capacity: &quot; &amp; initialCapacity)"/>
+                </then>
+                <else/>
+            </if>
             <declare name="bigger" type="T" array="True" size="initialCapacity"/>
             <assign variable="items" expression="bigger"/>
         </body>
@@ -94,6 +117,12 @@
         </parameters>
         <body>
             <comment text="Inserts x at position i: the items from i on move one place forward"/>
+            <if expression="i &lt; 0 or i &gt; count">
+                <then>
+                    <throw expression="new IndexOutOfRange(&quot;Index: &quot; &amp; i &amp; &quot;, Size: &quot; &amp; count)"/>
+                </then>
+                <else/>
+            </if>
             <declare name="k" type="Integer" array="False" size=""/>
             <if expression="count = Size(items)">
                 <then>
@@ -113,6 +142,12 @@
             <parameter name="i" type="Integer" array="False"/>
         </parameters>
         <body>
+            <if expression="i &lt; 0 or i &gt;= count">
+                <then>
+                    <throw expression="new IndexOutOfRange(&quot;Index &quot; &amp; i &amp; &quot; out of bounds for length &quot; &amp; count)"/>
+                </then>
+                <else/>
+            </if>
             <declare name="item" type="T" array="False" size=""/>
             <assign variable="item" expression="items[i]"/>
         </body>
@@ -123,6 +158,12 @@
             <parameter name="x" type="T" array="False"/>
         </parameters>
         <body>
+            <if expression="i &lt; 0 or i &gt;= count">
+                <then>
+                    <throw expression="new IndexOutOfRange(&quot;Index &quot; &amp; i &amp; &quot; out of bounds for length &quot; &amp; count)"/>
+                </then>
+                <else/>
+            </if>
             <assign variable="items[i]" expression="x"/>
         </body>
     </function>
@@ -132,6 +173,12 @@
         </parameters>
         <body>
             <comment text="Removes the item at position i: the following ones move one place back"/>
+            <if expression="i &lt; 0 or i &gt;= count">
+                <then>
+                    <throw expression="new IndexOutOfRange(&quot;Index &quot; &amp; i &amp; &quot; out of bounds for length &quot; &amp; count)"/>
+                </then>
+                <else/>
+            </if>
             <declare name="removed" type="T" array="False" size=""/>
             <declare name="k" type="Integer" array="False" size=""/>
             <assign variable="removed" expression="items[i]"/>
