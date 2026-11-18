@@ -792,7 +792,7 @@ LANGS.pseudo = {
       for (const s of stmts) {
         SRC.cur = s.id;
         switch (s.kind) {
-          case 'const': o.line(`${PS('const')} ${s.name} : ${TP(s.type)} = ${E(s.expression, sc)}`); break;
+          case 'const': o.line(`${PS('const')} ${s.name} : ${TP(s.type)} ← ${E(s.expression, sc)}`); break;
           case 'declare': o.line(`${PS('declare')} ${s.array ? PS('declareArray', { names: s.name.split(',').map((x) => x.trim() + '[' + dimsOf(s, E, sc).join(', ') + ']').join(', '), type: TP(s.type) }) : `${s.name} : ${TP(s.type)}${String(s.init || '').trim() ? ' ← ' + E(s.init, sc) : ''}`}`); break;
           case 'assign': o.line(`${targetsOf(s).map((x) => E(x, sc)).join(', ')} ← ${E(s.expression, sc)}`); break;
           case 'input': o.line(`${PS('read')} ${E(s.variable, sc)}`); break;

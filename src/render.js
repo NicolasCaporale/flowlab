@@ -95,7 +95,7 @@ function caption(s) {
       return { text: `${s.array ? names.map((n) => `${n}[${s.size}]`).join(', ') : names.join(', ')}: ${T[s.type]}${!s.array && String(s.init || '').trim() ? ' ← ' + s.init : ''}` };
     }
     case 'assign': return { text: `${s.variable} ← ${s.expression}` };
-    case 'const': return { text: `${s.name}: ${T[s.type]} = ${s.expression}`, badge: 'C' };
+    case 'const': return { text: `${s.name}: ${T[s.type]} ← ${s.expression}`, badge: 'C' };
     case 'input': return { text: s.variable, badge: 'I' };
     case 'output': return { text: `${s.expression}${s.newline ? '' : '  ⋯'}`, badge: 'O' };
     case 'if': case 'while': case 'do': return { text: s.expression };
