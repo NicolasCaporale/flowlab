@@ -3840,7 +3840,10 @@ function exprPrinter(L) {
     if (op === 'xor') {
       const ints = _CE.inferType(n.l, sc) === 'Integer' && _CE.inferType(n.r, sc) === 'Integer';
       const x = L.xor ? L.xor(ints) : { op: 'XOR', p: P.xor, a: 'left' };
-      return generic(n, sc, x.op, x.p, x.a);
+      if (!x.relParens) return generic(n, sc, x.op, x.p, x.a);
+      // comparisons in parentheses, as the compilers suggest: (x < 3) ^ (x > 1)
+      const l = pr(n.l, sc), r = pr(n.r, sc);
+      return { s: `${wrap(l, l.p < x.p || l.p === P.rel)} ${x.op} ${wrap(r, r.p <= x.p || r.p === P.rel)}`, p: x.p };
     }
     if (REL.includes(op)) return generic(n, sc, L.rel[op], P.rel, 'none');
     if (op === '+' || op === '-') return generic(n, sc, op, P.add, 'left');
@@ -3893,6 +3896,8 @@ function asReal(src, type, E, sc) {
 function lvTypeOf(v, sc) { const t = tryParse(v); const x = t && strip(t); return x ? _CE.inferType(x, sc) : 'String'; }
 
 /* Flat list of the operands of a chain of & */
+/* xor between booleans (in C++ it gives an int) */
+function boolXor(node, sc) { const n = strip(node); return !!n && n.k === 'bin' && n.op === 'xor' && _CE.inferType(n, sc) === 'Boolean'; }
 function concatParts(n) {
   n = strip(n);
   if (n.k === 'bin' && n.op === '&') return [...concatParts(n.l), ...concatParts(n.r)];
@@ -4281,9 +4286,10 @@ function cFamily(cfg) {
         // indices checked only if the program catches IndexOutOfRange (C++ .at(), JavaScript checkIndex())
         idx: GEN.exc.idx && cfg.idxChk ? (nm, ix) => cfg.idxChk(nm, ix, used) : cfg.idx, str: (s) => cfg.strLit(s), T: 'true', F: 'false', pi: cfg.pi, use: () => used.add('pi'),
         not: '!', notPrec: P.un, or: '||', and: '&&', pow: '**',
-        // in the C family ^ binds less than the comparisons and more than && and ||; between booleans ^ gives
-        // an int in C++ and a number in JavaScript (they have no xor between booleans): != and !== there
-        xor: (ints) => (!ints && (cfg.lang === 'cpp' || cfg.lang === 'javascript') ? { op: cfg.neq || '!=', p: P.rel, a: 'none' } : { op: '^', p: P.bxor, a: 'left' }),
+        // in the C family ^ binds less than the comparisons and more than && and ||. Between booleans ^ gives
+        // 1 or 0: in C++ it works as true and false (only printed it needs bool(...)); in JavaScript it is a
+        // number, and true === 1 is false, so there it is !==
+        xor: (ints) => (!ints && cfg.lang === 'javascript' ? { op: '!==', p: P.rel, a: 'none' } : { op: '^', p: P.bxor, a: 'left', relParens: true }),
         rel: { '==': cfg.eq || '==', '!=': cfg.neq || '!=', '<': '<', '<=': '<=', '>': '>', '>=': '>=' },
         lang: cfg.lang, targ: cfg.targ, diamond: cfg.diamond, garg: cfg.garg, excMsg: cfg.excMsg,
         nul: cfg.nul, self: cfg.self, arrow: cfg.arrow, staticSep: cfg.staticSep, newObj: cfg.newObj, superCtor: cfg.superCtor, superMethod: cfg.superMethod, field: cfg.field,
@@ -4353,6 +4359,8 @@ function cFamily(cfg) {
             case 'output': {
               // in C++ << binds tighter than comparisons: cout << (a == b)
               const x = tryParse(s.expression); const ex = x ? pr(x, sc) : { s: s.expression, p: P.atom };
+              // C++: a ^ b between booleans is an int, printed 1 or 0: bool(...) prints true or false
+              if (cfg.lang === 'cpp' && x && boolXor(x, sc)) { ex.s = `bool(${ex.s})`; ex.p = P.atom; }
               o.line(cfg.output(cfg.wrapOut && ex.p <= P.rel ? `(${ex.s})` : ex.s, s.newline) + ';');
               break;
             }
@@ -4554,7 +4562,7 @@ LANGS.cpp = cFamily({
     if (s.kind === 'open') o.line(s.mode === 'read' ? `fileIn.open(${E(s.expression, sc)});` : `fileOut.open(${E(s.expression, sc)});`);
     if (s.kind === 'close') o.line(s.mode === 'read' ? 'fileIn.close();' : 'fileOut.close();');
     if (s.kind === 'read') { const t = lvInfo(s.variable, sc).type; if (t === 'String') o.line(`getline(fileIn, ${E(s.variable, sc)});`); else { o.line(`fileIn >> ${E(s.variable, sc)};`); o.line('fileIn >> ws;'); } }
-    if (s.kind === 'write') { const x = strip(tryParse(s.expression)); const low = x && x.k === 'bin' && (REL.includes(x.op) || x.op === 'and' || x.op === 'or' || x.op === 'xor'); o.line(`fileOut << ${low ? `(${E(s.expression, sc)})` : E(s.expression, sc)} << endl;`); }
+    if (s.kind === 'write') { const x = strip(tryParse(s.expression)); const bx = x && boolXor(x, sc); const low = x && x.k === 'bin' && (REL.includes(x.op) || x.op === 'and' || x.op === 'or' || x.op === 'xor'); o.line(`fileOut << ${bx ? `bool(${E(s.expression, sc)})` : low ? `(${E(s.expression, sc)})` : E(s.expression, sc)} << endl;`); }
   },
   multiAssign(o, tg, call, f, sc, used) { used.add('tuple'); o.line(`tie(${tg.join(', ')}) = ${call};`); },
   program(prog, g) {
