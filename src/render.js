@@ -254,7 +254,8 @@ class Renderer {
     // in a branch or in the body of a loop the last arrow is short; after another loop or an If it is zero
     // (the exit of the block continues straight into the return, without steps)
     const last = arr[arr.length - 1];
-    const tail = !tailHead && last ? (COMPOUND_KINDS.has(last.kind) ? 0 : TAIL_C) : R_.GAP;
+    // after an If the line goes down a little from its junction before turning (it does not run along its branches)
+    const tail = !tailHead && last ? (COMPOUND_KINDS.has(last.kind) && last.kind !== 'if' ? 0 : TAIL_C) : R_.GAP;
     let lw = 22, R = 22, h = R_.GAP * (arr.length - glued.filter(Boolean).length) + tail;
     for (const p of parts) { lw = Math.max(lw, p.L); R = Math.max(R, p.R); h += p.h; }
     return {
