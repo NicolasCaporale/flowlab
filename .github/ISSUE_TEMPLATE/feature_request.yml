@@ -1,0 +1,28 @@
+name: Feature Request
+description: Proponi una nuova funzione o un miglioramento per la web app / PWA
+title: "[FEATURE] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Descrizione della proposta
+      description: Descrivi brevemente la funzione o il miglioramento che vorresti aggiungere.
+    validations:
+      required: true
+
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Perché è utile
+      description: Quale problema risolve o come migliora l'esperienza d'uso?
+    validations:
+      required: true
+
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Come dovrebbe funzionare (opzionale)
+      description: Indica eventuali dettagli, comportamenti offline o casi d'uso principali.
+    validations:
+      required: false
