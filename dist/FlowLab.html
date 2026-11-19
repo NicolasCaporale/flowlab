@@ -7025,8 +7025,16 @@ const ArrayView = (() => {
     const sub = h('span', { class: 'tpargs' });
     const cs = M.hasClasses(st.prog) ? st.prog.classes : [];
     const tps = ctx ? ctx.gens || ctx.tparams || [] : [];
-    const genOpt = (t) => h('option', { value: t, class: 'genopt' }, L('ui.genericType', { t }));
-    const opts = [...E.TYPES.map((t) => [t, TYPE_IT[t]]), ...tps.map((t) => [t, L('ui.genericType', { t })]), ...(ctx && ctx.allowNew ? [[NEW_GEN, L('ui.newGenericType')]] : []), ...cs.map((c) => [c.name, `${M.classTitle(c)} (${c.module ? L('ui.module') : L('ui.class')})`])];
+    const genOpt = (t) => h('option', { value: t, class: 'genopt', 'data-k': 'gen' }, L('ui.genericType', { t }));
+    // groups divided by a line: base types, Generic Types, classes of the program, classes of the modules, exceptions of the program
+    const isExc = (c) => M.isExcClass(st.prog, c);
+    const groups = [
+      E.TYPES.map((t) => [t, TYPE_IT[t], 'base']),
+      [...tps.map((t) => [t, L('ui.genericType', { t }), 'gen']), ...(ctx && ctx.allowNew ? [[NEW_GEN, L('ui.newGenericType'), 'gen']] : [])],
+      cs.filter((c) => !c.module && !isExc(c)).map((c) => [c.name, `${M.classTitle(c)} (${L('ui.class')})`, 'cls']),
+      cs.filter((c) => c.module).map((c) => [c.name, `${M.classTitle(c)} (${L('ui.module')})`, 'mod']),
+      cs.filter((c) => !c.module && isExc(c)).map((c) => [c.name, `${M.classTitle(c)} (${L('chart.exception')})`, 'exc']),
+    ].filter((g) => g.length);
     // the menus of the same dialog see at once the Generic Types just created
     if (ctx && typeof ctx === 'object' && !ctx.id) (ctx._sels = ctx._sels || new Set()).add(sel);
     const genOf = (b) => { const c = M.classByName(st.prog, b); return c && (c.tparams || []).length ? c : null; };
@@ -7048,13 +7056,25 @@ const ArrayView = (() => {
       sel.value = [...sel.options].find((o) => o.value.toLowerCase() === g.base.toLowerCase()).value;
       drawArgs(g.args);
     };
-    sel.append(...opts.map(([v, l]) => h('option', { value: v, class: v === NEW_GEN ? 'newgen' : null }, l)));
+    groups.forEach((g, i) => {
+      if (i) sel.append(document.createElement('hr'));
+      sel.append(...g.map(([v, l, k]) => h('option', { value: v, class: v === NEW_GEN ? 'newgen' : null, 'data-k': k }, l)));
+    });
     sel.addEventListener('change', () => {
       if (sel.value === NEW_GEN) {
         const taken = new Set([...(ctx.taken ? ctx.taken() : []), ...tps].map((x) => x.toLowerCase()));
         const nm = nextGenName(taken);
         for (const x of ctx._sels || [sel]) {
-          if (![...x.options].some((o) => o.value === nm)) { const nw = [...x.options].find((o) => o.value === NEW_GEN); const o = genOpt(nm); if (nw) x.insertBefore(o, nw); else { const firstCls = [...x.options].find((o2) => /\((classe|modulo)\)$/.test(o2.textContent)); x.insertBefore(o, firstCls || null); } }
+          if (![...x.options].some((o) => o.value === nm)) {
+            const nw = [...x.options].find((o) => o.value === NEW_GEN), o = genOpt(nm);
+            if (nw) x.insertBefore(o, nw);
+            else {
+              // a menu without «New Generic Type»: after its Generic Types, or a new group after the base types
+              const gens = [...x.options].filter((o2) => o2.dataset.k === 'gen');
+              if (gens.length) gens[gens.length - 1].after(o);
+              else { const lastBase = [...x.options].filter((o2) => o2.dataset.k === 'base').pop(); const line = document.createElement('hr'); lastBase.after(line); line.after(o); }
+            }
+          }
         }
         sel.value = nm;
         toast(L('ui.newGenericType2', { nm }));
