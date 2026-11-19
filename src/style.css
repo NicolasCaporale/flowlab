@@ -312,6 +312,9 @@ table.vars tr.changed td { background: var(--exec-soft); }
 #codeOut .cl.linked { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--sel); }
 #codeOut .cl.exec { background: var(--exec-soft); box-shadow: inset 3px 0 0 var(--exec); }
 .chart .shape.linked > path:not(.inner), .chart .shape.linked > rect { stroke: var(--sel); stroke-width: 3; }
+/* selection rectangle drawn with the mouse on the sheet */
+.selband { position: fixed; z-index: 35; pointer-events: none; border: 1.5px dashed var(--sel); background: color-mix(in srgb, var(--sel) 10%, transparent); border-radius: 3px; }
+body.banding, body.banding * { user-select: none; cursor: crosshair; }
 /* breakpoint marked on a block (only for the session) */
 .chart .bpmark circle { fill: var(--err); stroke: var(--paper); stroke-width: 1.5; }
 .chart .bpmark text { fill: #fff; font: 700 10px/1 var(--font-ui, sans-serif); text-anchor: middle; pointer-events: none; }

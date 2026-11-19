@@ -1211,6 +1211,11 @@
   "ui.backToTheNormalSize": "Grandezza del testo: clic per tornare a 13",
   "model.invalidArgument": "un valore non ammesso per un parametro (es. una capacità negativa); InvalidConversion è uno di questi",
   "model.emptyStack": "pop o peek su una pila vuota",
-  "model.noSuchElement": "l'elemento richiesto non esiste (es. remove o peek su una coda vuota)"
+  "model.noSuchElement": "l'elemento richiesto non esiste (es. remove o peek su una coda vuota)",
+  "ui.blocksCopiedClickAnArrow": "{n} blocchi copiati: clic su una freccia e scegli «Incolla qui»",
+  "ui.nBlocks": "{n} blocchi",
+  "ui.shiftClickShiftArrows": "Maiusc+clic  ·  Ctrl+clic  ·  Maiusc+↑ ↓  ·  rettangolo col mouse",
+  "ui.selectSeveralBlocks": "seleziona più blocchi: dal selezionato a quello cliccato (Maiusc), uno in più o in meno (Ctrl); copia, taglia, incolla, duplica, elimina e Alt+↑ ↓ agiscono su tutti; Esc ne lascia uno",
+  "ui.selectAllTheBlocksOfThe": "seleziona tutti i blocchi del diagramma"
  }
 }

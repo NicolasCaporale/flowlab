@@ -1204,6 +1204,11 @@
   "ui.backToTheNormalSize": "Text size: click to go back to 13",
   "model.invalidArgument": "a value not allowed for a parameter (e.g. a negative capacity); InvalidConversion is one of them",
   "model.emptyStack": "pop or peek on an empty stack",
-  "model.noSuchElement": "the element asked for does not exist (e.g. remove or peek on an empty queue)"
+  "model.noSuchElement": "the element asked for does not exist (e.g. remove or peek on an empty queue)",
+  "ui.blocksCopiedClickAnArrow": "{n} blocks copied: click an arrow and choose «Paste here»",
+  "ui.nBlocks": "{n} blocks",
+  "ui.shiftClickShiftArrows": "Shift+click  ·  Ctrl+click  ·  Shift+↑ ↓  ·  rectangle with the mouse",
+  "ui.selectSeveralBlocks": "select several blocks: from the selected one to the clicked one (Shift), one more or one less (Ctrl); copy, cut, paste, duplicate, delete and Alt+↑ ↓ act on all of them; Esc leaves one",
+  "ui.selectAllTheBlocksOfThe": "select all the blocks of the diagram"
  }
 }

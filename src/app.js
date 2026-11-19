@@ -28,7 +28,7 @@
 
   /* ------------------------------ State --------------------------------- */
   const st = {
-    prog: null, fi: 0, sel: null, clip: null, undo: [], redo: [], dirty: false,
+    prog: null, fi: 0, sel: null, msel: null, clip: null, undo: [], redo: [], dirty: false,
     zoom: store.get('zoom', 1), speed: store.get('speed', 2), lang: CodeGen.LANGS[store.get('lang', 'python')] ? store.get('lang', 'python') : 'python', tab: store.get('tab', 'console'),
     fileName: null, ins: [], expanded: new Set(), modCollapsed: new Set(store.get('modCollapsed', [])), varsOpen: new Set(), vfs: new Map(Object.entries(store.get('vfs', {}))),
     // Functions or Objects view; in the Objects view the sheet shows the class diagram (uml) or a method
@@ -41,7 +41,7 @@
   /* ---- views: the main sheet (MAIN) and the auxiliary views, floating windows with another
      diagram or another part of the same one. The active view (V) keeps its state in st (diagram,
      selection, zoom, insertion points…); the others keep it aside in v.state */
-  const VKEYS = ['fi', 'uml', 'sel', 'usel', 'zoom', 'ins', 'edges', 'compact', 'compactFid'];
+  const VKEYS = ['fi', 'uml', 'sel', 'msel', 'mselAnchor', 'usel', 'zoom', 'ins', 'edges', 'compact', 'compactFid'];
   const FOLLOW = ['fi', 'uml', 'compact', 'compactFid', 'zoom']; // a «Continue» view copies these from the main sheet
   const MAIN = { main: true, id: 0, state: {}, chart: null, wrap: null };
   const views = [MAIN];
@@ -432,10 +432,10 @@
     const on = run.state !== 'idle' && run.state !== 'done';
     for (const v of views) {
       if (!v.chart) continue;
-      const sel = vget(v, 'sel');
+      const sel = new Set(selIdsOf(v));
       $$('.shape', v.chart).forEach((g) => {
         const id = g.dataset.id;
-        g.classList.toggle('sel', id === sel);
+        g.classList.toggle('sel', sel.has(id));
         // the block lights up only when the cursor has reached it
         g.classList.toggle('exec', id === litId && on);
         g.classList.toggle('err', id === run.errId);
@@ -581,7 +581,7 @@
       }
       row.append(grid); box.append(row);
     }
-    if (st.clip) box.append(h('button', { class: 'pastebtn', type: 'button', onclick: () => { closePop(); paste(target); } }, L('ui.pasteHereCtrlV', { value: RenderLib.KIND_IT[st.clip.kind] })));
+    if (st.clip) box.append(h('button', { class: 'pastebtn', type: 'button', onclick: () => { closePop(); paste(target); } }, L('ui.pasteHereCtrlV', { value: clipLabel() })));
     openPop(x, y, box);
   }
   /* ---- breakpoints marked on the blocks (only for this session, not in the file) and «Run to here» ----
@@ -683,7 +683,7 @@
     const s = M.makeStmt(kind);
     if (isRunning()) { toast(L('ui.stopTheProgramToEditThe'), 'warn'); return; }
     if (roGuard()) return;
-    stmtDialog(s, true, (vals) => mutate(() => { Object.assign(s, vals); target.arr.splice(target.idx, 0, s); st.sel = s.id; }));
+    stmtDialog(s, true, (vals) => mutate(() => { Object.assign(s, vals); target.arr.splice(target.idx, 0, s); setSel([s.id]); }));
   }
   function editStmt(id) {
     const f = M.findStmt(st.prog, id); if (!f) return;
@@ -691,35 +691,100 @@
     if (roGuard()) return;
     stmtDialog(f.stmt, false, (vals) => mutate(() => Object.assign(f.stmt, vals)));
   }
+  /* ---- multiple selection: Shift+click (or Shift+↑/↓) selects the blocks between the selected one and the
+     clicked one, in the same sequence; Ctrl+click adds or removes a block; Ctrl+A all the blocks of the diagram.
+     st.sel is the main block (the last one chosen), st.msel all of them (valid while it contains st.sel) ---- */
+  const selIdsOf = (v) => { const s = vget(v, 'sel'), m = vget(v, 'msel'); return !s ? [] : m && m.size > 1 && m.has(s) ? [...m] : [s]; };
+  const selIds = () => selIdsOf(V);
+  const setSel = (ids, main) => { st.sel = main || ids[ids.length - 1] || null; st.msel = ids.length > 1 ? new Set(ids) : null; };
+  // the selected blocks in the order of the program, without those inside another selected one (an If takes its branches)
+  function selStmts() {
+    const ids = new Set(selIds()); if (!ids.size) return [];
+    const out = [];
+    const f = M.findStmt(st.prog, st.sel);
+    M.walk(f ? f.func.body : func().body, (x, arr, i) => { if (ids.has(x.id)) out.push({ stmt: x, arr, index: i }); });
+    return out.filter((o) => !out.some((p) => p !== o && containsArr(p.stmt, o.arr)));
+  }
+  // path of a block: the sequences and positions from the body of the function down to it
+  function pathOf(id, arr, acc) {
+    for (let i = 0; i < arr.length; i++) {
+      const s = arr[i], here = [...acc, { arr, index: i, stmt: s }];
+      if (s.id === id) return here;
+      for (const a of M.childArrays(s)) { const r = pathOf(id, a, here); if (r) return r; }
+    }
+    return null;
+  }
+  // blocks between a and b in the deepest sequence that contains both (they can be inside an If or a loop)
+  function rangeIds(a, b) {
+    const body = func().body, pa = pathOf(a, body, []), pb = pathOf(b, body, []);
+    if (!pa || !pb) return null;
+    let d = 0;
+    while (d + 1 < pa.length && d + 1 < pb.length && pa[d].stmt === pb[d].stmt && pa[d + 1].arr === pb[d + 1].arr) d++;
+    if (pa[d].arr !== pb[d].arr) return null;
+    const i = Math.min(pa[d].index, pb[d].index), j = Math.max(pa[d].index, pb[d].index);
+    return { ids: pa[d].arr.slice(i, j + 1).map((s) => s.id), main: pb[d].stmt.id };
+  }
+  function selectClick(id, e) {
+    const ctrl = e.ctrlKey || e.metaKey;
+    if (e.shiftKey && st.sel && id && !id.includes(':')) {
+      const r = rangeIds(st.msel && st.msel.size > 1 ? (st.mselAnchor || st.sel) : st.sel, id);
+      if (r) { const anchor = st.msel && st.msel.size > 1 ? st.mselAnchor : st.sel; setSel(r.ids, r.main); st.mselAnchor = anchor; return; }
+    }
+    if (ctrl && id && !id.includes(':')) {
+      const cur = selIds(), has = cur.includes(id);
+      const ids = has ? cur.filter((x) => x !== id) : [...cur, id];
+      setSel(ids, has ? ids[ids.length - 1] : id); st.mselAnchor = st.sel;
+      return;
+    }
+    setSel(id && !id.includes(':') ? [id] : []); st.mselAnchor = st.sel;
+  }
+  function selectAll() {
+    if (isUml() || func().abstract) return;
+    const ids = func().body.map((s) => s.id);
+    if (ids.length) { setSel(ids, ids[ids.length - 1]); st.mselAnchor = ids[0]; decorate(); }
+  }
   function deleteSel() {
     if (!st.sel || roGuard()) return;
-    const f = M.findStmt(st.prog, st.sel); if (!f) return;
-    mutate(() => { f.arr.splice(f.index, 1); st.sel = f.arr[f.index] ? f.arr[f.index].id : (f.arr[f.index - 1] ? f.arr[f.index - 1].id : null); });
+    const items = selStmts(); if (!items.length) return;
+    const last = items[items.length - 1];
+    mutate(() => {
+      for (const o of items) o.arr.splice(o.arr.indexOf(o.stmt), 1);
+      const i = Math.min(last.index - items.filter((o) => o.arr === last.arr).length + 1, last.arr.length - 1);
+      const next = last.arr[Math.max(0, i)];
+      setSel(next ? [next.id] : []);
+    });
   }
   function copySel(cut) {
     if (!st.sel) return;
-    const f = M.findStmt(st.prog, st.sel); if (!f) return;
+    const items = selStmts(); if (!items.length) return;
     if (cut && roGuard()) return;
-    st.clip = M.cloneStmt(f.stmt, true);
-    if (cut) mutate(() => { f.arr.splice(f.index, 1); st.sel = null; });
-    else toast(L('ui.blockCopiedClickAnArrowAnd'));
+    st.clip = items.map((o) => M.cloneStmt(o.stmt, true));
+    if (cut) mutate(() => { for (const o of items) o.arr.splice(o.arr.indexOf(o.stmt), 1); setSel([]); });
+    else toast(st.clip.length > 1 ? L('ui.blocksCopiedClickAnArrow', { n: st.clip.length }) : L('ui.blockCopiedClickAnArrowAnd'));
   }
+  // what is in the clipboard, for the «Paste here» item
+  const clipLabel = () => (st.clip.length > 1 ? L('ui.nBlocks', { n: st.clip.length }) : RenderLib.KIND_IT[st.clip[0].kind]);
   function paste(target) {
-    if (!st.clip || (!target && (isUml() || func().abstract)) || roGuard()) return;
-    const c = M.cloneStmt(st.clip);
+    if (!st.clip || !st.clip.length || (!target && (isUml() || func().abstract)) || roGuard()) return;
+    const cs = st.clip.map((x) => M.cloneStmt(x));
     if (!target) {
-      const f = st.sel && M.findStmt(st.prog, st.sel);
-      target = f ? { arr: f.arr, idx: f.index + 1 } : { arr: func().body, idx: func().body.length };
+      // after the last selected block
+      const items = selStmts(), o = items[items.length - 1];
+      target = o ? { arr: o.arr, idx: o.arr.indexOf(o.stmt) + 1 } : { arr: func().body, idx: func().body.length };
     }
-    mutate(() => { target.arr.splice(target.idx, 0, c); st.sel = c.id; });
+    mutate(() => { target.arr.splice(target.idx, 0, ...cs); setSel(cs.map((c) => c.id)); st.mselAnchor = cs[0].id; });
   }
   /* moves the selected block by one place (dir -1 up, +1 down) in the same sequence */
   function shiftSel(dir) {
     if (!st.sel || roGuard()) return;
     if (isRunning()) { toast(L('ui.stopTheProgramToEditThe'), 'warn'); return; }
-    const f = M.findStmt(st.prog, st.sel); if (!f) return;
-    const j = f.index + dir; if (j < 0 || j >= f.arr.length) return;
-    mutate(() => { f.arr.splice(f.index, 1); f.arr.splice(j, 0, f.stmt); });
+    const items = selStmts(); if (!items.length) return;
+    // several blocks: only if they are one after the other in the same sequence
+    const arr = items[0].arr, idx = items.map((o) => arr.indexOf(o.stmt));
+    if (items.some((o) => o.arr !== arr) || idx.some((x, k) => k && x !== idx[k - 1] + 1)) return;
+    const a = idx[0], b = idx[idx.length - 1];
+    if ((dir < 0 && a === 0) || (dir > 0 && b === arr.length - 1)) return;
+    mutate(() => { const moved = arr.splice(a, b - a + 1); arr.splice(a + dir, 0, ...moved); });
   }
   /* new block from the keyboard: after the selected block or at the end of the diagram */
   function addByKey(kind) {
@@ -727,11 +792,12 @@
     const f = st.sel && M.findStmt(st.prog, st.sel);
     addStmt(f ? { arr: f.arr, idx: f.index + 1 } : { arr: func().body, idx: func().body.length }, kind);
   }
+  // a copy of the selected blocks just after the last one (the clipboard does not change)
   function duplicate() {
     if (!st.sel || roGuard()) return;
-    const f = M.findStmt(st.prog, st.sel); if (!f) return;
-    const c = M.cloneStmt(f.stmt);
-    mutate(() => { f.arr.splice(f.index + 1, 0, c); st.sel = c.id; });
+    const items = selStmts(); if (!items.length) return;
+    const o = items[items.length - 1], cs = items.map((x) => M.cloneStmt(x.stmt));
+    mutate(() => { o.arr.splice(o.arr.indexOf(o.stmt) + 1, 0, ...cs); setSel(cs.map((c) => c.id)); st.mselAnchor = cs[0].id; });
   }
   /* headers of the Catch and Finally branches: they belong to the Try block */
   const ownerOf = (id) => (/:(catch:|finally$)/.test(id) ? id.split(':')[0] : id);
@@ -747,7 +813,7 @@
     let idx = target.idx;
     if (target.arr === f.arr && f.index < idx) idx--;
     if (target.arr === f.arr && idx === f.index) return;
-    mutate(() => { f.arr.splice(f.index, 1); target.arr.splice(idx, 0, f.stmt); st.sel = id; });
+    mutate(() => { f.arr.splice(f.index, 1); target.arr.splice(idx, 0, f.stmt); setSel([id]); });
   }
 
   /* ------------------------------ Dialogs ------------------------------- */
@@ -1633,7 +1699,7 @@
       if (ins) { if (isRunning()) { toast(L('ui.stopTheProgramToEditThe'), 'warn'); return; } insertMenu(+ins.dataset.ins, e.clientX + 6, e.clientY + 6); return; }
       const g = e.target.closest('.shape');
       const gid = g ? ownerOf(g.dataset.id) : null;
-      st.sel = gid && !gid.includes(':') ? gid : null;
+      selectClick(gid, e);
       link = g ? { from: 'chart', raw: g.dataset.id } : null;
       decorate();
       decorateCode(true);
@@ -1671,7 +1737,8 @@
       const g = e.target.closest('.shape'); if (!g) return;
       e.preventDefault();
       const gid = ownerOf(g.dataset.id);
-      if (!gid.includes(':')) { st.sel = gid; decorate(); }
+      // right click inside the selection keeps it (the menu acts on all the selected blocks)
+      if (!gid.includes(':') && !selIds().includes(gid)) { setSel([gid]); decorate(); }
       shapeMenu(gid, e.clientX, e.clientY);
     });
     chart.addEventListener('pointerdown', (e) => {
@@ -1689,8 +1756,14 @@
         udrag = { items: cs.map((c) => ({ c, ox: c.x || 0, oy: c.y || 0 })), mod: mod ? mod.dataset.module : null, x: e.clientX, y: e.clientY, on: false, raf: 0 };
         return;
       }
-      if (e.button !== 0 || isRunning() || e.target.closest('.ctoggle')) return;
-      const g = e.target.closest('.shape'); if (!g || g.dataset.id.includes(':')) return;
+      if (e.button !== 0 || e.target.closest('.ctoggle')) return;
+      const g = e.target.closest('.shape');
+      // on the empty sheet: a rectangle drawn with the mouse selects the blocks it contains (Shift or Ctrl: adds them)
+      if (!g && !e.target.closest('.ins') && !e.target.closest('.vtools, .zoombar, #chartTools') && !func().abstract) {
+        band = { v, x: e.clientX, y: e.clientY, on: false, add: e.shiftKey || e.ctrlKey || e.metaKey, base: selIds(), el: null };
+        return;
+      }
+      if (isRunning() || !g || g.dataset.id.includes(':')) return;
       drag = { id: g.dataset.id, x: e.clientX, y: e.clientY, on: false, ghost: null };
     });
     v.wrap.addEventListener('wheel', (e) => {
@@ -1700,9 +1773,41 @@
     }, { passive: false });
     v.wrap.addEventListener('scroll', closePop);
   }
+  /* ---- selection rectangle (bounding box) on the sheet of a view ---- */
+  let band = null;
+  function bandRect(b, e) { return { l: Math.min(b.x, e.clientX), t: Math.min(b.y, e.clientY), r: Math.max(b.x, e.clientX), b: Math.max(b.y, e.clientY) }; }
+  function bandMove(e) {
+    const b = band;
+    if (!b.on && Math.hypot(e.clientX - b.x, e.clientY - b.y) > 5) { b.on = true; b.el = h('div', { class: 'selband' }); document.body.append(b.el); document.body.classList.add('banding'); }
+    if (!b.on) return;
+    const r = bandRect(b, e);
+    Object.assign(b.el.style, { left: r.l + 'px', top: r.t + 'px', width: r.r - r.l + 'px', height: r.b - r.t + 'px' });
+    // near the edges of the view the sheet scrolls
+    const w = b.v.wrap.getBoundingClientRect(), E = 24, sp = 14;
+    if (e.clientY > w.bottom - E) b.v.wrap.scrollTop += sp; else if (e.clientY < w.top + E) b.v.wrap.scrollTop -= sp;
+    if (e.clientX > w.right - E) b.v.wrap.scrollLeft += sp; else if (e.clientX < w.left + E) b.v.wrap.scrollLeft -= sp;
+    bandApply(e, false);
+  }
+  // the blocks all inside the rectangle (Start, End and the Catch/Finally headers are not selected)
+  function bandApply(e, final) {
+    const b = band, r = bandRect(b, e);
+    const inside = new Set($$('.shape', b.v.chart).filter((g) => {
+      if (g.dataset.id.includes(':')) return false;
+      const q = g.getBoundingClientRect();
+      return q.left >= r.l && q.right <= r.r && q.top >= r.t && q.bottom <= r.b;
+    }).map((g) => g.dataset.id));
+    if (b.add) b.base.forEach((id) => inside.add(id));
+    // in the order of the program; the main block is the last one
+    const ids = []; M.walk(func().body, (x) => { if (inside.has(x.id)) ids.push(x.id); });
+    setSel(ids, ids[ids.length - 1]); st.mselAnchor = ids[0] || null;
+    link = null;
+    decorate();
+    if (final) decorateCode(true);
+  }
   /* dragging (also from one view to another) */
   function bindDrag() {
     window.addEventListener('pointermove', (e) => {
+      if (band) { bandMove(e); return; }
       if (udrag) {
         const dx = (e.clientX - udrag.x) / st.zoom, dy = (e.clientY - udrag.y) / st.zoom;
         if (!udrag.on && Math.hypot(dx, dy) > 4) {
@@ -1738,6 +1843,12 @@
       }
     });
     window.addEventListener('pointerup', (e) => {
+      if (band) {
+        const b = band;
+        if (b.on) { bandApply(e, true); b.el.remove(); document.body.classList.remove('banding'); suppressClick = true; setTimeout(() => { suppressClick = false; }, 0); }
+        band = null;
+        return;
+      }
       if (udrag) {
         const d = udrag; udrag = null;
         if (d.on) { cancelAnimationFrame(d.raf); document.body.classList.remove('udragging'); if (!d.items[0].c.builtin) st.dirty = true; suppressClick = true; setTimeout(() => { suppressClick = false; }, 50); render(); }
@@ -2353,8 +2464,7 @@
   // blocks the code follows: those of the clicked line, otherwise the selected block (and the clicked header)
   function codeFocus() {
     if (link && link.from === 'code') return link.ids;
-    const sel = st.uml ? null : vget(V, 'sel'), out = new Set();
-    if (sel) out.add(sel);
+    const sel = st.uml ? null : vget(V, 'sel'), out = new Set(st.uml ? [] : selIds());
     if (link && link.from === 'chart' && link.raw && (!sel || ownerOf(link.raw) === sel)) out.add(link.raw);
     return out;
   }
@@ -2393,7 +2503,7 @@
     const shown = views.find((v) => v.chart && $(`.shape[data-id="${CSS.escape(first)}"]`, v.chart));
     if (shown) focusView(shown);
     else { focusView(MAIN); const fi = st.prog.functions.findIndex((f) => f.id === fid); if (fi >= 0) showFunc(fi); }
-    st.sel = sel;
+    setSel(sel ? [sel] : []);
     link = { from: 'code', ids, sel };
     decorate();
     const el = $(`.shape[data-id="${CSS.escape(first)}"]`, V.chart);
@@ -3698,7 +3808,7 @@
     [L('ui.edit4'), [
       ['Ctrl+Z  ·  Ctrl+Y', L('ui.undoRedo')], ['Ctrl+C  X  V  D', L('ui.copyCutPasteAfterTheSelected')],
       [L('ui.enterDoubleClick'), L('ui.editTheSelectedBlock')], [L('ui.del'), L('ui.deleteTheSelectedBlock')],
-      ['↑  ↓', L('ui.selectThePreviousNextBlock')], ['Alt+↑  Alt+↓', L('ui.moveTheSelectedBlockUpDown')],
+      ['↑  ↓', L('ui.selectThePreviousNextBlock')], [L('ui.shiftClickShiftArrows'), L('ui.selectSeveralBlocks')], ['Ctrl+A', L('ui.selectAllTheBlocksOfThe')], ['Alt+↑  Alt+↓', L('ui.moveTheSelectedBlockUpDown')],
     ]],
     [L('ui.addABlockAfterTheSelected'), [
       [keysOf('declare', 'const', 'assign'), L('ui.declareConstantAssign')], [keysOf('input', 'output', 'call'), L('ui.inputOutputCall')], [keysOf('if', 'while', 'for', 'do'), L('ui.ifWhileForDoWhile')], [keysOf('comment', 'breakpoint'), L('ui.commentBreakpoint')],
@@ -3736,7 +3846,9 @@
       if (e.key === 'Escape') {
         if (!$('#pop').hidden) { closePop(); e.preventDefault(); return; }
         if (modalStack.length) { modalStack[modalStack.length - 1](); e.preventDefault(); return; }
-        if (drag && drag.on) { drag.ghost.remove(); drag = null; document.body.classList.remove('dragging'); }
+        if (drag && drag.on) { drag.ghost.remove(); drag = null; document.body.classList.remove('dragging'); return; }
+        // Esc leaves only the main block selected
+        if (st.msel && st.msel.size > 1) { setSel(st.sel ? [st.sel] : []); decorate(); }
         return;
       }
       // «Add a block» menu open: the key chooses the block
@@ -3790,6 +3902,7 @@
       if (ctrl && !shift && k === 'x') { if (st.sel) go(() => copySel(true)); return; }
       if (ctrl && !shift && k === 'v') { if (st.clip) go(() => paste()); return; }
       if (ctrl && !shift && k === 'd') { if (st.sel) go(duplicate); return; }
+      if (ctrl && !shift && !alt && k === 'a' && !isUml()) return go(selectAll);
       // functions, methods and classes
       if (e.key === 'PageDown' || e.key === 'PageUp') { if (!ctrl && !alt) go(() => navDiagram(e.key === 'PageDown' ? 1 : -1)); return; }
       if (e.key === 'F2') return go(() => $('#funcEdit').click());
@@ -3818,9 +3931,16 @@
         if (alt) return go(() => shiftSel(e.key === 'ArrowDown' ? 1 : -1));
         const f = M.findStmt(st.prog, st.sel); if (!f) return;
         const n = f.arr[f.index + (e.key === 'ArrowDown' ? 1 : -1)];
-        if (n) { e.preventDefault(); st.sel = n.id; decorate(); const el = $(`.shape[data-id="${n.id}"]`, V.chart); if (el) scrollIntoViewIfNeeded(el); }
+        if (n) {
+          e.preventDefault();
+          // Shift: the selection grows (or shrinks) from the first block chosen
+          if (shift) { const anchor = st.msel && st.msel.size > 1 ? st.mselAnchor : st.sel; const r = rangeIds(anchor, n.id); if (r) { setSel(r.ids, n.id); st.mselAnchor = anchor; } }
+          else setSel([n.id]);
+          decorate(); const el = $(`.shape[data-id="${n.id}"]`, V.chart); if (el) scrollIntoViewIfNeeded(el);
+        }
         return;
       }
+
       const kind = KEY_KIND[lab];
       if (kind) go(() => addByKey(kind));
     });
