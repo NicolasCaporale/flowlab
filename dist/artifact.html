@@ -3368,14 +3368,14 @@ const CHK = {
     queue_peek: ['def queue_peek(q):', '    if not q:', '        raise NoSuchElement("The queue is empty")', '    return q[0]'],
   },
   cpp: {
-    listGet: [`template <typename T> T& listGet(vector<T>* v, int i) { if (i < 0 || i >= (int) v->size()) throw out_of_range(${MSG_IDX('to_string(i)', 'to_string(v->size())')}); return (*v)[i]; }`],
-    listRemove: [`template <typename T> T listRemove(vector<T>* v, int i) { if (i < 0 || i >= (int) v->size()) throw out_of_range(${MSG_IDX('to_string(i)', 'to_string(v->size())')}); T x = (*v)[i]; v->erase(v->begin() + i); return x; }`],
-    listInsert: ['template <typename T> void listInsert(vector<T>* v, int i, const T& x) { if (i < 0 || i > (int) v->size()) throw out_of_range("Index: " + to_string(i) + ", Size: " + to_string(v->size())); v->insert(v->begin() + i, x); }'],
-    newList: ['template <typename T> vector<T>* newList(int n) { if (n < 0) throw invalid_argument("Illegal Capacity: " + to_string(n)); return new vector<T>(); }'],
-    stackPop: ['template <typename T> T stackPop(stack<T>* s) { if (s->empty()) throw EmptyStack("The stack is empty"); T x = s->top(); s->pop(); return x; }'],
-    stackPeek: ['template <typename T> T stackPeek(stack<T>* s) { if (s->empty()) throw EmptyStack("The stack is empty"); return s->top(); }'],
-    queueRemove: ['template <typename T> T queueRemove(queue<T>* q) { if (q->empty()) throw NoSuchElement("The queue is empty"); T x = q->front(); q->pop(); return x; }'],
-    queuePeek: ['template <typename T> T queuePeek(queue<T>* q) { if (q->empty()) throw NoSuchElement("The queue is empty"); return q->front(); }'],
+    listGet: [`template <typename T> T& listGet(vector<T>& v, int i) { if (i < 0 || i >= (int) v.size()) throw out_of_range(${MSG_IDX('to_string(i)', 'to_string(v.size())')}); return v[i]; }`],
+    listRemove: [`template <typename T> T listRemove(vector<T>& v, int i) { if (i < 0 || i >= (int) v.size()) throw out_of_range(${MSG_IDX('to_string(i)', 'to_string(v.size())')}); T x = v[i]; v.erase(v.begin() + i); return x; }`],
+    listInsert: ['template <typename T> void listInsert(vector<T>& v, int i, const T& x) { if (i < 0 || i > (int) v.size()) throw out_of_range("Index: " + to_string(i) + ", Size: " + to_string(v.size())); v.insert(v.begin() + i, x); }'],
+    newList: ['template <typename T> vector<T> newList(int n) { if (n < 0) throw invalid_argument("Illegal Capacity: " + to_string(n)); return vector<T>(); }'],
+    stackPop: ['template <typename T> T stackPop(stack<T>& s) { if (s.empty()) throw EmptyStack("The stack is empty"); T x = s.top(); s.pop(); return x; }'],
+    stackPeek: ['template <typename T> T stackPeek(stack<T>& s) { if (s.empty()) throw EmptyStack("The stack is empty"); return s.top(); }'],
+    queueRemove: ['template <typename T> T queueRemove(queue<T>& q) { if (q.empty()) throw NoSuchElement("The queue is empty"); T x = q.front(); q.pop(); return x; }'],
+    queuePeek: ['template <typename T> T queuePeek(queue<T>& q) { if (q.empty()) throw NoSuchElement("The queue is empty"); return q.front(); }'],
   },
   csharp: {
     ListGet: [`public static T ListGet<T>(List<T> v, int i) { if (i < 0 || i >= v.Count) throw new IndexOutOfRangeException(${MSG_IDX('i', 'v.Count')}); return v[i]; }`],
@@ -3424,12 +3424,12 @@ const NATIVE = {
       remove: (o, a) => (GEN.exc.idx ? chk('python', 'list_remove', 'list', `list_remove(${o}, ${a[0].s})`) : `${o}.pop(${a[0].s})`),
       size: (o) => `len(${o})`, isEmpty: (o) => rel(`len(${o}) == 0`), clear: (o) => `${o}.clear()`,
       indexOf: (o, a) => `(${o}.index(${Wp(a[0])}) if ${Wp(a[0])} in ${o} else -1)`, contains: (o, a) => rel(`${Wp(a[0])} in ${o}`) } },
-    cpp: { type: (t) => `vector<${t[0]}>*`, ctor: (t, a, ty) => (a && isCap(ty) && GEN.exc.arg ? chk('cpp', 'newList', 'cap', `newList<${t ? t[0] : 'int'}>(${a})`) : `new vector<${t ? t[0] : 'int'}>(${!a || isCap(ty) ? '' : deref(a)})`), m: {
-      add: (o, a) => (a.length === 2 ? (GEN.exc.idx ? chk('cpp', 'listInsert', 'list', `listInsert(${o}, ${a[0].s}, ${a[1].s})`) : `${o}->insert(${o}->begin() + ${Wp(a[0])}, ${a[1].s})`) : `${o}->push_back(${a[0].s})`),
-      get: (o, a) => (GEN.exc.idx ? chk('cpp', 'listGet', 'list', `listGet(${o}, ${a[0].s})`) : `(*${o})[${a[0].s}]`),
-      set: (o, a) => (GEN.exc.idx ? chk('cpp', 'listGet', 'list', `listGet(${o}, ${a[0].s}) = ${a[1].s}`) : `(*${o})[${a[0].s}] = ${a[1].s}`),
+    cpp: { type: (t) => `vector<${t[0]}>`, ctor: (t, a, ty) => (a && isCap(ty) && GEN.exc.arg ? chk('cpp', 'newList', 'cap', `newList<${t ? t[0] : 'int'}>(${a})`) : `vector<${t ? t[0] : 'int'}>(${!a || isCap(ty) ? '' : a})`), m: {
+      add: (o, a) => (a.length === 2 ? (GEN.exc.idx ? chk('cpp', 'listInsert', 'list', `listInsert(${o}, ${a[0].s}, ${a[1].s})`) : `${o}.insert(${o}.begin() + ${Wp(a[0])}, ${a[1].s})`) : `${o}.push_back(${a[0].s})`),
+      get: (o, a) => (GEN.exc.idx ? chk('cpp', 'listGet', 'list', `listGet(${o}, ${a[0].s})`) : `${o}[${a[0].s}]`),
+      set: (o, a) => (GEN.exc.idx ? chk('cpp', 'listGet', 'list', `listGet(${o}, ${a[0].s}) = ${a[1].s}`) : `${o}[${a[0].s}] = ${a[1].s}`),
       remove: (o, a) => { if (GEN.exc.idx) return chk('cpp', 'listRemove', 'list', `listRemove(${o}, ${a[0].s})`); need('removeAt'); return `removeAt(${o}, ${a[0].s})`; },
-      size: (o) => ({ s: `(int) ${o}->size()`, p: P.un }), isEmpty: (o) => `${o}->empty()`, clear: (o) => `${o}->clear()`,
+      size: (o) => ({ s: `(int) ${o}.size()`, p: P.un }), isEmpty: (o) => `${o}.empty()`, clear: (o) => `${o}.clear()`,
       indexOf: (o, a) => { need('indexOfItem'); return `indexOfItem(${o}, ${a[0].s})`; }, contains: (o, a) => { need('indexOfItem'); return rel(`indexOfItem(${o}, ${a[0].s}) >= 0`); } } },
     csharp: { type: (t) => `List<${t[0]}>`, ctor: (t, a, ty) => (a && isCap(ty) && GEN.exc.arg ? (need('Helpers'), chk('csharp', 'NewList', 'cap', `Helpers.NewList<${t ? t[0] : 'int'}>(${a})`)) : `new List<${t ? t[0] : 'int'}>(${a})`), m: {
       // in C# a wrong index of a List is an ArgumentOutOfRangeException (an ArgumentException): checked also when InvalidArgument is caught
@@ -3453,10 +3453,10 @@ const NATIVE = {
     python: { ctor: () => '[]', m: { push: (o, a) => `${o}.append(${a[0].s})`,
       pop: (o) => (GEN.exc.stack ? chk('python', 'stack_pop', 'stack', `stack_pop(${o})`) : `${o}.pop()`),
       peek: (o) => (GEN.exc.stack ? chk('python', 'stack_peek', 'stack', `stack_peek(${o})`) : `${o}[-1]`), size: (o) => `len(${o})`, isEmpty: (o) => rel(`len(${o}) == 0`) } },
-    cpp: { type: (t) => { need('stack'); return `stack<${t[0]}>*`; }, ctor: (t) => { need('stack'); return `new stack<${t ? t[0] : 'int'}>()`; }, m: {
-      push: (o, a) => `${o}->push(${a[0].s})`, pop: (o) => { if (GEN.exc.stack) return chk('cpp', 'stackPop', 'stack', `stackPop(${o})`); need('popTop'); return `popTop(${o})`; },
-      peek: (o) => (GEN.exc.stack ? chk('cpp', 'stackPeek', 'stack', `stackPeek(${o})`) : `${o}->top()`),
-      size: (o) => ({ s: `(int) ${o}->size()`, p: P.un }), isEmpty: (o) => `${o}->empty()` } },
+    cpp: { type: (t) => { need('stack'); return `stack<${t[0]}>`; }, ctor: (t) => { need('stack'); return `stack<${t ? t[0] : 'int'}>()`; }, m: {
+      push: (o, a) => `${o}.push(${a[0].s})`, pop: (o) => { if (GEN.exc.stack) return chk('cpp', 'stackPop', 'stack', `stackPop(${o})`); need('popTop'); return `popTop(${o})`; },
+      peek: (o) => (GEN.exc.stack ? chk('cpp', 'stackPeek', 'stack', `stackPeek(${o})`) : `${o}.top()`),
+      size: (o) => ({ s: `(int) ${o}.size()`, p: P.un }), isEmpty: (o) => `${o}.empty()` } },
     csharp: { type: (t) => `Stack<${t[0]}>`, ctor: (t) => `new Stack<${t ? t[0] : 'int'}>()`, m: { push: (o, a) => `${o}.Push(${a[0].s})`,
       pop: (o) => (GEN.exc.stack ? (need('Helpers'), chk('csharp', 'StackPop', 'stack', `Helpers.StackPop(${o})`)) : `${o}.Pop()`),
       peek: (o) => (GEN.exc.stack ? (need('Helpers'), chk('csharp', 'StackPeek', 'stack', `Helpers.StackPeek(${o})`)) : `${o}.Peek()`), size: (o) => `${o}.Count`, isEmpty: (o) => rel(`${o}.Count == 0`) } },
@@ -3471,10 +3471,10 @@ const NATIVE = {
     python: { ctor: (t, a) => { need('deque'); return `deque(${a})`; }, m: { add: (o, a) => `${o}.append(${a[0].s})`,
       remove: (o) => (GEN.exc.queue ? chk('python', 'queue_remove', 'queue', `queue_remove(${o})`) : `${o}.popleft()`),
       peek: (o) => (GEN.exc.queue ? chk('python', 'queue_peek', 'queue', `queue_peek(${o})`) : `${o}[0]`), size: (o) => `len(${o})`, isEmpty: (o) => rel(`len(${o}) == 0`) } },
-    cpp: { type: (t) => { need('queue'); return `queue<${t[0]}>*`; }, ctor: (t, a) => { need('queue'); return `new queue<${t ? t[0] : 'int'}>(${a ? deref(a) : ''})`; }, m: {
-      add: (o, a) => `${o}->push(${a[0].s})`, remove: (o) => { if (GEN.exc.queue) return chk('cpp', 'queueRemove', 'queue', `queueRemove(${o})`); need('popFront'); return `popFront(${o})`; },
-      peek: (o) => (GEN.exc.queue ? chk('cpp', 'queuePeek', 'queue', `queuePeek(${o})`) : `${o}->front()`),
-      size: (o) => ({ s: `(int) ${o}->size()`, p: P.un }), isEmpty: (o) => `${o}->empty()` } },
+    cpp: { type: (t) => { need('queue'); return `queue<${t[0]}>`; }, ctor: (t, a) => { need('queue'); return `queue<${t ? t[0] : 'int'}>(${a ? a : ''})`; }, m: {
+      add: (o, a) => `${o}.push(${a[0].s})`, remove: (o) => { if (GEN.exc.queue) return chk('cpp', 'queueRemove', 'queue', `queueRemove(${o})`); need('popFront'); return `popFront(${o})`; },
+      peek: (o) => (GEN.exc.queue ? chk('cpp', 'queuePeek', 'queue', `queuePeek(${o})`) : `${o}.front()`),
+      size: (o) => ({ s: `(int) ${o}.size()`, p: P.un }), isEmpty: (o) => `${o}.empty()` } },
     csharp: { type: (t) => `Queue<${t[0]}>`, ctor: (t, a) => `new Queue<${t ? t[0] : 'int'}>(${a})`, m: { add: (o, a) => `${o}.Enqueue(${a[0].s})`,
       remove: (o) => (GEN.exc.queue ? (need('Helpers'), chk('csharp', 'QueueRemove', 'queue', `Helpers.QueueRemove(${o})`)) : `${o}.Dequeue()`),
       peek: (o) => (GEN.exc.queue ? (need('Helpers'), chk('csharp', 'QueuePeek', 'queue', `Helpers.QueuePeek(${o})`)) : `${o}.Peek()`), size: (o) => `${o}.Count`, isEmpty: (o) => rel(`${o}.Count == 0`) } },
@@ -4594,7 +4594,10 @@ function cFamily(cfg) {
 }
 
 const T_CPP = { Integer: 'int', Real: 'double', String: 'string', Boolean: 'bool', None: 'void' };
-/* objects in C++ are pointers (created with new); T stays T; native ArrayList<int> becomes vector<int>* */
+/* objects in C++ are pointers (created with new); T stays T; the collections of the library (STL) are values:
+   native ArrayList<int> becomes vector<int>, passed to the functions by reference (vector<int>&) */
+const isNatCpp = (t) => { const n = nativeOf(_CE.splitType(t).base); return !!(n && n.cpp); };
+const pCpp = (t) => tCpp(t) + (isNatCpp(t) ? '&' : '');
 const tCpp = (t) => {
   const g = _CE.splitType(t);
   if (!g.args.length) return T_CPP[t] || (isTP(t) ? t : (_CM.excClass(t) ? excL('cpp', t) : t) + '*');
@@ -4608,10 +4611,10 @@ const cppRetT = (r) => (r.array ? 'vector<'.repeat(r.dims || 1) + tCpp(r.type) +
 const tplF = (f) => ((f.tparams || []).length ? `template <${f.tparams.map((t) => 'typename ' + t).join(', ')}> ` : '');
 const qualOf = (c) => ((c.tparams || []).length ? `${c.name}<${c.tparams.join(', ')}>` : c.name);
 const CPP_HELPERS = {
-  removeAt: [() => '// ' + C('removeAtComment'), 'template <typename T> T removeAt(vector<T>* v, int i) { T x = (*v)[i]; v->erase(v->begin() + i); return x; }'],
-  indexOfItem: [() => '// ' + C('indexOfComment'), 'template <typename T, typename U> int indexOfItem(vector<T>* v, const U& x) { for (int i = 0; i < (int) v->size(); i++) if ((*v)[i] == x) return i; return -1; }'],
-  popTop: [() => '// ' + C('popTopComment'), 'template <typename T> T popTop(stack<T>* s) { T x = s->top(); s->pop(); return x; }'],
-  popFront: [() => '// ' + C('popFrontComment'), 'template <typename T> T popFront(queue<T>* q) { T x = q->front(); q->pop(); return x; }'],
+  removeAt: [() => '// ' + C('removeAtComment'), 'template <typename T> T removeAt(vector<T>& v, int i) { T x = v[i]; v.erase(v.begin() + i); return x; }'],
+  indexOfItem: [() => '// ' + C('indexOfComment'), 'template <typename T, typename U> int indexOfItem(vector<T>& v, const U& x) { for (int i = 0; i < (int) v.size(); i++) if (v[i] == x) return i; return -1; }'],
+  popTop: [() => '// ' + C('popTopComment'), 'template <typename T> T popTop(stack<T>& s) { T x = s.top(); s.pop(); return x; }'],
+  popFront: [() => '// ' + C('popFrontComment'), 'template <typename T> T popFront(queue<T>& q) { T x = q.front(); q.pop(); return x; }'],
 };
 function cppHeaderExtras(o) {
   if (GEN.helpers.has('stack')) o.line('#include <stack>');
@@ -4735,7 +4738,7 @@ LANGS.cpp = cFamily({
     return null;
   },
   declare: (n, t, arr, D) => {
-    if (!arr) return T_CPP[t] ? `${T_CPP[t]} ${n};` : isTP(t) ? `${t} ${n}{};` : `${tCpp(t)} ${n} = nullptr;`;
+    if (!arr) return T_CPP[t] ? `${T_CPP[t]} ${n};` : isTP(t) ? `${t} ${n}{};` : isNatCpp(t) ? `${tCpp(t)} ${n};` : `${tCpp(t)} ${n} = nullptr;`;
     const c = cppParts(t, arr, D);
     return `${c.ty} ${n}(${c.args});`;
   },
@@ -4756,7 +4759,7 @@ LANGS.cpp = cFamily({
   program(prog, g) {
     const o = new g.Out();
     const retT = (f) => { const rl = _CM.rets(f); if (rl.length > 1) { g.used.add('tuple'); return `tuple<${rl.map(cppRetT).join(', ')}>`; } return rl.length ? cppRetT(rl[0]) : 'void'; };
-    const sig = (f) => `${tplF(f)}${retT(f)} ${f.name}(${f.params.map((p) => (p.array ? `${'vector<'.repeat(p.dims || 1)}${tCpp(p.type)}${'>'.repeat(p.dims || 1)}& ${p.name}` : `${tCpp(p.type)} ${p.name}`)).join(', ')})`;
+    const sig = (f) => `${tplF(f)}${retT(f)} ${f.name}(${f.params.map((p) => (p.array ? `${'vector<'.repeat(p.dims || 1)}${tCpp(p.type)}${'>'.repeat(p.dims || 1)}& ${p.name}` : `${pCpp(p.type)} ${p.name}`)).join(', ')})`;
     const fns = prog.functions.slice(1);
     const bodyOut = new g.Out();
     for (const f of fns) {
@@ -4793,7 +4796,7 @@ LANGS.cpp = cFamily({
   programOO(prog, g) {
     const main = _CM.mainClass(prog);
     const retT = (f) => { const rl = _CM.rets(f); if (rl.length > 1) { g.used.add('tuple'); return `tuple<${rl.map(cppRetT).join(', ')}>`; } return rl.length ? cppRetT(rl[0]) : 'void'; };
-    const params = (f) => f.params.map((p) => (p.array ? `${'vector<'.repeat(p.dims || 1)}${tCpp(p.type)}${'>'.repeat(p.dims || 1)}& ${p.name}` : `${tCpp(p.type)} ${p.name}`)).join(', ');
+    const params = (f) => f.params.map((p) => (p.array ? `${'vector<'.repeat(p.dims || 1)}${tCpp(p.type)}${'>'.repeat(p.dims || 1)}& ${p.name}` : `${pCpp(p.type)} ${p.name}`)).join(', ');
     const decls = new g.Out(), statics = [], defs = new g.Out();
     const ordered = OO.ordered(prog, false);
     for (const c of ordered) {
@@ -4804,7 +4807,7 @@ LANGS.cpp = cFamily({
       for (const a of c.attributes) {
         const sc = OO.classScope(prog, c, a.static);
         const pt = cppParts(a.type, a.array, a.array ? _CE.splitTop(a.size).map((x) => g.E(x, sc)) : null);
-        const init = a.array ? `${pt.ty}(${pt.args})` : (String(a.init || '').trim() ? g.E(a.init, sc) : (DEF_CPP[a.type] || (isTP(a.type) ? a.type + '()' : 'nullptr')));
+        const init = a.array ? `${pt.ty}(${pt.args})` : (String(a.init || '').trim() ? g.E(a.init, sc) : (DEF_CPP[a.type] || (isTP(a.type) ? a.type + '()' : isNatCpp(a.type) ? tCpp(a.type) + '()' : 'nullptr')));
         if (a.static) { vis(a.visibility).push(`static ${pt.ty} ${a.name};`); statics.push(`${tplOf(c) ? tplOf(c) + ' ' : ''}${pt.ty} ${qualOf(c)}::${a.name} = ${init};`); }
         else vis(a.visibility).push(`${pt.ty} ${a.name} = ${init};`);
       }
