@@ -1,0 +1,241 @@
+<?xml version="1.0"?>
+<flowgorithm fileversion="4.2">
+    <attributes>
+        <attribute name="name" value="Pizzeria Da Gino - ricerca con Tipi Generici (da completare)"/>
+        <attribute name="authors" value="Nicola Vacca"/>
+        <attribute name="about" value="File di partenza: funzioni di ricerca generiche gia' implementate; da completare visualizzaVettore e il main."/>
+        <attribute name="saved" value="2026-11-20 12:00:00 PM"/>
+    </attributes>
+    <function name="Main" type="None" variable="">
+        <parameters/>
+        <body>
+            <comment text="Pizzeria Da Gino: vettori pizze (Stringa) e attesaMin (Intero) di 8 elementi. Usare le funzioni di ricerca generiche gia' implementate, senza scrivere nuove funzioni di ricerca."/>
+            <comment text="Dichiarare i due vettori. Caricare prima pizze (input), poi attesaMin (input)"/>
+            <comment text="Visualizzare il contenuto di ciascun vettore con visualizzaVettore"/>
+            <comment text="1. Quante volte (ricerca totale su pizze): chiedere il nome di una pizza e stampare quante volte compare"/>
+            <comment text="2. Attese lunghe (ricerca totale su attesaMin): stampare quante attese superano i 30 minuti"/>
+            <comment text="3. Dove compare (ricerca parziale su pizze): chiedere il nome di una pizza e stampare tutte le posizioni in cui compare, contando da 1. Se non compare, stampare Pizza non presente"/>
+            <comment text="4. Prima attesa lunga (ricerca parziale su attesaMin): stampare la posizione della prima attesa oltre i 30 minuti, oppure Nessuna attesa lunga"/>
+            <comment text="Commento: in quali chiamate (comprese quelle di visualizzaVettore) T vale Stringa e in quali vale Intero?"/>
+        </body>
+    </function>
+    <function name="visualizzaVettore" type="None" variable="">
+        <parameters/>
+        <body>
+            <comment text="Funzione generica: visualizza gli elementi di un vettore (posizione: valore)"/>
+        </body>
+    </function>
+    <function name="ricercaTotaleEqual" type="Integer" variable="conta" flowlab-tparams="T">
+        <parameters>
+            <parameter name="V" type="T" array="True"/>
+            <parameter name="N" type="Integer" array="False"/>
+            <parameter name="elem" type="T" array="False"/>
+        </parameters>
+        <body>
+            <comment text="Funzione generica: V ed elem hanno lo stesso Tipo Generico T (Intero, Reale, Stringa...). Ricerca totale: conta gli elementi uguali a elem"/>
+            <declare name="i, conta" type="Integer" array="False" size=""/>
+            <assign variable="conta" expression="0"/>
+            <assign variable="i" expression="0"/>
+            <while expression="i &lt; N">
+                <if expression="V[i] == elem">
+                    <then>
+                        <assign variable="conta" expression="conta + 1"/>
+                    </then>
+                    <else/>
+                </if>
+                <assign variable="i" expression="i + 1"/>
+            </while>
+        </body>
+    </function>
+    <function name="ricercaTotaleLess" type="Integer" variable="conta" flowlab-tparams="T">
+        <parameters>
+            <parameter name="V" type="T" array="True"/>
+            <parameter name="N" type="Integer" array="False"/>
+            <parameter name="elem" type="T" array="False"/>
+        </parameters>
+        <body>
+            <comment text="Funzione generica: V ed elem hanno lo stesso Tipo Generico T (Intero, Reale, Stringa...). Ricerca totale: conta gli elementi minori di elem"/>
+            <declare name="i, conta" type="Integer" array="False" size=""/>
+            <assign variable="conta" expression="0"/>
+            <assign variable="i" expression="0"/>
+            <while expression="i &lt; N">
+                <if expression="V[i] &lt; elem">
+                    <then>
+                        <assign variable="conta" expression="conta + 1"/>
+                    </then>
+                    <else/>
+                </if>
+                <assign variable="i" expression="i + 1"/>
+            </while>
+        </body>
+    </function>
+    <function name="ricercaTotaleGreater" type="Integer" variable="conta" flowlab-tparams="T">
+        <parameters>
+            <parameter name="V" type="T" array="True"/>
+            <parameter name="N" type="Integer" array="False"/>
+            <parameter name="elem" type="T" array="False"/>
+        </parameters>
+        <body>
+            <comment text="Funzione generica: V ed elem hanno lo stesso Tipo Generico T (Intero, Reale, Stringa...). Ricerca totale: conta gli elementi maggiori di elem"/>
+            <declare name="i, conta" type="Integer" array="False" size=""/>
+            <assign variable="conta" expression="0"/>
+            <assign variable="i" expression="0"/>
+            <while expression="i &lt; N">
+                <if expression="V[i] &gt; elem">
+                    <then>
+                        <assign variable="conta" expression="conta + 1"/>
+                    </then>
+                    <else/>
+                </if>
+                <assign variable="i" expression="i + 1"/>
+            </while>
+        </body>
+    </function>
+    <function name="ricercaTotale" type="Integer" variable="conta" flowlab-tparams="T">
+        <parameters>
+            <parameter name="V" type="T" array="True"/>
+            <parameter name="N" type="Integer" array="False"/>
+            <parameter name="elem" type="T" array="False"/>
+            <parameter name="tipo" type="Integer" array="False"/>
+        </parameters>
+        <body>
+            <comment text="Funzione generica sul Tipo T di V ed elem. tipo: 0 = uguale, -1 = minore, 1 = maggiore. Chiama la funzione specifica corrispondente; con un tipo non valido restituisce -1"/>
+            <declare name="conta" type="Integer" array="False" size=""/>
+            <if expression="tipo == 0">
+                <then>
+                    <assign variable="conta" expression="ricercaTotaleEqual(V, N, elem)"/>
+                </then>
+                <else>
+                    <if expression="tipo == -1">
+                        <then>
+                            <assign variable="conta" expression="ricercaTotaleLess(V, N, elem)"/>
+                        </then>
+                        <else>
+                            <if expression="tipo == 1">
+                                <then>
+                                    <assign variable="conta" expression="ricercaTotaleGreater(V, N, elem)"/>
+                                </then>
+                                <else>
+                                    <assign variable="conta" expression="-1"/>
+                                </else>
+                            </if>
+                        </else>
+                    </if>
+                </else>
+            </if>
+        </body>
+    </function>
+    <function name="ricercaParzialeEqual" type="Integer" variable="idx" flowlab-tparams="T">
+        <parameters>
+            <parameter name="V" type="T" array="True"/>
+            <parameter name="N" type="Integer" array="False"/>
+            <parameter name="elem" type="T" array="False"/>
+            <parameter name="idxStart" type="Integer" array="False"/>
+        </parameters>
+        <body>
+            <comment text="Funzione generica: V ed elem hanno lo stesso Tipo Generico T (Intero, Reale, Stringa...). Ricerca parziale: indice del primo elemento uguale a elem a partire da idxStart, oppure -1 se non esiste. Il ciclo si ferma appena trovato diventa vero"/>
+            <declare name="i, idx" type="Integer" array="False" size=""/>
+            <declare name="trovato" type="Boolean" array="False" size=""/>
+            <assign variable="idx" expression="-1"/>
+            <assign variable="trovato" expression="false"/>
+            <assign variable="i" expression="idxStart"/>
+            <while expression="i &lt; N and not(trovato)">
+                <if expression="V[i] == elem">
+                    <then>
+                        <assign variable="trovato" expression="true"/>
+                        <assign variable="idx" expression="i"/>
+                    </then>
+                    <else/>
+                </if>
+                <assign variable="i" expression="i + 1"/>
+            </while>
+        </body>
+    </function>
+    <function name="ricercaParzialeLess" type="Integer" variable="idx" flowlab-tparams="T">
+        <parameters>
+            <parameter name="V" type="T" array="True"/>
+            <parameter name="N" type="Integer" array="False"/>
+            <parameter name="elem" type="T" array="False"/>
+            <parameter name="idxStart" type="Integer" array="False"/>
+        </parameters>
+        <body>
+            <comment text="Funzione generica: V ed elem hanno lo stesso Tipo Generico T (Intero, Reale, Stringa...). Ricerca parziale: indice del primo elemento minore di elem a partire da idxStart, oppure -1 se non esiste. Il ciclo si ferma appena trovato diventa vero"/>
+            <declare name="i, idx" type="Integer" array="False" size=""/>
+            <declare name="trovato" type="Boolean" array="False" size=""/>
+            <assign variable="idx" expression="-1"/>
+            <assign variable="trovato" expression="false"/>
+            <assign variable="i" expression="idxStart"/>
+            <while expression="i &lt; N and not(trovato)">
+                <if expression="V[i] &lt; elem">
+                    <then>
+                        <assign variable="trovato" expression="true"/>
+                        <assign variable="idx" expression="i"/>
+                    </then>
+                    <else/>
+                </if>
+                <assign variable="i" expression="i + 1"/>
+            </while>
+        </body>
+    </function>
+    <function name="ricercaParzialeGreater" type="Integer" variable="idx" flowlab-tparams="T">
+        <parameters>
+            <parameter name="V" type="T" array="True"/>
+            <parameter name="N" type="Integer" array="False"/>
+            <parameter name="elem" type="T" array="False"/>
+            <parameter name="idxStart" type="Integer" array="False"/>
+        </parameters>
+        <body>
+            <comment text="Funzione generica: V ed elem hanno lo stesso Tipo Generico T (Intero, Reale, Stringa...). Ricerca parziale: indice del primo elemento maggiore di elem a partire da idxStart, oppure -1 se non esiste. Il ciclo si ferma appena trovato diventa vero"/>
+            <declare name="i, idx" type="Integer" array="False" size=""/>
+            <declare name="trovato" type="Boolean" array="False" size=""/>
+            <assign variable="idx" expression="-1"/>
+            <assign variable="trovato" expression="false"/>
+            <assign variable="i" expression="idxStart"/>
+            <while expression="i &lt; N and not(trovato)">
+                <if expression="V[i] &gt; elem">
+                    <then>
+                        <assign variable="trovato" expression="true"/>
+                        <assign variable="idx" expression="i"/>
+                    </then>
+                    <else/>
+                </if>
+                <assign variable="i" expression="i + 1"/>
+            </while>
+        </body>
+    </function>
+    <function name="ricercaParziale" type="Integer" variable="idx" flowlab-tparams="T">
+        <parameters>
+            <parameter name="V" type="T" array="True"/>
+            <parameter name="N" type="Integer" array="False"/>
+            <parameter name="elem" type="T" array="False"/>
+            <parameter name="idxStart" type="Integer" array="False"/>
+            <parameter name="tipo" type="Integer" array="False"/>
+        </parameters>
+        <body>
+            <comment text="Funzione generica sul Tipo T di V ed elem. tipo: 0 = uguale, -1 = minore, 1 = maggiore. Chiama la funzione specifica corrispondente; con un tipo non valido restituisce -1"/>
+            <declare name="idx" type="Integer" array="False" size=""/>
+            <if expression="tipo == 0">
+                <then>
+                    <assign variable="idx" expression="ricercaParzialeEqual(V, N, elem, idxStart)"/>
+                </then>
+                <else>
+                    <if expression="tipo == -1">
+                        <then>
+                            <assign variable="idx" expression="ricercaParzialeLess(V, N, elem, idxStart)"/>
+                        </then>
+                        <else>
+                            <if expression="tipo == 1">
+                                <then>
+                                    <assign variable="idx" expression="ricercaParzialeGreater(V, N, elem, idxStart)"/>
+                                </then>
+                                <else>
+                                    <assign variable="idx" expression="-1"/>
+                                </else>
+                            </if>
+                        </else>
+                    </if>
+                </else>
+            </if>
+        </body>
+    </function>
+</flowgorithm>
