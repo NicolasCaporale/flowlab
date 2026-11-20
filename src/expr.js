@@ -306,13 +306,37 @@ function splitTop(src) {
   for (const ch of String(src)) {
     if (q) { cur += ch; if (ch === q) q = null; continue; }
     if (ch === '"' || ch === "'") { q = ch; cur += ch; continue; }
-    if (ch === '(' || ch === '[') depth++;
-    if (ch === ')' || ch === ']') depth--;
+    if (ch === '(' || ch === '[' || ch === '{') depth++;
+    if (ch === ')' || ch === ']' || ch === '}') depth--;
     if (ch === ',' && depth === 0) { out.push(cur.trim()); cur = ''; continue; }
     cur += ch;
   }
   out.push(cur.trim());
   return out;
+}
+/* initial values of an array, between braces: "{1, 2, 3}", "{{1, 2}, {3, 4}}" ->
+   { dims: [2, 2], leaves: ["1", "2", "3", "4"] } (texts of the expressions, row by row); every row of the same length */
+function parseArrayLit(src) {
+  const s = String(src || '').trim();
+  const node = (t) => {
+    t = t.trim();
+    if (!t.startsWith('{')) { if (!t) throw new FlowError(L('expr.aValueIsMissingInThe')); return t; }
+    if (!t.endsWith('}')) throw new FlowError(L('expr.theValuesOfAnArrayGo'));
+    const inner = t.slice(1, -1).trim();
+    return inner ? splitTop(inner).map(node) : [];
+  };
+  if (!s.startsWith('{')) throw new FlowError(L('expr.theValuesOfAnArrayGo'));
+  let level = [node(s)];
+  const dims = [];
+  while (level.length && Array.isArray(level[0])) {
+    const n = level[0].length;
+    if (level.some((x) => !Array.isArray(x) || x.length !== n)) throw new FlowError(L('expr.theRowsOfTheValuesMust'));
+    dims.push(n);
+    level = level.flat();
+    if (!n) break;
+  }
+  if (level.some(Array.isArray)) throw new FlowError(L('expr.theRowsOfTheValuesMust'));
+  return { dims, leaves: level };
 }
 function parseLValueList(src) {
   const parts = splitTop(src);
@@ -677,5 +701,5 @@ function inferType(node, scope) {
   return 'Unknown';
 }
 
-const ExprLib = { FlowError, TYPES, TYPE_IT, typeName, splitType, splitTypeList, joinType, isGenericType, normTypeText, substType, sameType, isBaseType, tokenize, parseExpr, parseLValue, splitTop, parseLValueList, arrOffset, validIdent, RESERVED, V, isNum, fmtValue, fmtReal, literalOf, checkInt, coerce, parseInputText, BUILTINS, BUILTIN_NAMES, evalE, arrIndex, inferType, genericMap };
+const ExprLib = { FlowError, TYPES, TYPE_IT, typeName, splitType, splitTypeList, joinType, isGenericType, normTypeText, substType, sameType, isBaseType, tokenize, parseExpr, parseLValue, splitTop, parseArrayLit, parseLValueList, arrOffset, validIdent, RESERVED, V, isNum, fmtValue, fmtReal, literalOf, checkInt, coerce, parseInputText, BUILTINS, BUILTIN_NAMES, evalE, arrIndex, inferType, genericMap };
 if (typeof module !== 'undefined') module.exports = ExprLib;

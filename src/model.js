@@ -362,6 +362,16 @@ function parseBlock(el) {
         continue;
       }
     }
+    // FlowLab extension: array with its values = <declare flowlab-values="{…}"/> followed by an assignment for each element
+    if (c.nodeName.toLowerCase() === 'declare' && c.getAttribute('flowlab-values') != null && boolAttr(c.getAttribute('array'), false)) {
+      const d = parseStmt(c), vals = c.getAttribute('flowlab-values') || '';
+      d.init = vals;
+      if (String(c.getAttribute('flowlab-autosize')).toLowerCase() === 'true') d.size = '';
+      let n = 0; try { n = _MX.parseArrayLit(vals).leaves.length * d.name.split(',').filter((x) => x.trim()).length; } catch (e) { n = 0; }
+      let k = 0; while (k < n && kids[i + 1 + k] && kids[i + 1 + k].nodeName.toLowerCase() === 'assign') k++;
+      out.push(d); i += k;
+      continue;
+    }
     const s = parseStmt(c);
     if (s) out.push(s); else _skipped.push(c.nodeName);
   }
@@ -514,6 +524,17 @@ function writeBlock(stmts, L, depth) {
           // the other editors see the declaration and an assignment for each variable
           open('declare', [['name', s.name], ['type', s.type], ['array', 'False'], ['size', ''], ['flowlab-init', 'True']]);
           for (const n of s.name.split(',').map((x) => x.trim()).filter(Boolean)) open('assign', [['variable', n], ['expression', s.init]]);
+        } else if (s.array && String(s.init || '').trim()) {
+          // array with its values: the other editors see the declaration with the size and an assignment for each element
+          let lit = null; try { lit = _MX.parseArrayLit(s.init); } catch (e) { lit = null; }
+          const auto = !String(s.size || '').trim();
+          open('declare', [['name', s.name], ['type', s.type], ['array', 'True'], ['size', auto && lit ? lit.dims.join(', ') : s.size], ['flowlab-init', 'True'], ['flowlab-values', s.init], ...(auto ? [['flowlab-autosize', 'True']] : [])]);
+          if (lit) for (const n of s.name.split(',').map((x) => x.trim()).filter(Boolean)) {
+            lit.leaves.forEach((v, k) => {
+              const ix = []; let r = k; for (let d = lit.dims.length - 1; d >= 0; d--) { ix.unshift(r % lit.dims[d]); r = Math.floor(r / lit.dims[d]); }
+              open('assign', [['variable', `${n}[${ix.join(', ')}]`], ['expression', v]]);
+            });
+          }
         } else open('declare', [['name', s.name], ['type', s.type], ['array', TF(s.array)], ['size', s.array ? s.size : '']]);
         break;
       case 'assign': open('assign', [['variable', s.variable], ['expression', s.expression]]); break;
@@ -574,8 +595,8 @@ function extendedFeatures(prog) {
     if (f.params.some((p) => p.array && (p.dims || 1) > 1)) out.add(L('model.multiDimensionalArrays'));
     walk(f.body, (s) => {
       if (s.kind === 'const') out.add(L('model.constants'));
-      if (s.kind === 'declare' && !s.array && String(s.init || '').trim()) out.add(L('model.declarationsWithAnInitialValue'));
-      if (s.kind === 'declare' && s.array && _MX.splitTop(s.size).length > 1) out.add(L('model.multiDimensionalArrays'));
+      if (s.kind === 'declare' && String(s.init || '').trim()) out.add(L('model.declarationsWithAnInitialValue'));
+      if (s.kind === 'declare' && s.array && (_MX.splitTop(s.size || '').length > 1 || (() => { try { return _MX.parseArrayLit(s.init || '').dims.length > 1; } catch (e) { return false; } })())) out.add(L('model.multiDimensionalArrays'));
       for (const k of ['variable', 'expression', 'start', 'end', 'step', 'size']) {
         // xor is not part of the standard format
         if (typeof s[k] === 'string' && /xor|⊕|⊻/i.test(s[k])) { try { if (_MX.tokenize(s[k]).some((t) => t.k === 'op' && t.v === 'xor')) out.add(L('model.theXorOperator')); } catch (e) { /* incomplete expression */ } }
@@ -590,7 +611,7 @@ function extendedFeatures(prog) {
 /* Completeness of a block (required fields filled in) */
 function isIncomplete(s) {
   switch (s.kind) {
-    case 'declare': return !s.name.trim() || (s.array && !String(s.size).trim());
+    case 'declare': return !s.name.trim() || (s.array && !String(s.size).trim() && !String(s.init || '').trim());
     case 'const': return !s.name.trim() || !String(s.expression).trim();
     case 'assign': return !s.variable.trim() || !s.expression.trim();
     case 'input': case 'read': return !s.variable.trim();

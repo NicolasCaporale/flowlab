@@ -698,15 +698,19 @@ class Interpreter {
         yield { type: 'stmt', stmt: s, frame };
         const names = s.name.split(',').map((x) => x.trim()).filter(Boolean);
         let size = 0, dims = null;
+        // initial values of an array: {1, 2, 3}; the size can be left out
+        const lit = s.array && String(s.init || '').trim() ? _E.parseArrayLit(s.init) : null;
         if (s.array) {
           // one or more dimensions: "10" or "3, 4"
           dims = [];
-          for (const part of _E.splitTop(s.size)) {
+          for (const part of String(s.size || '').trim() ? _E.splitTop(s.size) : []) {
             const sv = yield* ev(part);
             if (sv.t !== 'Integer') throw new _E.FlowError(L('run.theArraySizeMustBeAn', { value: _E.TYPE_IT[sv.t] }));
             if (sv.v < 0) throw new _E.FlowError(L('run.theArraySizeCannotBeNegative'));
             dims.push(sv.v);
           }
+          if (lit && !dims.length) dims = lit.dims.slice();
+          if (lit && (dims.length !== lit.dims.length || dims.some((d, k) => d !== lit.dims[k]))) throw new _E.FlowError(L('run.theValuesOfTheArrayAre', { values: lit.dims.join(' × '), size: dims.join(' × ') }));
           size = dims.reduce((a, b) => a * b, 1);
           if (size > 1e7) throw new _E.FlowError(L('run.arrayTooLargeAtMost10'));
         }
@@ -722,6 +726,10 @@ class Interpreter {
         }
         // initial value: it applies to all the variables of the block
         if (!s.array && String(s.init || '').trim()) for (const n of names) yield* this.store({ k: 'var', name: n }, yield* ev(s.init));
+        if (lit) for (const n of names) {
+          const cell = frame.vars.get(n.toLowerCase());
+          for (let k = 0; k < lit.leaves.length; k++) cell.items[k] = this.coerceTo(yield* ev(lit.leaves[k]), s.type, L('run.theValueOfInTheArray', { k: k + 1, n }), frame.tctx);
+        }
         return;
       }
       case 'const': {

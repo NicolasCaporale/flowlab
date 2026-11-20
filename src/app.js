@@ -1017,7 +1017,9 @@
       else if (String(v).trim()) {
         try {
           if (spec.type === 'expr') E.parseExpr(v);
-          if (spec.type === 'exprlist') E.splitTop(v).forEach((x, i) => { if (!x) throw new Error(L('ui.dimensionIsMissing', { value: i + 1 })); E.parseExpr(x); });
+          // an array: the number of elements or, between braces, its initial values
+          if (spec.type === 'exprlist' && spec.values && String(v).trim().startsWith('{')) { const lit = E.parseArrayLit(v); lit.leaves.forEach((x) => E.parseExpr(x)); }
+          else if (spec.type === 'exprlist') E.splitTop(v).forEach((x, i) => { if (!x) throw new Error(L('ui.dimensionIsMissing', { value: i + 1 })); E.parseExpr(x); });
           if (spec.type === 'lvalue') E.parseLValue(v);
           if (spec.type === 'lvalues') E.parseLValueList(v);
           if (spec.type === 'names') {
@@ -1056,7 +1058,8 @@
       { key: 'name', label: L('ui.variableNames'), type: 'names', required: true, placeholder: L('ui.eGABTotal') },
       { key: 'type', label: L('win.type'), type: 'seg', options: TYPE_OPTS },
       { key: 'array', label: L('ui.arrayListOfValuesWithIndex'), type: 'check' },
-      { key: 'size', label: L('ui.numberOfElements'), type: 'exprlist', placeholder: L('ui.eG10Or34'), hint: L('ui.forAMultiDimensionalArraySeparate'), showIf: 'array' },
+      // array: the number of elements or its initial values between braces (which give the size too)
+      { key: 'size', label: L('ui.numberOfElementsOrInitialValues'), type: 'exprlist', values: true, placeholder: L('ui.eG10Or34Or123'), hint: L('ui.theNumberOfElementsOrTheValues'), showIf: 'array' },
       { key: 'init', label: L('ui.initialValueOptional'), type: 'expr', placeholder: 'es. 0', hint: L('ui.withSeveralNamesAllTheVariables'), showIf: '!array' }] },
     const: { title: L('chart.constant'), help: L('ui.aNamedValueThatDoesNot'), fields: [
       { key: 'name', label: L('ui.constantName'), type: 'ident', required: true, placeholder: L('ui.eGMax') },
@@ -1158,7 +1161,10 @@
     const ws = {};
     const row = h('div', { class: 'row' });
     for (const spec of form.fields) {
-      const w = field(spec, s[spec.key], vars);
+      // an array with initial values shows them in the field of the size
+      const arrVals = s.kind === 'declare' && s.array && String(s.init || '').trim();
+      const val = arrVals && spec.key === 'size' ? s.init : arrVals && spec.key === 'init' ? '' : s[spec.key];
+      const w = field(spec, val, vars);
       ws[spec.key] = w;
       if (spec.inline) { row.append(w); if (!row.parentNode) body.append(row); } else body.append(w);
     }
@@ -1191,7 +1197,11 @@
           vals[spec.key] = ws[spec.key]._get();
           if (typeof vals[spec.key] === 'string' && spec.type !== 'textarea') vals[spec.key] = vals[spec.key].trim();
         }
-        if (s.kind === 'declare' && vals.array && !String(vals.size).trim()) return L('ui.enterTheNumberOfElementsOf');
+        if (s.kind === 'declare') {
+          // the field of the size can hold the initial values {…}: then they are the values and the size comes from them
+          if (vals.array && String(vals.size).trim().startsWith('{')) { vals.init = String(vals.size).trim(); vals.size = ''; }
+          if (vals.array && !String(vals.size).trim() && !vals.init) return L('ui.enterTheNumberOfElementsOrThe');
+        }
         if (s.kind === 'declare') vals.name = vals.name.split(',').map((x) => x.trim()).join(', ');
         if (s.kind === 'breakpoint' && !vals.always && !String(vals.expression || '').trim()) return L('ui.writeAConditionOrChooseAlways');
         done(vals);

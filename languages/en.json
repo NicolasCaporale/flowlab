@@ -608,8 +608,6 @@
   "ui.eGABTotal": "e.g. a, b, total",
   "ui.arrayListOfValuesWithIndex": "Array (list of values with index from 0)",
   "ui.numberOfElements": "Number of elements",
-  "ui.eG10Or34": "e.g. 10   or   3, 4 for a matrix",
-  "ui.forAMultiDimensionalArraySeparate": "For a multi-dimensional array separate the dimensions with a comma: 3, 4 is a 3 × 4 matrix",
   "ui.initialValueOptional": "Initial value (optional)",
   "ui.withSeveralNamesAllTheVariables": "With several names all the variables start from this value. If left empty, the variable has no value until you assign something to it.",
   "ui.aNamedValueThatDoesNot": "A named value that does not change during the program. By convention it is written in uppercase.",
@@ -1209,6 +1207,15 @@
   "ui.nBlocks": "{n} blocks",
   "ui.shiftClickShiftArrows": "Shift+click  ·  Ctrl+click  ·  Shift+↑ ↓  ·  rectangle with the mouse",
   "ui.selectSeveralBlocks": "select several blocks: from the selected one to the clicked one (Shift), one more or one less (Ctrl); copy, cut, paste, duplicate, delete and Alt+↑ ↓ act on all of them; Esc leaves one",
-  "ui.selectAllTheBlocksOfThe": "select all the blocks of the diagram"
+  "ui.selectAllTheBlocksOfThe": "select all the blocks of the diagram",
+  "ui.enterTheNumberOfElementsOrThe": "Enter the number of elements of the array or its initial values",
+  "run.theValuesOfTheArrayAre": "The values of the array are {values}, but its size is {size}",
+  "run.theValueOfInTheArray": "value {k} of the array {n}",
+  "expr.theValuesOfAnArrayGo": "The values of an array go between braces: {1, 2, 3}",
+  "expr.theRowsOfTheValuesMust": "All the rows of the values must have the same number of elements: {{1, 2}, {3, 4}}",
+  "expr.aValueIsMissingInThe": "A value is missing in the braces (two commas in a row?)",
+  "ui.numberOfElementsOrInitialValues": "Number of elements or initial values",
+  "ui.eG10Or34Or123": "e.g. 10, or 3, 4, or {1, 2, 3}",
+  "ui.theNumberOfElementsOrTheValues": "The number of elements (for more dimensions separated by commas: 3, 4) or the initial values between braces, which give the size too: {1, 2, 3}, and for more dimensions one pair of braces per row: {{1, 2}, {3, 4}}."
  }
 }

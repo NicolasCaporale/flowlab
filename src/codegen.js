@@ -306,7 +306,7 @@ const boundHere = (t) => !!GEN.cur && isBound(t, GEN.cur.f, GEN.cur.c);
 /* texts of the expressions of a block */
 function exprSources(s) {
   switch (s.kind) {
-    case 'declare': return [..._CE.splitTop(s.array ? s.size || '' : ''), s.init || ''];
+    case 'declare': return [..._CE.splitTop(s.array ? s.size || '' : ''), ...(s.array && String(s.init || '').trim() ? (() => { try { return _CE.parseArrayLit(s.init).leaves; } catch (e) { return []; } })() : [s.init || ''])];
     case 'const': case 'output': case 'write': case 'if': case 'while': case 'do': case 'call': case 'open': case 'throw': return [s.expression];
     case 'breakpoint': return s.always ? [] : [s.expression];
     case 'assign': return [..._CE.splitTop(s.variable), s.expression];
@@ -419,7 +419,7 @@ function buildScope(prog, func) {
   for (const p of func.params) vars.set(p.name.toLowerCase(), { type: p.type, array: p.array, dims: p.array ? (p.dims || 1) : 0, name: p.name });
   _CM.walk(func.body, (s) => {
     if (s.kind === 'const' && s.name.trim() && !vars.has(s.name.trim().toLowerCase())) vars.set(s.name.trim().toLowerCase(), { type: s.type, array: false, name: s.name.trim(), constant: true });
-    if (s.kind === 'declare') for (const n of s.name.split(',').map((x) => x.trim()).filter(Boolean)) if (!vars.has(n.toLowerCase())) vars.set(n.toLowerCase(), { type: s.type, array: s.array, dims: s.array ? _CE.splitTop(s.size).length : 0, name: n });
+    if (s.kind === 'declare') for (const n of s.name.split(',').map((x) => x.trim()).filter(Boolean)) if (!vars.has(n.toLowerCase())) vars.set(n.toLowerCase(), { type: s.type, array: s.array, dims: s.array ? declDims(s) : 0, name: n });
     // variable of a Catch: the caught exception
     if (s.kind === 'try') for (const c of s.catches || []) if (c.variable && !vars.has(c.variable.toLowerCase())) vars.set(c.variable.toLowerCase(), { type: (_CM.classByName(prog, c.type) || { name: c.type }).name, array: false, dims: 0, name: c.variable, catchVar: true });
   });
@@ -556,7 +556,18 @@ function sizeInfo(n, sc) {
   }
   return { d: dn && dn.k === 'num' ? dn.v : 0, nd };
 }
-const dimsOf = (s, E, sc) => _CE.splitTop(s.size).map((x) => E(x, sc));
+const hasArrInit = (s) => s.array && !!String(s.init || '').trim();
+// number of dimensions of a declared array
+function declDims(s) { if (String(s.size || '').trim()) return _CE.splitTop(s.size).length; try { return _CE.parseArrayLit(s.init).dims.length || 1; } catch (e) { return 1; } }
+// dimensions of an array: the size written, or those of its values when the size is left out
+const dimsOf = (s, E, sc) => (String(s.size || '').trim() ? _CE.splitTop(s.size).map((x) => E(x, sc)) : hasArrInit(s) ? _CE.parseArrayLit(s.init).dims.map(String) : []);
+/* initial values of an array {…}, with the brackets of the language (open, close) and its expressions */
+function arrLitCode(s, E, sc, open, close) {
+  const lit = _CE.parseArrayLit(s.init);
+  let k = 0;
+  const rec = (d) => open + Array.from({ length: lit.dims[d] }, () => (d === lit.dims.length - 1 ? asReal(lit.leaves[k++], s.type, E, sc) : rec(d + 1))).join(', ') + close;
+  return { code: rec(0), dims: lit.dims };
+}
 
 /* Generic printing of expressions, with rules per language */
 function exprPrinter(L) {
@@ -793,7 +804,7 @@ LANGS.pseudo = {
         SRC.cur = s.id;
         switch (s.kind) {
           case 'const': o.line(`${PS('const')} ${s.name} : ${TP(s.type)} ← ${E(s.expression, sc)}`); break;
-          case 'declare': o.line(`${PS('declare')} ${s.array ? PS('declareArray', { names: s.name.split(',').map((x) => x.trim() + '[' + dimsOf(s, E, sc).join(', ') + ']').join(', '), type: TP(s.type) }) : `${s.name} : ${TP(s.type)}${String(s.init || '').trim() ? ' ← ' + E(s.init, sc) : ''}`}`); break;
+          case 'declare': o.line(`${PS('declare')} ${s.array ? PS('declareArray', { names: s.name.split(',').map((x) => x.trim() + '[' + dimsOf(s, E, sc).join(', ') + ']').join(', '), type: TP(s.type) }) + (hasArrInit(s) ? ' ← ' + arrLitCode(s, E, sc, '{', '}').code : '') : `${s.name} : ${TP(s.type)}${String(s.init || '').trim() ? ' ← ' + E(s.init, sc) : ''}`}`); break;
           case 'assign': o.line(`${targetsOf(s).map((x) => E(x, sc)).join(', ')} ← ${E(s.expression, sc)}`); break;
           case 'input': o.line(`${PS('read')} ${E(s.variable, sc)}`); break;
           case 'output': o.line(`${PS('write')} ${E(s.expression, sc)}${s.newline ? '' : '   // ' + PS('noNewline')}`); break;
@@ -949,6 +960,7 @@ LANGS.python = {
             if (!s.array && String(s.init || '').trim()) { for (const nm of s.name.split(',').map((x) => x.trim()).filter(Boolean)) o.line(`${nm} = ${asReal(s.init, s.type, E, sc)}`); break; }
             const init = initOf(s, stmts[si + 1]);
             if (init != null) { SRC.cur = s.id + ',' + stmts[si + 1].id; o.line(`${s.name.trim()} = ${withExpect(sc, s.type, () => asReal(init, s.type, E, sc))}`); si++; break; }
+            if (hasArrInit(s)) { for (const nm of s.name.split(',').map((x) => x.trim()).filter(Boolean)) o.line(`${nm} = ${arrLitCode(s, E, sc, '[', ']').code}`); break; }
             for (const nm of s.name.split(',').map((x) => x.trim()).filter(Boolean)) {
               if (!s.array) { o.line(`${nm} = ${DEFT(s.type)}`); continue; }
               const D = dimsOf(s, E, sc);
@@ -1208,6 +1220,8 @@ function cFamily(cfg) {
               if (!s.array && String(s.init || '').trim() && cfg.declareInit) { for (const nm of s.name.split(',').map((x) => x.trim()).filter(Boolean)) o.line(cfg.declareInit(nm, s.type, withExpect(sc, s.type, () => asReal(s.init, s.type, E, sc)))); break; }
               const init = initOf(s, stmts[si + 1]);
               if (init != null && cfg.declareInit) { SRC.cur = s.id + ',' + stmts[si + 1].id; o.line(cfg.declareInit(s.name.trim(), s.type, withExpect(sc, s.type, () => asReal(init, s.type, E, sc)))); si++; break; }
+              // an array with its values: {1, 2, 3} in Java, C# and C++, [1, 2, 3] in JavaScript
+              if (hasArrInit(s) && cfg.declareArrLit) { for (const nm of s.name.split(',').map((x) => x.trim()).filter(Boolean)) o.line(cfg.declareArrLit(nm, s.type, arrLitCode(s, E, sc, ...(cfg.lang === 'javascript' ? ['[', ']'] : ['{', '}'])), sc)); break; }
               for (const nm of s.name.split(',').map((x) => x.trim()).filter(Boolean)) o.line(cfg.declare(nm, s.type, s.array, s.array ? dimsOf(s, E, sc) : null, used, sc));
               break;
             }
@@ -1421,6 +1435,7 @@ LANGS.cpp = cFamily({
     return `${c.ty} ${n}(${c.args});`;
   },
   constDecl: (n, t, e) => `const ${tCpp(t)} ${n} = ${e};`,
+  declareArrLit: (n, t, lit) => `${cppParts(t, true, lit.dims).ty} ${n} = ${lit.code};`,
   declareInit: (n, t, e) => `${tCpp(t)} ${n} = ${e};`,
   nul: 'nullptr', self: 'this', arrow: '->', staticSep: (c, m) => `${c}::${m}`,
   superMethod: (m, a, par) => `${par ? par.name : 'Base'}::${m}(${a})`,
@@ -1639,6 +1654,7 @@ LANGS.java = cFamily({
     return `${box ? BOX_J[t] : tJava(t)}${'[]'.repeat(D.length)} ${n} = ${newArrJava(t, D, box)};`;
   },
   constDecl: (n, t, e) => `final ${tJava(t)} ${n} = ${e};`,
+  declareArrLit: (n, t, lit) => `${tJava(t)}${'[]'.repeat(lit.dims.length)} ${n} = ${lit.code};`,
   declareInit: (n, t, e) => `${tJava(t)} ${n} = ${e};`,
   input: (o, v, t) => { const i = J_PFX + 'input'; o.line(`${v} = ${t === 'Integer' ? `Integer.parseInt(${i}.nextLine())` : t === 'Real' ? `Double.parseDouble(${i}.nextLine())` : t === 'Boolean' ? `Boolean.parseBoolean(${i}.nextLine())` : `${i}.nextLine()`};`); },
   nul: 'null', self: 'this',
@@ -1810,6 +1826,7 @@ LANGS.csharp = cFamily({
     return null;
   },
   idx: idxComma,
+  declareArrLit: (n, t, lit) => `${tCs(t)}[${','.repeat(lit.dims.length - 1)}] ${n} = ${lit.code};`,
   declare: (n, t, arr, D) => (arr ? `${tCs(t)}[${','.repeat(D.length - 1)}] ${n} = new ${tCs(t)}[${D.join(', ')}];` : `${tCs(t)} ${n} = ${DEF_C[t] || (isTP(t) ? `default(${t})` : 'null')};`),
   // in C# const wants a value known at compile time; otherwise a normal variable
   constDecl: (n, t, e, lit) => (lit ? `const ${tCs(t)} ${n} = ${e};` : `${tCs(t)} ${n} = ${e}; // costante`),
@@ -1960,6 +1977,7 @@ LANGS.javascript = cFamily({
     }
     return null;
   },
+  declareArrLit: (n, t, lit) => `let ${n} = ${lit.code};`,
   declare: (n, t, arr, D, used) => { if (!arr) return `let ${n};`; if (D.length === 1) return `let ${n} = new Array(${D[0]});`; used.add('createArray'); return `let ${n} = createArray([${D.join(', ')}]);`; },
   constDecl: (n, t, e) => `const ${n} = ${e};`,
   declareInit: (n, t, e) => `let ${n} = ${e};`,

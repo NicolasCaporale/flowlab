@@ -19,6 +19,24 @@ Object.assign(progs, { exc_fun: X.excfun(), exc_oo: X.excoo() });
     S('output', { expression: '""' }), S('output', { expression: '12 xor 10' }), S('output', { expression: 'x xor 2' }), S('output', { expression: 'a xor b' }), S('output', { expression: '"v: " & (a xor c) & " " & (5 xor 1)' })];
   progs.xor_ops = p;
 }
+// arrays with their initial values {…}, also with more dimensions and without the size
+{
+  const S = M.makeStmt, p = M.newProgram();
+  p.functions[0].body = [
+    S('declare', { name: 'x', type: 'Integer', init: '5' }),
+    S('declare', { name: 'v', type: 'Integer', array: true, size: '', init: '{3, 1, x + 1}' }),
+    S('declare', { name: 'm', type: 'Integer', array: true, size: '2, 3', init: '{{1, 2, 3}, {4, 5, 6}}' }),
+    S('declare', { name: 'r', type: 'Real', array: true, size: '', init: '{1, 2.5}' }),
+    S('declare', { name: 'nomi', type: 'String', array: true, size: '', init: '{"Ada", "Alan"}' }),
+    S('declare', { name: 'i, t', type: 'Integer' }), S('assign', { variable: 't', expression: '0' }),
+    S('for', { variable: 'i', start: '0', end: 'Size(v) - 1', direction: 'inc', step: '1', body: [S('assign', { variable: 't', expression: 't + v[i]' })] }),
+    S('output', { expression: '"v: " & t & " " & Size(v)' }),
+    S('output', { expression: '"m: " & m[1, 2] & " " & m[0, 1] & " " & Size(m, 0) & "x" & Size(m, 1)' }),
+    S('output', { expression: '"r: " & (r[0] + r[1])' }),
+    S('output', { expression: 'nomi[1] & " e " & nomi[0]' }),
+  ];
+  progs.arr_init = p;
+}
 // anche gli esempi a oggetti dell'applicazione
 global.ExprLib = require('../src/expr.js'); global.ModelLib = M;
 const Examples = require('./examples_node.js');
