@@ -1003,11 +1003,34 @@
     if (['expr', 'exprlist', 'lvalue', 'lvalues'].includes(spec.type)) attachMemberAC(input, spec.type === 'lvalue' || spec.type === 'lvalues');
     if (['expr', 'exprlist', 'lvalue', 'lvalues'].includes(spec.type) && vars && vars.length) {
       const chips = h('div', { class: 'chips', 'aria-label': L('ui.availableVariables') });
-      vars.slice(0, 24).forEach((v) => chips.append(h('button', { type: 'button', class: 'chip', tabindex: '-1', onclick: () => {
+      const put = (v) => {
         const s = input.selectionStart ?? input.value.length, e = input.selectionEnd ?? s;
         input.value = input.value.slice(0, s) + v + input.value.slice(e);
         input.focus(); input.setSelectionRange(s + v.length, s + v.length); input.dispatchEvent(new Event('input'));
-      } }, v)));
+      };
+      const btns = vars.map((v) => h('button', { type: 'button', class: 'chip', tabindex: '-1', onclick: () => put(v) }, v));
+      // at most two rows: the last chip «…» opens the list of the variables that do not fit
+      const more = h('button', { type: 'button', class: 'chip more', tabindex: '-1', hidden: true, title: L('ui.otherVariables'), 'aria-label': L('ui.otherVariables'), onclick: (ev) => {
+        const r = more.getBoundingClientRect();
+        openPop(r.left, r.bottom + 4, h('div', { class: 'ctxmenu chipmenu' }, btns.filter((b) => b.hidden).map((b) => h('button', { type: 'button', onclick: () => { closePop(); put(b.textContent); } }, h('span', { class: 'mono' }, b.textContent)))));
+        ev.stopPropagation();
+      } }, '…');
+      chips.append(...btns, more);
+      const fit = () => {
+        if (!chips.isConnected || !chips.offsetWidth || !btns.length) return;
+        btns.forEach((b) => { b.hidden = false; }); more.hidden = true;
+        // rows measured from the top of the list (the dialog can move while the list changes height)
+        const top = (el) => Math.round(el.getBoundingClientRect().top - chips.getBoundingClientRect().top);
+        const tops = [...new Set(btns.map(top))].sort((a, b) => a - b);
+        if (tops.length <= 2) return;
+        const row2 = tops[1];
+        btns.forEach((b) => { if (top(b) > row2) b.hidden = true; });
+        more.hidden = false;
+        const shown = btns.filter((b) => !b.hidden);
+        while (top(more) > row2 && shown.length) shown.pop().hidden = true;
+      };
+      if (window.ResizeObserver) new ResizeObserver(() => fit()).observe(chips);
+      requestAnimationFrame(fit);
       wrap.append(chips);
     }
     const check = () => {
