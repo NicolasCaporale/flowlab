@@ -1,0 +1,49 @@
+<?xml version="1.0"?>
+<flowgorithm fileversion="4.2">
+    <attributes>
+        <attribute name="name" value="Auto o a piedi con variabili booleane"/>
+        <attribute name="authors" value="Nicola Vacca"/>
+        <attribute name="about" value="Dati distanzaM, tempoSereno, etaAnni (da leggere in input), calcola e visualizza il consiglio se prendere l'automobile o uscire a piedi."/>
+        <attribute name="saved" value="2026-11-20 07:40:03 PM"/>
+        <attribute name="created" value="Zmxvd2xhYjticm93c2VyOzIwMjYtMTEtMjAgMDc6NDA6MDMgUE07MQ=="/>
+        <attribute name="edited" value="Zmxvd2xhYjticm93c2VyOzIwMjYtMTEtMjAgMDc6NDA6MDMgUE07MQ=="/>
+    </attributes>
+    <function name="Main" type="None" variable="">
+        <parameters/>
+        <body>
+            <comment text="Regola: l'automobile si usa solo se si e' maggiorenni e, in piu', la meta non e' vicina oppure piove."/>
+            <comment text="COSTANTI"/>
+            <declare name="DISTANZA_MAX_PIEDI_M" type="Integer" array="False" size="" flowlab-const="True"/>
+            <assign variable="DISTANZA_MAX_PIEDI_M" expression="2000"/>
+            <declare name="MAGGIORE_ETA" type="Integer" array="False" size="" flowlab-const="True"/>
+            <assign variable="MAGGIORE_ETA" expression="18"/>
+            <comment text="INPUT"/>
+            <declare name="distanzaM" type="Integer" array="False" size=""/>
+            <declare name="tempoSereno" type="Boolean" array="False" size=""/>
+            <declare name="etaAnni" type="Integer" array="False" size=""/>
+            <comment text="LAVORO"/>
+            <declare name="vicino" type="Boolean" array="False" size=""/>
+            <declare name="maggiorenne" type="Boolean" array="False" size=""/>
+            <declare name="piove" type="Boolean" array="False" size=""/>
+            <declare name="usaAutomobile" type="Boolean" array="False" size=""/>
+            <output expression="&quot;Distanza (m): &quot;" newline="True"/>
+            <input variable="distanzaM"/>
+            <output expression="&quot;Tempo sereno (true/false): &quot;" newline="True"/>
+            <input variable="tempoSereno"/>
+            <output expression="&quot;Eta' (anni): &quot;" newline="True"/>
+            <input variable="etaAnni"/>
+            <assign variable="vicino" expression="(distanzaM &lt;= DISTANZA_MAX_PIEDI_M)"/>
+            <assign variable="maggiorenne" expression="(etaAnni &gt;= MAGGIORE_ETA)"/>
+            <assign variable="piove" expression="not (tempoSereno)"/>
+            <assign variable="usaAutomobile" expression="(maggiorenne and (not(vicino) or piove))"/>
+            <if expression="usaAutomobile">
+                <then>
+                    <output expression="&quot;Prendi l'automobile&quot;" newline="True"/>
+                </then>
+                <else>
+                    <output expression="&quot;Esci a piedi&quot;" newline="True"/>
+                </else>
+            </if>
+        </body>
+    </function>
+</flowgorithm>
