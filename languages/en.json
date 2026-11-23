@@ -1217,6 +1217,7 @@
   "ui.numberOfElementsOrInitialValues": "Number of elements or initial values",
   "ui.eG10Or34Or123": "e.g. 10, or 3, 4, or {1, 2, 3}",
   "ui.theNumberOfElementsOrTheValues": "The number of elements (for more dimensions separated by commas: 3, 4) or the initial values between braces, which give the size too: {1, 2, 3}, and for more dimensions one pair of braces per row: {{1, 2}, {3, 4}}.",
-  "ui.otherVariables": "Other variables"
+  "ui.otherVariables": "Other variables",
+  "ui.confirmTheDialog": "in a dialog: confirm (Add, Save, OK…), from any field"
  }
 }

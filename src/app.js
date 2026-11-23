@@ -821,7 +821,7 @@
   function openModal({ title, body, okText, onOk, wide, cancelText, danger, noCancel }) {
     const back = h('div', { class: 'modal-back' });
     const err = h('div', { class: 'formerr', role: 'alert' });
-    const ok = h('button', { class: 'btn primary' + (danger ? ' danger' : ''), type: 'button' }, okText || 'OK');
+    const ok = h('button', { class: 'btn primary' + (danger ? ' danger' : ''), type: 'button', title: `${okText || 'OK'} (Shift+Enter)` }, okText || 'OK');
     const form = h('form', { class: 'modal' + (wide ? ' wide' : ''), role: 'dialog', 'aria-modal': 'true', 'aria-label': title },
       h('header', null, h('h2', null, title), h('button', { class: 'iconbtn', type: 'button', 'aria-label': L('win.close'), onclick: () => close() }, '✕')),
       h('div', { class: 'modal-body' }, body),
@@ -838,7 +838,9 @@
     form.addEventListener('submit', (e) => e.preventDefault());
     ok.addEventListener('click', submit);
     form.addEventListener('keydown', (e) => {
-      if (e.key !== 'Enter' || e.isComposing || e.shiftKey) return;
+      if (e.key !== 'Enter' || e.isComposing) return;
+      // Shift+Enter confirms from any field (also a text area, a menu or with the suggestions open)
+      if (e.shiftKey) { e.preventDefault(); e.stopPropagation(); acHide(); submit(); return; }
       const t = e.target;
       if (t.tagName === 'TEXTAREA' || t.tagName === 'BUTTON' || t.tagName === 'SELECT') return;
       e.preventDefault(); e.stopPropagation(); submit();
@@ -958,7 +960,7 @@
       if (!acCur || acCur.input !== input) return;
       const n = acCur.sug.items.length;
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); e.stopPropagation(); acCur.sel = (acCur.sel + (e.key === 'ArrowDown' ? 1 : n - 1)) % n; acShow(input, acCur.sug); return; }
-      if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); e.stopPropagation(); acApply(); return; }
+      if ((e.key === 'Enter' && !e.shiftKey) || e.key === 'Tab') { e.preventDefault(); e.stopPropagation(); acApply(); return; }
       if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); acHide(); }
     });
     input.addEventListener('keyup', (e) => { if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'Home' || e.key === 'End') acUpdate(input, lvalueOnly); });
@@ -3858,7 +3860,7 @@
     [L('ui.view3'), [
       ['Ctrl+Alt+F  ·  Ctrl+Alt+O', L('ui.functionsViewObjectsView')], ['Alt+1  2  3  4', L('ui.consoleVariablesCodeFilesTabs')], ['Ctrl+B', L('ui.showOrHideThePanel')],
       ['Ctrl++  Ctrl+-  Ctrl+0', L('ui.zoomInOut100')], ['Shift+1', L('ui.fitToWindow')], ['Shift+K', L('ui.compactViewOfTheFlowchartBlocks')], ['Ctrl+Alt+V', L('ui.newViewAnotherWindowOnThe2')], [L('ui.ctrlWheel'), 'Zoom'],
-      ['F1', L('ui.quickGuide')], ['Esc', L('ui.closeWindowsAndMenus')],
+      ['F1', L('ui.quickGuide')], ['Esc', L('ui.closeWindowsAndMenus')], ['Shift+Enter', L('ui.confirmTheDialog')],
     ]],
   ];
   /* previous or next diagram in the selector */

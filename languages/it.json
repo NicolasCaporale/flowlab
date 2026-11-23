@@ -1224,6 +1224,7 @@
   "ui.numberOfElementsOrInitialValues": "Numero di elementi o valori iniziali",
   "ui.eG10Or34Or123": "es. 10, oppure 3, 4, oppure {1, 2, 3}",
   "ui.theNumberOfElementsOrTheValues": "Il numero di elementi (per più dimensioni separati da virgole: 3, 4) oppure i valori iniziali tra graffe, che danno anche la dimensione: {1, 2, 3}, e per più dimensioni una coppia di graffe per riga: {{1, 2}, {3, 4}}.",
-  "ui.otherVariables": "Altre variabili"
+  "ui.otherVariables": "Altre variabili",
+  "ui.confirmTheDialog": "in un dialogo: conferma (Aggiungi, Salva, OK…), da qualunque campo"
  }
 }
