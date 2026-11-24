@@ -35,6 +35,8 @@ class Interpreter {
         (f.ctor ? this.ctors : this.methods).get(f.cls).push(f);
       }
     }
+    // Objects view: functions of the modules with only functions, callable from every class
+    this.globals = _M.globalFuncs(prog);
     // predefined exceptions: classes available also in the Functions view
     for (const c of _M.EXC_CLASSES) if (!this.byName.has(c.name.toLowerCase())) { this.byName.set(c.name.toLowerCase(), c); this.methods.set(c.id, []); this.ctors.set(c.id, []); }
     // type parameters of the classes and of the generic functions
@@ -391,7 +393,7 @@ class Interpreter {
     this.checkRetUse(f, opts, node);
     if (f.abstract) throw new _E.FlowError(L('run.isAnAbstractMethodOfIt', { name: f.name, name2: this.classById(f.cls).name }), { node });
     let self = null;
-    if (this.oo) {
+    if (this.oo && f.cls) { // (a function of a module belongs to no class: it is called without an object)
       const owner = this.classById(f.cls);
       this.checkAccess(f.visibility, owner, L('run.theMethod'), f.name);
       if (!f.static) {
@@ -532,11 +534,15 @@ class Interpreter {
   }
   hasUser(name) {
     if (!this.oo) return !!this.findFunc(name);
-    const fr = this.frame; if (!fr || !fr.cls) return false;
+    const fr = this.frame; if (!fr) return false;
     const low = name.toLowerCase();
     // without an object, the name of a built-in function always means the built-in function
     if (_E.BUILTINS[low]) return false;
+    if (this.globalCands(low).length) return true;
+    if (!fr.cls) return false;
     return this.methodCands(fr.self ? fr.self.cls : fr.cls, low).length > 0 || this.methodCands(fr.cls, low).length > 0;
+  }
+  globalCands(low) { return this.globals.filter((f) => f.name.toLowerCase() === low);
   }
 
   findFunc(name) {
@@ -655,9 +661,11 @@ class Interpreter {
     if (!this.oo) cands = [this.findFunc(name)];
     else {
       const fr = this.frame, low = name.toLowerCase();
-      cands = this.methodCands(fr.self ? fr.self.cls : fr.cls, low);
-      if (!cands.length) cands = this.methodCands(fr.cls, low);
+      cands = fr.cls ? this.methodCands(fr.self ? fr.self.cls : fr.cls, low) : [];
+      if (!cands.length && fr.cls) cands = this.methodCands(fr.cls, low);
       self = fr.self;
+      // a function of a module: from every class, without an object
+      if (!cands.length) { cands = this.globalCands(low); self = null; }
     }
     return yield* this.callCands(cands, name, argNodes, node, { asStatement, allowMulti, allowArray, self });
   }

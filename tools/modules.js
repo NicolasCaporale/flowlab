@@ -48,7 +48,7 @@ function functionsModule({ name, about, funcs, main }) {
   p.functions[0].body = main;
   for (const fn of funcs) {
     const f = M.makeFunction(fn.name, { params: (fn.params || []).map(([n, t, arr]) => ({ name: n, type: t, array: !!arr })), body: fn.body || [] });
-    if (fn.ret) M.setRets(f, [{ name: fn.ret[0], type: fn.ret[1] }]);
+    if (fn.ret) M.setRets(f, [{ name: fn.ret[0], type: fn.ret[1], array: !!fn.ret[2] }]);
     p.functions.push(f);
   }
   return p;
@@ -260,6 +260,92 @@ const MODULES = [
       ],
     }),
   },
+  {
+    topic: 'strings', id: 'Strings',
+    make: () => functionsModule({
+      name: 'Strings',
+      about: 'Functions on strings, like the methods of String in Java: Substring(s, beginIndex, endIndex), IndexOf, Contains, StartsWith, EndsWith, ToUpper, ToLower, Trim, Replace, Split (an array of strings) and IsDigit, IsLetter for a character. Positions start from 0. In the generated code they become the functions of each language.',
+      funcs: [
+        { name: 'Substring', params: [['s', 'String'], ['beginIndex', 'Integer'], ['endIndex', 'Integer']], ret: ['sub', 'String'], body: [
+          X.note('The characters from beginIndex to endIndex, endIndex excluded, as in Java: Substring("hello", 1, 3) = "el"'),
+          X.if('beginIndex < 0 or endIndex > Len(s) or beginIndex > endIndex', [X.throw('new IndexOutOfRange("Range [" & beginIndex & ", " & endIndex & ") out of bounds for length " & Len(s))')]),
+          X.decl('sub', 'String'), X.decl('i', 'Integer'), X.set('sub', '""'),
+          X.for('i', 'beginIndex', 'endIndex - 1', [X.set('sub', 'sub & Char(s, i)')])] },
+        { name: 'IndexOf', params: [['s', 'String'], ['t', 'String']], ret: ['position', 'Integer'], body: [
+          X.note('Position of the first t in s, -1 if it is not there'),
+          X.decl('position, i, k', 'Integer'), X.set('position', '-1'), X.set('i', '0'),
+          X.while('position = -1 and i <= Len(s) - Len(t)', [
+            X.set('k', '0'),
+            X.while('k < Len(t) and Char(s, i + k) = Char(t, k)', [X.set('k', 'k + 1')]),
+            X.if('k = Len(t)', [X.set('position', 'i')]),
+            X.set('i', 'i + 1')])] },
+        { name: 'Contains', params: [['s', 'String'], ['t', 'String']], ret: ['found', 'Boolean'], body: [X.decl('found', 'Boolean'), X.set('found', 'IndexOf(s, t) >= 0')] },
+        { name: 'StartsWith', params: [['s', 'String'], ['t', 'String']], ret: ['result', 'Boolean'], body: [X.decl('result', 'Boolean'), X.set('result', 'Len(t) <= Len(s) and Substring(s, 0, Len(t)) = t')] },
+        { name: 'EndsWith', params: [['s', 'String'], ['t', 'String']], ret: ['result', 'Boolean'], body: [X.decl('result', 'Boolean'), X.set('result', 'Len(t) <= Len(s) and Substring(s, Len(s) - Len(t), Len(s)) = t')] },
+        { name: 'ToUpper', params: [['s', 'String']], ret: ['r', 'String'], body: [
+          X.note('Lowercase letters (also the accented ones) become uppercase: the code of the character goes down by 32'),
+          X.decl('r', 'String'), X.decl('i, c', 'Integer'), X.set('r', '""'),
+          X.for('i', '0', 'Len(s) - 1', [X.set('c', 'ToCode(Char(s, i))'),
+            X.if('(c >= 97 and c <= 122) or (c >= 224 and c <= 254 and c != 247)', [X.set('c', 'c - 32')]),
+            X.set('r', 'r & ToChar(c)')])] },
+        { name: 'ToLower', params: [['s', 'String']], ret: ['r', 'String'], body: [
+          X.note('Uppercase letters (also the accented ones) become lowercase: the code of the character goes up by 32'),
+          X.decl('r', 'String'), X.decl('i, c', 'Integer'), X.set('r', '""'),
+          X.for('i', '0', 'Len(s) - 1', [X.set('c', 'ToCode(Char(s, i))'),
+            X.if('(c >= 65 and c <= 90) or (c >= 192 and c <= 222 and c != 215)', [X.set('c', 'c + 32')]),
+            X.set('r', 'r & ToChar(c)')])] },
+        { name: 'Trim', params: [['s', 'String']], ret: ['r', 'String'], body: [
+          X.note('Without the spaces (and tabs, new lines) at the beginning and at the end'),
+          X.decl('r', 'String'), X.decl('a, b', 'Integer'), X.set('a', '0'), X.set('b', 'Len(s) - 1'),
+          X.while('a <= b and ToCode(Char(s, a)) <= 32', [X.set('a', 'a + 1')]),
+          X.while('b >= a and ToCode(Char(s, b)) <= 32', [X.set('b', 'b - 1')]),
+          X.set('r', 'Substring(s, a, b + 1)')] },
+        { name: 'Replace', params: [['s', 'String'], ['target', 'String'], ['replacement', 'String']], ret: ['r', 'String'], body: [
+          X.note('Every target in s replaced by replacement, from left to right'),
+          X.decl('r', 'String'), X.decl('i', 'Integer'), X.set('i', '0'),
+          X.if('Len(target) = 0', [
+            X.note('An empty target: replacement between all the characters, as in Java'),
+            X.set('r', 'replacement'), X.for('i', '0', 'Len(s) - 1', [X.set('r', 'r & Char(s, i) & replacement')])], [
+            X.set('r', '""'),
+            X.while('i < Len(s)', [
+              X.if('i <= Len(s) - Len(target) and Substring(s, i, i + Len(target)) = target', [X.set('r', 'r & replacement'), X.set('i', 'i + Len(target)')], [X.set('r', 'r & Char(s, i)'), X.set('i', 'i + 1')])])])] },
+        { name: 'Split', params: [['s', 'String'], ['separator', 'String']], ret: ['parts', 'String', true], body: [
+          X.note('The pieces of s between the separators, also the empty ones: Split("a;b;;c", ";") = {"a", "b", "", "c"}'),
+          X.if('Len(separator) = 0', [X.throw('new InvalidArgument("The separator is empty")')]),
+          X.decl('count, i, k, start', 'Integer'), X.set('count', '1'), X.set('i', '0'),
+          X.while('i <= Len(s) - Len(separator)', [
+            X.if('Substring(s, i, i + Len(separator)) = separator', [X.set('count', 'count + 1'), X.set('i', 'i + Len(separator)')], [X.set('i', 'i + 1')])]),
+          X.decl('parts', 'String', 'count'),
+          X.set('k', '0'), X.set('start', '0'), X.set('i', '0'),
+          X.while('i <= Len(s) - Len(separator)', [
+            X.if('Substring(s, i, i + Len(separator)) = separator', [X.set('parts[k]', 'Substring(s, start, i)'), X.set('k', 'k + 1'), X.set('i', 'i + Len(separator)'), X.set('start', 'i')], [X.set('i', 'i + 1')])]),
+          X.set('parts[k]', 'Substring(s, start, Len(s))')] },
+        { name: 'IsDigit', params: [['c', 'String']], ret: ['result', 'Boolean'], body: [
+          X.note('True if c is a single digit character, 0 to 9'),
+          X.decl('result', 'Boolean'), X.set('result', 'Len(c) = 1 and ToCode(c) >= 48 and ToCode(c) <= 57')] },
+        { name: 'IsLetter', params: [['c', 'String']], ret: ['result', 'Boolean'], body: [
+          X.note('True if c is a single letter, also accented'),
+          X.decl('result', 'Boolean'), X.decl('x', 'Integer'), X.set('x', '0'),
+          X.if('Len(c) = 1', [X.set('x', 'ToCode(c)')]),
+          X.set('result', '(x >= 65 and x <= 90) or (x >= 97 and x <= 122) or (x >= 192 and x <= 255 and x != 215 and x != 247)')] },
+      ],
+      main: [
+        X.note('Test of the module: this Main is not imported'),
+        X.decl('s, t', 'String'), X.decl('i', 'Integer'), X.decl('parts', 'String', 1),
+        X.set('s', '"  Hello, World!  "'), X.set('t', 'Trim(s)'),
+        X.out('"[" & t & "] " & Len(t)'),
+        X.out('Substring(t, 0, 5) & " " & IndexOf(t, "World") & " " & IndexOf(t, "xyz")'),
+        X.out('Contains(t, "lo, W") & " " & StartsWith(t, "Hello") & " " & EndsWith(t, "?")'),
+        X.out('ToUpper(t) & " " & ToLower("ABC def")'),
+        X.out('Replace("banana", "na", "NA") & " " & Replace("ab", "", "-")'),
+        X.set('parts', 'Split("Rossi;7;;8", ";")'),
+        X.for('i', '0', 'Size(parts) - 1', [X.out('"[" & parts[i] & "]"', false)]), X.out('" " & Size(parts)'),
+        X.out('IsDigit("7") & " " & IsDigit("a") & " " & IsLetter("x") & " " & IsLetter("?") & " " & IsDigit("12")'),
+        X.note('Positions outside the string: IndexOutOfRange, as in Java'),
+        X.try([X.out('Substring("abc", 2, 5)')], [['IndexOutOfRange', 'e', [X.out('"Error: " & e.message')]]]),
+      ],
+    }),
+  },
 ];
 
 /* name shown for a topic: the folder name, data_structures -> "Data structures" */
@@ -293,8 +379,9 @@ Anyone can write a module, even a student: it is enough to save a program with t
 ${rows.join('\n')}
 
 In the generated code the library modules that have an equivalent in the language use the classes
-already available (for example \`java.util.ArrayList\`, \`list\` in Python, \`std::vector\` in C++); the other
-modules become classes written in the code.
+already available (for example \`java.util.ArrayList\`, \`list\` in Python, \`std::vector\` in C++), and the
+functions of Strings become those of each language (\`s.substring(a, b)\` in Java, \`s[a:b]\` in Python); the other
+modules become classes or functions written in the code.
 
 Each subfolder is a topic: its name, with spaces written as \`_\`, is the one shown in FlowLab
 (\`data_structures\` becomes «Data structures»). The description of each module is the one written in

@@ -85,6 +85,29 @@ const UmlLib = (() => {
     }
   }
 
+  /* modules with only functions in the Objects view: one box each, with the functions (session position in pos: Map name → { x, y },
+     the first time to the right of the classes) */
+  function fmodBoxes(prog, boxes, pos, collapsed) {
+    const out = [];
+    const all = () => [...boxes.values(), ...out];
+    const hits = (x, y, w, h) => all().some((b) => x < b.x + b.w + 40 && x + w + 40 > b.x && y < b.y + b.h + 40 && y + h + 40 > b.y);
+    for (const m of ModelLib.modulesOf(prog).filter((x) => !x.classes.length && x.funcs.length)) {
+      const rows = m.funcs.map((f) => ({ f, text: methodText(prog, f).replace(/^\S+ /, '') }));
+      const label = L('uml.module') + m.name;
+      const w = Math.ceil(Math.min(MAXW + 60, Math.max(190, tw(label, FS) + 70, ...rows.map((r) => tw(r.text, FM) + PADX * 2 + 8))));
+      const h = collapsed.has(m.name) ? 62 : 34 + rows.length * ROW + 10;
+      let p = pos && pos.get(m.name);
+      if (!p) {
+        const right = all().length ? Math.max(...all().map((b) => b.x + b.w)) : 0;
+        let at = null;
+        for (let yy = 40; yy < 2000 && !at; yy += 40) for (const xx of [right + 90]) if (!hits(xx, yy, w, h)) at = { x: Math.round(xx), y: yy };
+        p = at || { x: Math.round(right + 90), y: 40 };
+        if (pos) pos.set(m.name, p);
+      }
+      out.push({ m, rows, label, x: p.x, y: p.y, w, h });
+    }
+    return out;
+  }
   /* point where the line from the centre towards (tx, ty) leaves the box */
   function clip(b, tx, ty, ox, oy) {
     const cx = b.x + b.w / 2 + (ox || 0), cy = b.y + b.h / 2 + (oy || 0);
@@ -111,8 +134,10 @@ const UmlLib = (() => {
       const cb = { compact: true, m, rows, label, x: Math.min(...bs.map((b) => b.x)), y: Math.min(...bs.map((b) => b.y)), w, h: 40 + rows.length * 22 + 8 };
       for (const c of m.classes) boxes.set(c.id, cb);
     }
+    // modules with only functions: a box of the module with its functions (they belong to no class)
+    const fbox = fmodBoxes(prog, boxes, opts && opts.fmodPos, collapsed);
     let W = 640, H = 420;
-    for (const b of boxes.values()) { W = Math.max(W, b.x + b.w + 120); H = Math.max(H, b.y + b.h + 120); }
+    for (const b of [...boxes.values(), ...fbox]) { W = Math.max(W, b.x + b.w + 120); H = Math.max(H, b.y + b.h + 120); }
     const lines = [], labels = [], shapes = [], frames = [];
     // imported modules: a dashed box around their classes
     for (const m of mods.filter((x) => !collapsed.has(x.name))) {
@@ -176,6 +201,19 @@ const UmlLib = (() => {
       g += `<rect class="umodbg" x="${x}" y="${y}" width="${w}" height="${h}" rx="10"/><rect class="umodtab" x="${x}" y="${y}" width="${w}" height="26" rx="10"/><text class="umodlab" x="${x + 13}" y="${y + 17}">${esc(b.label)}</text>`;
       g += modTog(x + w - 15, y + 13, b.m.name, false);
       b.rows.forEach((r, k) => { g += `<text class="umodcls" x="${x + 16}" y="${y + 46 + k * 22}">${esc(r)}</text>`; });
+      shapes.push(g + '</g>');
+    }
+    for (const b of fbox) {
+      const { x, y, w, h } = b, open = !collapsed.has(b.m.name);
+      let g = `<g class="umod umodf${open ? '' : ' umodc'}" data-module="${esc(b.m.name)}"><title>${open ? L('uml.functionsModuleReadOnly', { name: esc(b.m.name) }) : L('uml.moduleReadOnlyCollapsedDoubleClick', { name: esc(b.m.name) })}</title>`;
+      g += `<rect class="umodbg" x="${x}" y="${y}" width="${w}" height="${h}" rx="10"/><rect class="umodtab" x="${x}" y="${y}" width="${w}" height="26" rx="10"/><text class="umodlab" x="${x + 13}" y="${y + 17}">${esc(b.label)}</text>`;
+      g += modTog(x + w - 15, y + 13, b.m.name, open);
+      if (!open) g += `<text class="umodcls" x="${x + 16}" y="${y + 46}">${esc(L('uml.nFunctions', { n: b.rows.length }))}</text>`;
+      else b.rows.forEach((r, k) => {
+        const ry = y + 34 + k * ROW;
+        const on = sel && sel.kind === 'method' && sel.fid === r.f.id;
+        g += `<g class="urow method${on ? ' sel' : ''}" data-kind="method" data-fid="${r.f.id}"><rect class="uhit" x="${x + 4}" y="${ry}" width="${w - 8}" height="${ROW}" rx="3"/><text class="umem" x="${x + PADX}" y="${ry + ROW / 2 + 4.5}">${esc(RenderLib.fitText(r.text, w - PADX * 2, FM))}</text><title>${esc(r.text)}${L('uml.functionOfTheModuleDoubleClick')}</title></g>`;
+      });
       shapes.push(g + '</g>');
     }
     // boxes

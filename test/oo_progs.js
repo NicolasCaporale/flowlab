@@ -101,4 +101,26 @@ const tostring = () => oo([
   { cls: 'Gatto', name: 'toString', rets: [['descrizione', 'String']], body: [decl('descrizione', 'String'), set('descrizione', 'nome & " (" & ToString(eta) & " anni) " & this.saluto()')] },
   { cls: 'Gatto', name: 'saluto', rets: [['s', 'String']], body: [decl('s', 'String'), set('s', '"miao"')] },
 ]);
-module.exports = { oo, punto, forme, lista, vettore, getter, tostring, out, set, decl, call };
+/* modules with only functions in a program with classes: called from the Main, from a method and from another function of the module */
+const moduli = () => {
+  const p = oo([
+    decl('w', 'Parola'), decl('v', 'Integer', 4),
+    set('w', 'new Parola("  ciao mondo ")'),
+    out('w.corta() & " " & w.ha("mondo") & " " & Parola.iniziale("zebra")'),
+    set('v[0]', '7'), set('v[1]', '2'), set('v[2]', '9'), set('v[3]', '1'),
+    call('bubbleSort(v, 4)'),
+    out('v[0] & v[1] & v[2] & v[3] & " " & linearSearch(v, 4, 9)'),
+  ], [{ name: 'Parola', attributes: [{ name: 'testo', type: 'String' }] }], [
+    { cls: 'Parola', ctor: true, params: [['t', 'String']], body: [set('testo', 'Trim(t)')] },
+    { cls: 'Parola', name: 'corta', rets: [['r', 'String']], body: [decl('r', 'String'), set('r', 'ToUpper(Substring(testo, 0, 4))')] },
+    { cls: 'Parola', name: 'ha', params: [['x', 'String']], rets: [['r', 'Boolean']], body: [decl('r', 'Boolean'), set('r', 'Contains(testo, x) and IndexOf(testo, x) = 5')] },
+    { cls: 'Parola', name: 'iniziale', static: true, params: [['x', 'String']], rets: [['r', 'String']], body: [decl('r', 'String'), set('r', 'Substring(x, 0, 1)')] },
+  ]);
+  const { MODULES } = require('../tools/modules.js');
+  for (const id of ['Strings', 'Sorting', 'Search']) {
+    const m = MODULES.find((x) => x.id === id), q = m.make();
+    for (const f of q.functions.slice(1)) { f.module = { name: id, src: `lib:${m.topic}/${id}` }; p.functions.push(f); }
+  }
+  return p;
+};
+module.exports = { oo, punto, forme, lista, vettore, getter, tostring, moduli, out, set, decl, call };

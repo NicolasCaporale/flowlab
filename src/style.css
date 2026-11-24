@@ -824,3 +824,14 @@ body.hasviews:not(.auxactive) #canvasWrap { box-shadow: inset 0 0 0 2px var(--ac
 .langlist { display: grid; gap: 6px; }
 .langitem { display: flex; justify-content: space-between; align-items: center; gap: 12px; text-align: left; }
 .langitem.on { border-color: var(--accent); background: var(--accent-soft); }
+/* menu of the diagram selector: the program first, then a group for each imported module (+ to open it) */
+.fmenu { max-height: min(70vh, 560px); overflow: auto; gap: 1px; }
+.fmenu button { justify-content: flex-start; gap: 8px; padding: 6px 10px; color: var(--ink); font: inherit; }
+.fmenu .fcheck { width: 1em; flex: none; color: var(--accent); font-weight: 700; }
+.fmenu .ftxt { white-space: nowrap; }
+.fmenu .fin { padding-left: 26px; }
+.fmenu .fgroup { padding: 7px 10px 3px; font-size: 12px; font-weight: 700; color: var(--muted); }
+.fmenu .fgroup.fin { padding-left: 30px; }
+.fmenu .fmod { margin-top: 4px; border-top: 1px solid var(--line-soft); border-radius: 0 0 6px 6px; padding-top: 8px; color: var(--muted); font-weight: 700; font-size: 13px; }
+.fmenu .fplus { width: 1em; height: 1em; flex: none; display: inline-grid; place-items: center; border: 1px solid var(--line); border-radius: 4px; font-size: 12px; line-height: 1; color: var(--ink); }
+.fmenu .fcount { margin-left: auto; font-weight: 400; font-size: 11.5px; color: var(--faint); }

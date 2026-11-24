@@ -3,6 +3,8 @@ import { chromium } from '/opt/npm-tools/node_modules/playwright/index.mjs';
 const browser = await chromium.launch();
 const page = await browser.newPage({ locale: 'it-IT', viewport: { width: 1440, height: 900 } });
 const errs = []; page.on('pageerror', (e) => errs.push(e.message));
+// the collection built into the page (the one on GitHub may be older than this build)
+await page.route(/github(usercontent)?\.com/, (r) => r.abort());
 await page.goto('file://' + process.cwd() + '/dist/FlowLab.html'); await page.waitForTimeout(300);
 await page.evaluate(() => { localStorage.clear(); const s = document.querySelector('#speed'); s.value = 0; s.dispatchEvent(new Event('input')); });
 const wait = (ms = 150) => page.waitForTimeout(ms);
@@ -16,7 +18,7 @@ await page.evaluate(() => document.querySelectorAll('.modal details').forEach((d
 await page.waitForFunction(() => ![...document.querySelectorAll('.modsrc')].some((d) => /Caricamento/.test(d.innerText)), null, { timeout: 30000 });
 await page.evaluate(() => document.querySelectorAll('.modal details').forEach((d) => { d.open = true; })); await page.waitForTimeout(100);
 
-ok('dialogo dei moduli: ' + (await page.locator('.modtname').allTextContents()).join(', '), (await page.locator('.modsrc .modrow').count()) === 5);
+ok('dialogo dei moduli: ' + (await page.locator('.modtname').allTextContents()).join(', '), (await page.locator('.modsrc .modrow').count()) === 6);
 await page.screenshot({ path: 'test/mod1_dialog.png' });
 await page.locator('.modsrc .modrow', { hasText: 'ArrayList' }).locator('button').click(); await wait(250);
 ok('importato: vista ' + await page.evaluate(() => FlowLab.state.view) + ', classi ' + (await page.locator('.uname').allTextContents()).join(', '), (await page.locator('.uname').allTextContents()).includes('ArrayList<T>'));

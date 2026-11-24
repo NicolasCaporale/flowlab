@@ -35,6 +35,7 @@
     view: store.get('view', 'functions') === 'objects' ? 'objects' : 'functions', uml: true, usel: null,
     // positions of the predefined exceptions in the class diagram (only in memory, for the open program)
     excPos: new Map(),
+    fmodPos: new Map(), // position of the boxes of the modules with only functions in the class diagram (session)
   };
   const SPEEDS = [{ ms: 0, label: L('ui.instant') }, { ms: 40, label: L('ui.fast') }, { ms: 280, label: L('ui.medium') }, { ms: 750, label: L('ui.slow') }];
   const renderer = new RenderLib.Renderer();
@@ -290,10 +291,10 @@
     $('#backUml').hidden = !isOO();
     if (!bar.hidden) {
       const f = func(); const c = isOO() ? M.classOf(st.prog, f) : null; const m = M.moduleOfFunc(st.prog, f);
-      $('#crumbWhere').textContent = isOO() ? `${c ? M.classTitle(c) : ''} › ${f === st.prog.functions[0] ? L('ui.mainStartOfTheProgram') : f.ctor ? L('uml.constructor') : f.name + '()'}${m ? L('ui.moduleReadOnly', { name: m.name }) : ''}` : L('ui.moduleReadOnly2', { name: f.name, name2: m.name });
+      $('#crumbWhere').textContent = isOO() && c ? `${M.classTitle(c)} › ${f === st.prog.functions[0] ? L('ui.mainStartOfTheProgram') : f.ctor ? L('uml.constructor') : f.name + '()'}${m ? L('ui.moduleReadOnly', { name: m.name }) : ''}` : L('ui.moduleReadOnly2', { name: f.name, name2: m.name });
     }
     document.body.classList.toggle('readonly', !bar.hidden && M.isModuleFunc(st.prog, func()));
-    const mods = isUml() ? M.modulesOf(st.prog).filter((m) => m.classes.length) : [];
+    const mods = isUml() ? M.modulesOf(st.prog) : [];
     $('#modBar').hidden = !mods.length;
     document.body.classList.toggle('hasmods', !!mods.length);
     if (mods.length) { const anyOpen = mods.some((m) => !st.modCollapsed.has(m.name)); $('#modToggle').textContent = anyOpen ? L('ui.collapseModules') : L('ui.expandModules'); $('#modToggle').title = (anyOpen ? L('ui.showImportedModulesAsCompactBoxes') : L('ui.showAttributesAndMethodsOfThe')) + ' (Shift+M)'; }
@@ -321,7 +322,7 @@
     store.set('modCollapsed', [...st.modCollapsed]); render();
   }
   function toggleAllModules() {
-    const ms = M.modulesOf(st.prog).filter((m) => m.classes.length).map((m) => m.name);
+    const ms = M.modulesOf(st.prog).map((m) => m.name);
     const anyOpen = ms.some((n) => !st.modCollapsed.has(n));
     for (const n of ms) { if (anyOpen) st.modCollapsed.add(n); else st.modCollapsed.delete(n); }
     store.set('modCollapsed', [...st.modCollapsed]); render();
@@ -333,7 +334,7 @@
   function renderChart() {
     const holder = V.chart;
     if (isUml()) {
-      const out = UmlLib.render(st.prog, st.usel, { collapsed: st.modCollapsed, excPos: st.excPos });
+      const out = UmlLib.render(st.prog, st.usel, { collapsed: st.modCollapsed, excPos: st.excPos, fmodPos: st.fmodPos });
       st.ins = []; st.edges = [];
       holder.innerHTML = vsvg(out.svg);
       applyZoom();
@@ -467,23 +468,123 @@
     const z = Math.min((wrap.clientWidth - 24) / svg.dataset.w, (wrap.clientHeight - 24) / svg.dataset.h, 1.4);
     setZoom(Math.max(0.3, z));
   }
-  /* items of a diagram selector: functions, or class diagram and methods */
+  /* items of a diagram selector: functions, or class diagram and methods. First those of the program,
+     then those of each imported module, in a group of the module (data-mod) that the menu shows collapsed */
   function fillFuncOptions(sel) {
     sel.innerHTML = '';
+    const modGroup = (name) => h('optgroup', { label: L('ui.moduleGroup', { name }), 'data-mod': name });
     if (isOO()) {
       sel.append(h('option', { value: 'uml', selected: st.uml }, '▦ Classi (UML)'));
-      for (const c of st.prog.classes) {
+      // the classes of the program, then the modules: their classes and the functions imported into a class of the program
+      const cs = st.prog.classes, mods = new Map();
+      const modList = (name) => { if (!mods.has(name)) mods.set(name, []); return mods.get(name); };
+      for (const c of [...cs.filter((x) => !x.module), ...cs.filter((x) => x.module)]) {
         const og = h('optgroup', { label: L('ui.class2') + M.classTitle(c) + (c.module ? L('ui.module2', { name: c.module.name }) : '') });
+        if (c.module) { og.dataset.mod = c.module.name; og.dataset.cls = M.classTitle(c); }
         const ms = M.membersOf(st.prog, c);
         for (const f of [...ms.filter((x) => x.ctor), ...ms.filter((x) => !x.ctor)]) {
           const i = st.prog.functions.indexOf(f);
-          og.append(h('option', { value: i, selected: !st.uml && i === st.fi }, i === 0 ? L('ui.mainStart') : f.ctor ? L('ui.newConstructor', { name: c.name, list: f.params.map((p) => p.name).join(', ') }) : `${f.name}${tplTxt(f)}(${f.params.map((p) => p.name).join(', ')})${f.abstract ? L('ui.abstract') : ''}${f.module ? L('ui.module3') + f.module.name : ''}`));
+          const sig = i === 0 ? L('ui.mainStart') : f.ctor ? L('ui.newConstructor', { name: c.name, list: f.params.map((p) => p.name).join(', ') }) : `${f.name}${tplTxt(f)}(${f.params.map((p) => p.name).join(', ')})${f.abstract ? L('ui.abstract') : ''}`;
+          const o = h('option', { value: i, selected: !st.uml && i === st.fi }, sig + (f.module ? L('ui.module3') + f.module.name : ''));
+          if (f.module && !c.module) {
+            // a function of a module of functions: in the group of the module
+            o.dataset.short = sig;
+            const l = modList(f.module.name);
+            let g = l.find((x) => !x.dataset.cls);
+            if (!g) { g = h('optgroup', { label: L('ui.moduleGroup', { name: f.module.name }), 'data-mod': f.module.name }); l.unshift(g); }
+            g.append(o);
+          } else og.append(o);
         }
-        sel.append(og);
+        if (c.module) modList(c.module.name).push(og);
+        else sel.append(og);
       }
+      // the functions of the modules with only functions: outside the classes
+      for (const f of M.globalFuncs(st.prog)) {
+        const i = st.prog.functions.indexOf(f), sig = `${f.name}${tplTxt(f)}(${f.params.map((p) => p.name).join(', ')})`;
+        const o = h('option', { value: i, selected: !st.uml && i === st.fi, 'data-short': sig }, sig + L('ui.module3') + f.module.name);
+        const l = modList(f.module.name);
+        let g = l.find((x) => !x.dataset.cls);
+        if (!g) { g = h('optgroup', { label: L('ui.moduleGroup', { name: f.module.name }), 'data-mod': f.module.name }); l.unshift(g); }
+        g.append(o);
+      }
+      mods.forEach((l) => l.forEach((g) => sel.append(g)));
       return;
     }
-    st.prog.functions.forEach((f, i) => sel.append(h('option', { value: i, selected: i === st.fi }, i === 0 ? L('ui.mainStart') : `${f.name}${tplTxt(f)}(${f.params.map((p) => p.name).join(', ')})${f.module ? L('ui.module3') + f.module.name : ''}`)));
+    const groups = new Map();
+    st.prog.functions.forEach((f, i) => {
+      const sig = i === 0 ? L('ui.mainStart') : `${f.name}${tplTxt(f)}(${f.params.map((p) => p.name).join(', ')})`;
+      const o = h('option', { value: i, selected: i === st.fi }, sig + (f.module ? L('ui.module3') + f.module.name : ''));
+      if (!f.module) { sel.append(o); return; }
+      o.dataset.short = sig;
+      if (!groups.has(f.module.name)) groups.set(f.module.name, modGroup(f.module.name));
+      groups.get(f.module.name).append(o);
+    });
+    groups.forEach((g) => sel.append(g));
+  }
+  /* the menu of a diagram selector: like the list of the select, but each module is a group that opens with + */
+  const modOpen = new Set();
+  function funcMenu(sel) {
+    const box = h('div', { class: 'ctxmenu fmenu', role: 'menu' });
+    box.style.minWidth = sel.getBoundingClientRect().width + 'px';
+    const cur = sel.selectedOptions[0];
+    const curMod = cur && cur.parentElement.dataset && cur.parentElement.dataset.mod;
+    if (curMod) modOpen.add(curMod);
+    const item = (o, cls) => h('button', { type: 'button', role: 'menuitemradio', class: 'fitem' + (cls ? ' ' + cls : ''), 'aria-checked': String(o === cur),
+      onclick: () => { closePop(); if (sel.value !== o.value) { sel.value = o.value; sel.dispatchEvent(new Event('change')); } sel.focus({ preventScroll: true }); } },
+    h('span', { class: 'fcheck', 'aria-hidden': 'true' }, o === cur ? '✓' : ''), h('span', { class: 'ftxt' }, o.dataset.short || o.textContent));
+    const build = (focusMod) => {
+      box.innerHTML = '';
+      const kids = [...sel.children];
+      for (let k = 0; k < kids.length; k++) {
+        const el = kids[k];
+        if (el.tagName === 'OPTION') { box.append(item(el)); continue; }
+        const mod = el.dataset.mod;
+        if (!mod) { box.append(h('div', { class: 'fgroup' }, el.label)); [...el.children].forEach((o) => box.append(item(o, 'fin'))); continue; }
+        // the groups of the same module (the classes of a module) go under one heading
+        const gs = [el]; while (kids[k + 1] && kids[k + 1].dataset && kids[k + 1].dataset.mod === mod) gs.push(kids[++k]);
+        const n = gs.reduce((a, g) => a + g.children.length, 0), open = modOpen.has(mod);
+        const head = h('button', { type: 'button', class: 'fmod', 'aria-expanded': String(open), 'data-mod': mod, title: L('ui.showOrHideTheModule', { name: mod }),
+          onclick: () => { if (modOpen.has(mod)) modOpen.delete(mod); else modOpen.add(mod); build(mod); } },
+        h('span', { class: 'fplus', 'aria-hidden': 'true' }, open ? '−' : '+'), h('span', { class: 'ftxt' }, L('ui.moduleGroup', { name: mod })), h('span', { class: 'fcount' }, String(n)));
+        box.append(head);
+        if (!open) continue;
+        for (const g of gs) {
+          if (g.dataset.cls) box.append(h('div', { class: 'fgroup fin' }, L('ui.class2') + g.dataset.cls));
+          [...g.children].forEach((o) => box.append(item(o, 'fin')));
+        }
+      }
+      const f = focusMod ? box.querySelector(`.fmod[data-mod="${CSS.escape(focusMod)}"]`) : box.querySelector('.fitem[aria-checked=true]');
+      if (f) setTimeout(() => { f.focus({ preventScroll: true }); f.scrollIntoView({ block: 'nearest' }); }, 0);
+    };
+    // arrows: previous and next item; right and left: open and close the module
+    box.addEventListener('keydown', (e) => {
+      const bs = [...box.querySelectorAll('button')], i = bs.indexOf(document.activeElement);
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); e.stopPropagation(); const b = bs[(i + (e.key === 'ArrowDown' ? 1 : bs.length - 1)) % bs.length]; if (b) { b.focus(); b.scrollIntoView({ block: 'nearest' }); } return; }
+      if (e.key === 'Home' || e.key === 'End') { e.preventDefault(); e.stopPropagation(); const b = e.key === 'Home' ? bs[0] : bs[bs.length - 1]; if (b) b.focus(); return; }
+      const a = document.activeElement;
+      if (e.key === 'ArrowRight' || e.key === '+') { if (a.classList.contains('fmod') && a.getAttribute('aria-expanded') === 'false') { e.preventDefault(); a.click(); } return; }
+      if (e.key === 'ArrowLeft' || e.key === '-') {
+        let hd = a.classList.contains('fmod') ? a : null;
+        if (!hd && a.classList.contains('fin')) for (let k = i; k >= 0; k--) if (bs[k].classList.contains('fmod')) { hd = bs[k]; break; }
+        if (hd && hd.getAttribute('aria-expanded') === 'true') { e.preventDefault(); hd.click(); }
+      }
+    });
+    build();
+    return box;
+  }
+  /* a diagram selector opens the menu with the modules instead of the list of the browser */
+  function enhanceSel(sel) {
+    const open = () => { if (sel.disabled) return; const r = sel.getBoundingClientRect(); openPop(r.left, r.bottom + 4, funcMenu(sel)); $('#pop')._sel = sel; };
+    sel.addEventListener('mousedown', (e) => {
+      if (e.button !== 0) return;
+      e.preventDefault(); sel.focus({ preventScroll: true });
+      const was = !$('#pop').hidden && $('#pop')._sel === sel;
+      setTimeout(() => { if (!was) open(); else closePop(); }, 0);
+    });
+    sel.addEventListener('keydown', (e) => {
+      const arrows = /Mac|iPhone|iPad/.test(navigator.platform) && (e.key === 'ArrowDown' || e.key === 'ArrowUp');
+      if (e.key === ' ' || e.key === 'Enter' || e.key === 'F4' || (e.altKey && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) || arrows) { e.preventDefault(); e.stopPropagation(); open(); }
+    });
   }
   function renderFuncSelect() {
     const sel = $('#funcSel');
@@ -557,7 +658,7 @@
   }
 
   /* ------------------------------ Popover -------------------------------- */
-  function closePop() { $('#pop').hidden = true; $('#pop').innerHTML = ''; }
+  function closePop() { $('#pop').hidden = true; $('#pop').innerHTML = ''; $('#pop')._sel = null; }
   function openPop(x, y, content) {
     const p = $('#pop');
     p.innerHTML = ''; p.append(content); p.hidden = false;
@@ -1638,7 +1739,8 @@
         B(L('ui.newExceptionInheritingFrom', { bi }), () => classDialog(null, svgPoint(e), true, bi)), B(L('ui.whatIsIt'), () => builtinInfo(bi)));
     } else if (modEl && !c) {
       const mn = modEl.dataset.module;
-      menuBox = h('div', { class: 'ctxmenu' }, h('div', { class: 'pophead' }, L('ui.module4') + mn), B(L('ui.updateTheModule'), () => updateModule(mn)), h('hr'), B(L('ui.removeTheModule'), () => removeModule(mn), 'danger'));
+      const fr = row && row.dataset.kind === 'method' ? row.dataset.fid : null;
+      menuBox = h('div', { class: 'ctxmenu' }, h('div', { class: 'pophead' }, L('ui.module4') + mn), fr ? B(L('ui.openTheFlowchart'), () => openMethod(fr), '', L('ui.enter')) : null, B(L('ui.updateTheModule'), () => updateModule(mn)), h('hr'), B(L('ui.removeTheModule'), () => removeModule(mn), 'danger'));
     } else if (!c) {
       const pt = svgPoint(e);
       menuBox = h('div', { class: 'ctxmenu' }, B(L('ui.newClass2'), () => classDialog(null, pt), '', 'N'), B(L('ui.newException2'), () => classDialog(null, pt, true), '', 'Shift+E'), B(L('ui.importAModule'), moduleDialog, '', 'Ctrl+I'));
@@ -1745,8 +1847,9 @@
         if (e.target.closest('.uadd') || e.target.closest('.umodtog')) return;
         const mc = e.target.closest('.umodc');
         if (mc) { toggleModule(mc.dataset.module); return; }
-        if (e.target.closest('.umod')) return; // box of a module: no new class
         const row = e.target.closest('.urow'), box = e.target.closest('.ubox');
+        if (row && row.dataset.kind === 'method' && !box) { openMethod(row.dataset.fid); return; } // function of a module
+        if (e.target.closest('.umod')) return; // box of a module: no new class
         if (box && box.classList.contains('builtin')) { builtinInfo(box.dataset.cls.slice(4)); return; }
         if (row && row.dataset.kind === 'method') { openMethod(row.dataset.fid); return; }
         if (isRunning()) { toast(L('ui.stopTheProgramToEditThe'), 'warn'); return; }
@@ -1786,7 +1889,11 @@
         // predefined exception: its position is moved (it is not in the file)
         if (box && box.classList.contains('builtin')) cs = [Object.assign(st.excPos.get(box.dataset.cls.slice(4)) || {}, { builtin: true })];
         else if (box) cs = [M.classById(st.prog, box.dataset.cls)];
-        else if (mod) { const m = M.modulesOf(st.prog).find((x) => x.name === mod.dataset.module); cs = m ? m.classes : []; }
+        else if (mod) {
+          const m = M.modulesOf(st.prog).find((x) => x.name === mod.dataset.module);
+          // module with only functions: its position is moved (it is not in the file)
+          cs = !m ? [] : m.classes.length ? m.classes : st.fmodPos.has(m.name) ? [Object.assign(st.fmodPos.get(m.name), { builtin: true })] : [];
+        }
         if (!cs || !cs.length) return;
         udrag = { items: cs.map((c) => ({ c, ox: c.x || 0, oy: c.y || 0 })), mod: mod ? mod.dataset.module : null, x: e.clientX, y: e.clientY, on: false, raf: 0 };
         return;
@@ -2842,6 +2949,7 @@
     const v = { id: ++viewSeq, main: false, sync: false, min: false, h: 0,
       state: { fi, uml: o.fi != null ? !!o.uml : st.uml, sel: null, usel: null, zoom: o.zoom || st.zoom, ins: [], edges: [], compact: o.fi != null ? !!o.compact : !!st.compact, compactFid: fidAt(fi), fid: fidAt(fi) } };
     v.sel = h('select', { class: 'vsel', 'aria-label': L('ui.diagramOfTheView') });
+    enhanceSel(v.sel);
     v.compactBtn = h('button', { class: 'vcompact', type: 'button', 'aria-pressed': 'false', html: ICON_COMPACT + `<span class="lbl">${L('ui.compact')}</span>` });
     v.syncBtn = h('button', { class: 'vsync', type: 'button', 'aria-pressed': 'false', title: L('ui.continueTheMainSheetTheView') }, v.syncIco = h('span', { 'aria-hidden': 'true' }, '⇣'), L('ui.continue2'));
     v.zoomVal = h('button', { class: 'vzoomval', type: 'button', title: L('ui.backTo100') }, '100%');
@@ -3099,7 +3207,7 @@
     if (isRunning()) stopRun();
     resetViews();
     const before = keepUndo ? snapshot() : null;
-    st.excPos = new Map();
+    st.excPos = new Map(); st.fmodPos = new Map();
     st.undo = before ? [before] : []; st.redo = []; st.prog = prog; st.fi = 0; st.sel = null; st.fileName = name || null; st.dirty = false; st.sourceUrl = null; st.fileHandle = null;
     run.errId = null; run.mainFrame = null;
     startView();
@@ -3230,17 +3338,17 @@
       // functions: same names not allowed (in the Functions view there is no overloading)
       for (const f of funcs) {
         if (E.BUILTINS[f.name.toLowerCase()] || f.name.toLowerCase() === 'main') return fail(L('ui.theModuleContainsTheFunctionWhich', { name, name2: f.name }));
-        const clash = st.prog.functions.find((g) => !oldF.includes(g) && g.name.toLowerCase() === f.name.toLowerCase() && (!M.hasClasses(st.prog) || g.cls === M.mainClass(st.prog).id));
+        // in the Objects view: the other functions of the modules (a method of a class has precedence in its class)
+        const clash = st.prog.functions.find((g) => !oldF.includes(g) && g.name.toLowerCase() === f.name.toLowerCase() && (!M.hasClasses(st.prog) || M.isGlobalFunc(st.prog, g)));
         if (clash) return fail(L('ui.theModuleContainsTheFunctionBut', { name, name2: f.name, text: clash.module ? L('ui.fromTheModule', { name: clash.module.name }) : '' }));
       }
       mutate(() => {
         const cur = func();
         st.prog.functions = st.prog.functions.filter((f) => !oldF.includes(f));
-        const home = M.hasClasses(st.prog) ? M.mainClass(st.prog) : null;
+        // also in the Objects view they belong to no class: the module is shown apart and its functions are called from everywhere
         for (const f of funcs) {
           const nf = cloneFunc(f);
-          if (home) Object.assign(nf, { cls: home.id, static: true, visibility: 'public', ctor: false });
-          else { delete nf.cls; delete nf.visibility; delete nf.static; delete nf.ctor; delete nf.abstract; }
+          delete nf.cls; delete nf.visibility; delete nf.static; delete nf.ctor; delete nf.abstract;
           nf.module = { name, src };
           st.prog.functions.push(nf);
         }
@@ -3485,13 +3593,13 @@
     confirmBox(L('ui.unsavedChanges'), L('ui.theCurrentProgramHasUnsavedChanges'), L('ui.continue'), action);
   }
   function newProgram() {
-    guardDirty(() => { if (isRunning()) stopRun(); resetViews(); st.excPos = new Map(); st.prog = M.newProgram(); st.fi = 0; st.sel = null; st.uml = isOO(); st.usel = null; st.undo = []; st.redo = []; st.fileName = null; st.dirty = false; run.mainFrame = null; codeStart(); render(); renderVars(); });
+    guardDirty(() => { if (isRunning()) stopRun(); resetViews(); st.excPos = new Map(); st.fmodPos = new Map(); st.prog = M.newProgram(); st.fi = 0; st.sel = null; st.uml = isOO(); st.usel = null; st.undo = []; st.redo = []; st.fileName = null; st.dirty = false; run.mainFrame = null; codeStart(); render(); renderVars(); });
   }
   function loadExample(id) {
     const ex = Examples.get(id); if (!ex) return;
     guardDirty(() => {
       if (isRunning()) stopRun();
-      resetViews(); st.excPos = new Map();
+      resetViews(); st.excPos = new Map(); st.fmodPos = new Map();
       st.prog = ex.make(); st.fi = 0; st.sel = null; st.usel = null; st.undo = []; st.redo = []; st.fileName = null; st.dirty = false; run.mainFrame = null; run.errId = null;
       startView();
       conClear(); render(); renderVars(); setTimeout(fitIfLarge, 0);
@@ -3540,7 +3648,7 @@
       return `${f.abstract ? L('ui.abstractMethod') : f.static ? L('ui.staticMethod') : L('ui.method')} ${c.name}.${sigOf(f)}`;
     };
     // order: Main, then by class (constructors and methods) or the functions in the order of the program
-    const funcs = oo ? [prog.functions[0], ...prog.classes.flatMap((c) => { const ms = M.membersOf(prog, c).filter((f) => f !== prog.functions[0]); return [...ms.filter((f) => f.ctor), ...ms.filter((f) => !f.ctor)]; })] : prog.functions.slice();
+    const funcs = oo ? [prog.functions[0], ...prog.classes.flatMap((c) => { const ms = M.membersOf(prog, c).filter((f) => f !== prog.functions[0]); return [...ms.filter((f) => f.ctor), ...ms.filter((f) => !f.ctor)]; }), ...M.globalFuncs(prog)] : prog.functions.slice();
 
     /* ---- cover ---- */
     let p = doc.page();
@@ -3607,7 +3715,7 @@
     }
     try {
       if (oo) {
-        const u = UmlLib.render(prog, null, { excPos: st.excPos });
+        const u = UmlLib.render(prog, null, { excPos: st.excPos, fmodPos: st.fmodPos });
         await placeDiagram('uml', L('ui.classDiagram'), exportSvg(svgFromString(u.svg), css), u.W, u.H);
       }
       const all = new Set();
@@ -3994,9 +4102,10 @@
     $('#helpBtn').addEventListener('click', helpDialog);
     $('#progName').addEventListener('click', () => { if (isRunning()) { toast(L('ui.stopTheProgramToEditThe'), 'warn'); return; } editProgram(); });
     $('#fileInput').addEventListener('change', (e) => { readFileObj(e.target.files[0]); e.target.value = ''; });
+    enhanceSel($('#funcSel'));
     $('#funcSel').addEventListener('change', (e) => { focusView(MAIN); if (e.target.value === 'uml') showUml(); else showFunc(+e.target.value); });
     const busy = () => { if (isRunning()) { toast(L('ui.stopTheProgramToEditThe'), 'warn'); return true; } return false; };
-    $('#funcAdd').addEventListener('click', () => { if (busy()) return; if (!isOO()) editFunction(null); else if (st.uml) classDialog(null); else editFunction(null, { cls: M.classOf(st.prog, func()), ctor: false }); });
+    $('#funcAdd').addEventListener('click', () => { if (busy()) return; if (!isOO()) editFunction(null); else if (st.uml) classDialog(null); else editFunction(null, { cls: M.classOf(st.prog, func()) || M.mainClass(st.prog), ctor: false }); });
     $('#funcEdit').addEventListener('click', () => { if (busy()) return; if (isUml()) editUmlSel(); else if (st.fi === 0) editProgram(); else editFunction(st.fi); });
     $('#funcDel').addEventListener('click', () => { if (busy()) return; if (isUml()) deleteUmlSel(); else deleteFunction(); });
     $('#viewFn').addEventListener('click', () => setView('functions'));

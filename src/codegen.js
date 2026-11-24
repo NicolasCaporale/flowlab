@@ -33,6 +33,7 @@ const rel = (s) => ({ s, p: P.rel });
 /* checks of the native classes, as in the modules (and in Java): written only if the program catches that
    exception (GEN.exc). The messages are those of Java and of the modules, in English like the modules */
 const MSG_IDX = (i, n) => `"Index " + ${i} + " out of bounds for length " + ${n}`;
+const MSG_SUB = (a, b, n) => `"Range [" + ${a} + ", " + ${b} + ") out of bounds for length " + ${n}`;
 const CHK = {
   python: {
     list_get: ['def list_get(v, i):', '    if i < 0 or i >= len(v):', `        raise IndexError(${MSG_IDX('str(i)', 'str(len(v))')})`, '    return v[i]'],
@@ -44,6 +45,7 @@ const CHK = {
     stack_peek: ['def stack_peek(s):', '    if not s:', '        raise EmptyStack("The stack is empty")', '    return s[-1]'],
     queue_remove: ['def queue_remove(q):', '    if not q:', '        raise NoSuchElement("The queue is empty")', '    return q.popleft()'],
     queue_peek: ['def queue_peek(q):', '    if not q:', '        raise NoSuchElement("The queue is empty")', '    return q[0]'],
+    substring: ['def substring(s, a, b):', '    if a < 0 or b > len(s) or a > b:', `        raise IndexError(${MSG_SUB('str(a)', 'str(b)', 'str(len(s))')})`, '    return s[a:b]'],
   },
   cpp: {
     listGet: [`template <typename T> T& listGet(vector<T>& v, int i) { if (i < 0 || i >= (int) v.size()) throw out_of_range(${MSG_IDX('to_string(i)', 'to_string(v.size())')}); return v[i]; }`],
@@ -54,8 +56,10 @@ const CHK = {
     stackPeek: ['template <typename T> T stackPeek(stack<T>& s) { if (s.empty()) throw EmptyStack("The stack is empty"); return s.top(); }'],
     queueRemove: ['template <typename T> T queueRemove(queue<T>& q) { if (q.empty()) throw NoSuchElement("The queue is empty"); T x = q.front(); q.pop(); return x; }'],
     queuePeek: ['template <typename T> T queuePeek(queue<T>& q) { if (q.empty()) throw NoSuchElement("The queue is empty"); return q.front(); }'],
+    substring: [`string substring(const string& s, int a, int b) { if (a < 0 || b > (int) s.size() || a > b) throw out_of_range(${MSG_SUB('to_string(a)', 'to_string(b)', 'to_string(s.size())')}); return s.substr(a, b - a); }`],
   },
   csharp: {
+    Substring: [`public static string Substring(string s, int a, int b) { if (a < 0 || b > s.Length || a > b) throw new IndexOutOfRangeException(${MSG_SUB('a', 'b', 's.Length')}); return s.Substring(a, b - a); }`],
     ListGet: [`public static T ListGet<T>(List<T> v, int i) { if (i < 0 || i >= v.Count) throw new IndexOutOfRangeException(${MSG_IDX('i', 'v.Count')}); return v[i]; }`],
     ListSet: [`public static void ListSet<T>(List<T> v, int i, T x) { if (i < 0 || i >= v.Count) throw new IndexOutOfRangeException(${MSG_IDX('i', 'v.Count')}); v[i] = x; }`],
     ListRemove: [`public static T ListRemove<T>(List<T> v, int i) { if (i < 0 || i >= v.Count) throw new IndexOutOfRangeException(${MSG_IDX('i', 'v.Count')}); T x = v[i]; v.RemoveAt(i); return x; }`],
@@ -76,6 +80,7 @@ const CHK = {
     stackPeek: ['function stackPeek(s) { if (!s.length) throw new EmptyStack("The stack is empty"); return s[s.length - 1]; }'],
     queueRemove: ['function queueRemove(q) { if (!q.length) throw new NoSuchElement("The queue is empty"); return q.shift(); }'],
     queuePeek: ['function queuePeek(q) { if (!q.length) throw new NoSuchElement("The queue is empty"); return q[0]; }'],
+    substring: [`function substring(s, a, b) { if (a < 0 || b > s.length || a > b) throw new IndexOutOfRange(${MSG_SUB('a', 'b', 's.length')}); return s.substring(a, b); }`],
   },
 };
 // exceptions used by the checks of each language
@@ -90,6 +95,68 @@ function chk(lang, name, kind, call) {
 const chkList = () => GEN.exc.idx || GEN.exc.arg;
 /* the helpers used, as lines of code */
 const chkLines = (lang) => Object.entries(CHK[lang]).filter(([k]) => GEN.helpers.has('chk:' + lang + ':' + k)).flatMap(([, l]) => l);
+/* the functions written in the code (those of the library modules the language has are left out) */
+const emittedFns = (prog) => prog.functions.slice(1).filter((f) => !(GEN.skipF && GEN.skipF.has(f.id)));
+/* functions of the library modules written with the language's own (a = arguments {s, p}); the positions
+   outside a string throw IndexOutOfRange as in Java: a check function where the language does not, if the program catches it */
+// C++: a string literal is not a string object ("ab".substr does not compile)
+const Rcpp = (x) => (/^"/.test(x.s) && x.p === P.atom ? `string(${x.s})` : Wp(x));
+const NATIVE_FN = {
+  'strings/Strings': {
+    substring: {
+      java: (a) => `${Wp(a[0])}.substring(${a[1].s}, ${a[2].s})`,
+      python: (a) => (GEN.exc.idx ? chk('python', 'substring', 'list', `substring(${a[0].s}, ${a[1].s}, ${a[2].s})`) : `${Wp(a[0])}[${a[1].s}:${a[2].s}]`),
+      cpp: (a) => (GEN.exc.idx ? chk('cpp', 'substring', 'list', `substring(${a[0].s}, ${a[1].s}, ${a[2].s})`) : `${Rcpp(a[0])}.substr(${a[1].s}, ${Wp(a[2])} - ${Wp(a[1])})`),
+      csharp: (a) => (GEN.exc.idx ? (need('Helpers'), chk('csharp', 'Substring', 'list', `Helpers.Substring(${a[0].s}, ${a[1].s}, ${a[2].s})`)) : `${Wp(a[0])}.Substring(${a[1].s}, ${Wp(a[2])} - ${Wp(a[1])})`),
+      javascript: (a) => (GEN.exc.idx ? chk('javascript', 'substring', 'list', `substring(${a[0].s}, ${a[1].s}, ${a[2].s})`) : `${Wp(a[0])}.substring(${a[1].s}, ${a[2].s})`),
+    },
+    indexof: {
+      java: (a) => `${Wp(a[0])}.indexOf(${a[1].s})`, python: (a) => `${Wp(a[0])}.find(${a[1].s})`,
+      cpp: (a) => { need('indexOfStr'); return `indexOfStr(${a[0].s}, ${a[1].s})`; }, csharp: (a) => `${Wp(a[0])}.IndexOf(${a[1].s}, StringComparison.Ordinal)`, javascript: (a) => `${Wp(a[0])}.indexOf(${a[1].s})`,
+    },
+    contains: {
+      java: (a) => `${Wp(a[0])}.contains(${a[1].s})`, python: (a) => rel(`${Wp(a[1])} in ${Wp(a[0])}`),
+      cpp: (a) => `(${Rcpp(a[0])}.find(${a[1].s}) != string::npos)`, csharp: (a) => `${Wp(a[0])}.Contains(${a[1].s})`, javascript: (a) => `${Wp(a[0])}.includes(${a[1].s})`,
+    },
+    startswith: {
+      java: (a) => `${Wp(a[0])}.startsWith(${a[1].s})`, python: (a) => `${Wp(a[0])}.startswith(${a[1].s})`,
+      cpp: (a) => `(${Rcpp(a[0])}.rfind(${a[1].s}, 0) == 0)`, csharp: (a) => `${Wp(a[0])}.StartsWith(${a[1].s}, StringComparison.Ordinal)`, javascript: (a) => `${Wp(a[0])}.startsWith(${a[1].s})`,
+    },
+    endswith: {
+      java: (a) => `${Wp(a[0])}.endsWith(${a[1].s})`, python: (a) => `${Wp(a[0])}.endswith(${a[1].s})`,
+      cpp: (a) => { need('endsWith'); return `endsWith(${a[0].s}, ${a[1].s})`; }, csharp: (a) => `${Wp(a[0])}.EndsWith(${a[1].s}, StringComparison.Ordinal)`, javascript: (a) => `${Wp(a[0])}.endsWith(${a[1].s})`,
+    },
+    toupper: {
+      java: (a) => `${Wp(a[0])}.toUpperCase()`, python: (a) => `${Wp(a[0])}.upper()`,
+      cpp: (a) => { need('toUpperStr'); return `toUpperStr(${a[0].s})`; }, csharp: (a) => `${Wp(a[0])}.ToUpperInvariant()`, javascript: (a) => `${Wp(a[0])}.toUpperCase()`,
+    },
+    tolower: {
+      java: (a) => `${Wp(a[0])}.toLowerCase()`, python: (a) => `${Wp(a[0])}.lower()`,
+      cpp: (a) => { need('toLowerStr'); return `toLowerStr(${a[0].s})`; }, csharp: (a) => `${Wp(a[0])}.ToLowerInvariant()`, javascript: (a) => `${Wp(a[0])}.toLowerCase()`,
+    },
+    trim: {
+      java: (a) => `${Wp(a[0])}.trim()`, python: (a) => `${Wp(a[0])}.strip()`,
+      cpp: (a) => { need('trimStr'); return `trimStr(${a[0].s})`; }, csharp: (a) => `${Wp(a[0])}.Trim()`, javascript: (a) => `${Wp(a[0])}.trim()`,
+    },
+    replace: {
+      java: (a) => `${Wp(a[0])}.replace(${a[1].s}, ${a[2].s})`, python: (a) => `${Wp(a[0])}.replace(${a[1].s}, ${a[2].s})`,
+      cpp: (a) => { need('replaceAll'); return `replaceAll(${a[0].s}, ${a[1].s}, ${a[2].s})`; }, csharp: (a) => `${Wp(a[0])}.Replace(${a[1].s}, ${a[2].s})`, javascript: (a) => `${Wp(a[0])}.replaceAll(${a[1].s}, ${a[2].s})`,
+    },
+    split: {
+      // the separator is a text, not a regular expression, and the empty pieces at the end stay (as in the module)
+      java: (a) => `${Wp(a[0])}.split(java.util.regex.Pattern.quote(${a[1].s}), -1)`, python: (a) => `${Wp(a[0])}.split(${a[1].s})`,
+      cpp: (a) => { need('splitStr'); return `splitStr(${a[0].s}, ${a[1].s})`; }, csharp: (a) => `${Wp(a[0])}.Split(new string[] { ${a[1].s} }, StringSplitOptions.None)`, javascript: (a) => `${Wp(a[0])}.split(${a[1].s})`,
+    },
+    isdigit: {
+      java: (a) => `(${Wp(a[0])}.length() == 1 && Character.isDigit(${Wp(a[0])}.charAt(0)))`, python: (a) => `(len(${a[0].s}) == 1 and ${Wp(a[0])}.isdigit())`,
+      cpp: (a) => { need('isDigitStr'); return `isDigitStr(${a[0].s})`; }, csharp: (a) => `(${Wp(a[0])}.Length == 1 && char.IsDigit(${Wp(a[0])}[0]))`, javascript: (a) => `/^[0-9]$/.test(${a[0].s})`,
+    },
+    isletter: {
+      java: (a) => `(${Wp(a[0])}.length() == 1 && Character.isLetter(${Wp(a[0])}.charAt(0)))`, python: (a) => `(len(${a[0].s}) == 1 and ${Wp(a[0])}.isalpha())`,
+      cpp: (a) => { need('isLetterStr'); return `isLetterStr(${a[0].s})`; }, csharp: (a) => `(${Wp(a[0])}.Length == 1 && char.IsLetter(${Wp(a[0])}[0]))`, javascript: (a) => `/^\\p{L}$/u.test(${a[0].s})`,
+    },
+  },
+};
 /* for each module: type, constructor and methods in the various languages (o = object, a = arguments {s, p}) */
 const NATIVE = {
   'data_structures/ArrayList': {
@@ -162,6 +229,20 @@ const NATIVE = {
   },
 };
 /* prepares GEN for a program and a language */
+/* Objects view: the functions of a module with only functions belong to no class; in the code they become
+   static methods of a class with the name of the module (Sorting.bubbleSort(v, n)), except those that the language has */
+function withModuleClasses(prog, lang) {
+  const gl = _CM.globalFuncs(prog); if (!gl.length) return prog;
+  const isNat = (f) => { if (lang === 'pseudo') return false; const src = f.module.src || ''; const spec = src.startsWith('lib:') ? NATIVE_FN[src.slice(4)] : null; const fn = spec && spec[f.name.toLowerCase()]; return !!(fn && fn[lang]); };
+  const classes = prog.classes.slice(), byMod = new Map();
+  const functions = prog.functions.map((f) => {
+    if (!gl.includes(f) || isNat(f)) return f;
+    let c = byMod.get(f.module.name);
+    if (!c) { const nm = prog.classes.some((k) => k.name.toLowerCase() === f.module.name.toLowerCase()) ? f.module.name + 'Module' : f.module.name; c = _CM.makeClass(nm, { module: f.module, fmodule: true }); byMod.set(f.module.name, c); classes.push(c); }
+    return Object.assign({}, f, { cls: c.id, static: true, visibility: 'public', ctor: false });
+  });
+  return Object.assign({}, prog, { classes, functions });
+}
 function setupGen(prog, lang) {
   const native = new Map(), skip = new Set();
   const cs = _CM.hasClasses(prog) ? prog.classes : [];
@@ -173,7 +254,15 @@ function setupGen(prog, lang) {
     if (c.name === spec.cls) native.set(c.name.toLowerCase(), spec);
   }
   const tps = [...cs.flatMap((c) => c.tparams || []), ...prog.functions.flatMap((f) => f.tparams || [])].map((t) => t.toLowerCase());
-  GEN = { native, skip, tparams: new Set(tps), helpers: new Set(), bound: new Set(), boxed: new Set(), cur: null, exc: excInfo(prog), jthrows: new Map() };
+  // functions of the library modules that the language already has (Strings): not written, their calls become the language's
+  const nativeFns = new Map(), skipF = new Set();
+  if (lang !== 'pseudo') for (const f of prog.functions) {
+    const src = f.module && f.module.src || '';
+    const spec = src.startsWith('lib:') ? NATIVE_FN[src.slice(4)] : null;
+    const fn = spec && spec[f.name.toLowerCase()];
+    if (fn && fn[lang]) { nativeFns.set(f.name.toLowerCase(), fn); skipF.add(f.id); }
+  }
+  GEN = { lang, native, skip, nativeFns, skipF, tparams: new Set(tps), helpers: new Set(), bound: new Set(), boxed: new Set(), cur: null, exc: excInfo(prog), jthrows: new Map() };
   if (tps.length) analyzeGenerics(prog, lang);
   if (lang === 'java' && GEN.exc.used) analyzeThrows(prog);
 }
@@ -236,7 +325,7 @@ function jChecked(prog, name) {
 /* Java: for each function, the checked exceptions that can escape (not caught by a Try) */
 function analyzeThrows(prog) {
   const oo = _CM.hasClasses(prog);
-  const fl = prog.functions.filter((f) => !(oo && GEN.skip.has(f.cls)));
+  const fl = prog.functions.filter((f) => !(oo && GEN.skip.has(f.cls)) && !GEN.skipF.has(f.id));
   const out = new Map(fl.map((f) => [f, new Set()])), scopes = new Map(fl.map((f) => [f, buildScope(prog, f)]));
   const caughtBy = (t, catches) => catches.some((ct) => _CM.isSubclass(prog, _CM.classByName(prog, t), _CM.classByName(prog, ct)));
   for (let changed = true, guard = 0; changed && guard < 30; guard++) {
@@ -332,7 +421,7 @@ function calleeNode(n, sc, prog) {
 /* analysis of the program: which T must be comparable and (Java) which arrays of base types are passed to T[] parameters */
 function analyzeGenerics(prog, lang) {
   const oo = _CM.hasClasses(prog), cs = oo ? prog.classes.filter((c) => !GEN.skip.has(c.id)) : [];
-  const info = prog.functions.filter((f) => !(oo && GEN.skip.has(f.cls))).map((f) => {
+  const info = prog.functions.filter((f) => !(oo && GEN.skip.has(f.cls)) && !GEN.skipF.has(f.id)).map((f) => {
     const it = { f, c: oo ? _CM.classOf(prog, f) : null, sc: buildScope(prog, f), nodes: [], decls: [], assigns: [] };
     _CM.walk(f.body, (st) => {
       if (st.kind === 'declare') it.decls.push(st);
@@ -429,6 +518,11 @@ function buildScope(prog, func) {
   if (!ooMode) for (const f of prog.functions) funcs.set(f.name.toLowerCase(), { type: f.type, rets: _CM.rets(f), f, name: f.name });
   // methods with the name of a built-in function are called only with obj.name() or this.name()
   else for (const k of _CM.chainOf(prog, cls)) for (const f of _CM.membersOf(prog, k)) if (!f.ctor && !funcs.has(f.name.toLowerCase()) && !_CE.BUILTINS[f.name.toLowerCase()]) funcs.set(f.name.toLowerCase(), { type: f.type, rets: _CM.rets(f), f, name: f.name, owner: k });
+  // the functions of the modules with only functions: callable from every class (in the code they are static methods of a class of the module)
+  if (ooMode) for (const f of prog.functions) {
+    const k = f.cls ? _CM.classOf(prog, f) : null, low = f.name.toLowerCase();
+    if (((f.module && !f.cls) || (k && k.fmodule)) && !funcs.has(low) && !_CE.BUILTINS[low]) funcs.set(low, { type: f.type, rets: _CM.rets(f), f, name: f.name, owner: k });
+  }
   const sc = { vars, funcs, func, prog, cls, ooMode };
   if (ooMode) ooScope(prog, sc);
   // Functions view: of the objects there are only the exceptions (new Exception("…"), e.message)
@@ -500,7 +594,7 @@ const OO = {
     if (mainFirst) { visit(main); rest.forEach(visit); } else { rest.forEach(visit); visit(main); }
     return out;
   },
-  methods: (prog, c) => _CM.membersOf(prog, c).filter((f) => !f.ctor),
+  methods: (prog, c) => _CM.membersOf(prog, c).filter((f) => !f.ctor && !(GEN.skipF && GEN.skipF.has(f.id))),
   ctors: (prog, c) => _CM.membersOf(prog, c).filter((f) => f.ctor),
   isMain: (prog, f) => f === prog.functions[0],
   sig: (f) => f.params.map((p) => p.type.toLowerCase() + (p.array ? '[' + (p.dims || 1) : '')).join(','),
@@ -638,7 +732,13 @@ function exprPrinter(L) {
       case 'un':
         if (n.op === 'neg') { const e = pr(n.e, sc); return { s: '-' + (e.p < P.un ? `(${e.s})` : e.s), p: P.un }; }
         { const np = L.notPrec; const e = pr(n.e, sc); return { s: L.not + (e.p < np || (np === P.un && e.p === P.un && e.s[0] === '-') ? `(${e.s})` : e.s), p: np }; }
-      case 'call': return L.call(n, sc, pr);
+      case 'call': {
+        // a function of a library module that the language has: its code (s.substring(a, b)…)
+        const nf = GEN.nativeFns && GEN.nativeFns.get(String(n.name).toLowerCase());
+        const uf = sc.funcs && sc.funcs.get(String(n.name).toLowerCase());
+        if (nf && nf[L.lang] && (!uf || uf.f.module)) { const r = nf[L.lang](n.args.map((x) => pr(x, sc))); return typeof r === 'string' ? { s: r, p: P.atom } : r; }
+        return L.call(n, sc, pr);
+      }
       case 'bin': return bin(n, sc);
     }
     return { s: '?', p: P.atom };
@@ -662,7 +762,11 @@ function exprPrinter(L) {
   function bin(n, sc) {
     const op = n.op;
     if (L.bin) { const r = L.bin(n, sc, pr, generic); if (r) return r; }
-    if (op === 'or') return generic(n, sc, L.or, P.or, 'left');
+    if (op === 'or') {
+      // C++: an and inside an or between parentheses (the compiler warns without)
+      if (L.lang === 'cpp') { const l = pr(n.l, sc), r = pr(n.r, sc); return { s: `${wrap(l, l.p < P.or || (l.p > P.or && l.p <= P.and))} ${L.or} ${wrap(r, r.p <= P.and)}`, p: P.or }; }
+      return generic(n, sc, L.or, P.or, 'left');
+    }
     if (op === 'and') return generic(n, sc, L.and, P.and, 'left');
     // xor: the operator of the language (^), between booleans and between integers (bit by bit); XOR in pseudocode
     if (op === 'xor') {
@@ -693,7 +797,7 @@ function retName(name, sc, self) {
 }
 function ucall(entry, sc, self) {
   if (!sc.ooMode || !entry || !entry.owner) return '';
-  return entry.f.static ? entry.owner.name + '.' : self + '.';
+  return entry.f.static ? entry.owner.name + (GEN.lang === 'cpp' ? '::' : '.') : self + '.';
 }
 /* declaration followed at once by the assignment of the same variable: it becomes a
    declaration with an initial value (double a = 0.0;). Returns the expression or null. */
@@ -1129,7 +1233,7 @@ LANGS.python = {
       return head() + o.text();
     }
     const funcs = new Out();
-    prog.functions.slice(1).forEach((f) => {
+    emittedFns(prog).forEach((f) => {
       const sc = buildScope(prog, f);
       funcs.line(`def ${f.name}(${f.params.map((p) => p.name).join(', ')}):`);
       funcs.in();
@@ -1197,7 +1301,7 @@ function cFamily(cfg) {
           const a = n.args.map((x) => pr(x, sc));
           const uf = sc.funcs.get(n.name.toLowerCase());
           if (uf && cfg.garg && (uf.f.tparams || []).length) a.forEach((x, i) => { x.s = cfg.garg(n.args[i], x.s); });
-          if (sc.funcs.has(n.name.toLowerCase())) return { s: `${cfg.qualifyCalls ? ucall(sc.funcs.get(n.name.toLowerCase()), sc, 'this') : ''}${fname(n.name, sc)}(${a.map((x) => x.s).join(', ')})`, p: P.atom };
+          if (sc.funcs.has(n.name.toLowerCase())) return { s: `${cfg.qualifyCalls || (uf.owner && uf.owner.fmodule && uf.owner !== sc.cls) ? ucall(sc.funcs.get(n.name.toLowerCase()), sc, 'this') : ''}${fname(n.name, sc)}(${a.map((x) => x.s).join(', ')})`, p: P.atom };
           const low = n.name.toLowerCase();
           const r = cfg.builtin(low, a, n, sc, used);
           if (r) return typeof r === 'string' ? { s: r, p: P.atom } : r;
@@ -1303,6 +1407,16 @@ const cppRetT = (r) => (r.array ? 'vector<'.repeat(r.dims || 1) + tCpp(r.type) +
 const tplF = (f) => ((f.tparams || []).length ? `template <${f.tparams.map((t) => 'typename ' + t).join(', ')}> ` : '');
 const qualOf = (c) => ((c.tparams || []).length ? `${c.name}<${c.tparams.join(', ')}>` : c.name);
 const CPP_HELPERS = {
+  // functions of the Strings module
+  indexOfStr: ['int indexOfStr(const string& s, const string& t) { size_t p = s.find(t); return p == string::npos ? -1 : (int) p; }'],
+  endsWith: ['bool endsWith(const string& s, const string& t) { return s.size() >= t.size() && s.compare(s.size() - t.size(), t.size(), t) == 0; }'],
+  toUpperStr: ["string toUpperStr(string s) { for (char& c : s) if (c >= 'a' && c <= 'z') c -= 32; return s; }"],
+  toLowerStr: ["string toLowerStr(string s) { for (char& c : s) if (c >= 'A' && c <= 'Z') c += 32; return s; }"],
+  trimStr: ['string trimStr(const string& s) { size_t a = 0, b = s.size(); while (a < b && (unsigned char) s[a] <= 32) a++; while (b > a && (unsigned char) s[b - 1] <= 32) b--; return s.substr(a, b - a); }'],
+  replaceAll: ['string replaceAll(string s, const string& a, const string& b) { if (a.empty()) { string r = b; for (char c : s) { r += c; r += b; } return r; } size_t p = 0; while ((p = s.find(a, p)) != string::npos) { s.replace(p, a.size(), b); p += b.size(); } return s; }'],
+  isDigitStr: ["bool isDigitStr(const string& c) { return c.size() == 1 && c[0] >= '0' && c[0] <= '9'; }"],
+  isLetterStr: ["bool isLetterStr(const string& c) { return c.size() == 1 && ((c[0] >= 'a' && c[0] <= 'z') || (c[0] >= 'A' && c[0] <= 'Z')); }"],
+  splitStr: ['vector<string> splitStr(const string& s, const string& sep) { if (sep.empty()) throw invalid_argument("The separator is empty"); vector<string> r; size_t a = 0, p; while ((p = s.find(sep, a)) != string::npos) { r.push_back(s.substr(a, p - a)); a = p + sep.size(); } r.push_back(s.substr(a)); return r; }'],
   removeAt: [() => '// ' + C('removeAtComment'), 'template <typename T> T removeAt(vector<T>& v, int i) { T x = v[i]; v.erase(v.begin() + i); return x; }'],
   indexOfItem: [() => '// ' + C('indexOfComment'), 'template <typename T, typename U> int indexOfItem(vector<T>& v, const U& x) { for (int i = 0; i < (int) v.size(); i++) if (v[i] == x) return i; return -1; }'],
   popTop: [() => '// ' + C('popTopComment'), 'template <typename T> T popTop(stack<T>& s) { T x = s.top(); s.pop(); return x; }'],
@@ -1453,7 +1567,7 @@ LANGS.cpp = cFamily({
     const o = new g.Out();
     const retT = (f) => { const rl = _CM.rets(f); if (rl.length > 1) { g.used.add('tuple'); return `tuple<${rl.map(cppRetT).join(', ')}>`; } return rl.length ? cppRetT(rl[0]) : 'void'; };
     const sig = (f) => `${tplF(f)}${retT(f)} ${f.name}(${f.params.map((p) => (p.array ? `${'vector<'.repeat(p.dims || 1)}${tCpp(p.type)}${'>'.repeat(p.dims || 1)}& ${p.name}` : `${pCpp(p.type)} ${p.name}`)).join(', ')})`;
-    const fns = prog.functions.slice(1);
+    const fns = emittedFns(prog);
     const bodyOut = new g.Out();
     for (const f of fns) {
       const sc = g.buildScope(f);
@@ -1476,7 +1590,7 @@ LANGS.cpp = cFamily({
     if (u.has('fstream')) { o.line('ifstream fileIn;'); o.line('ofstream fileOut;'); }
     if (u.has('fmt')) { o.line(''); o.line('string formatNum(double x) {'); o.line('    ostringstream s;'); o.line('    s << setprecision(15) << x;'); o.line('    return s.str();'); o.line('}'); }
     if (u.has('fixed')) { o.line(''); o.line('string toDecimals(double x, int cifre) {'); o.line('    ostringstream s;'); o.line('    s << fixed << setprecision(cifre) << x;'); o.line('    return s.str();'); o.line('}'); }
-    cppExcHelpers(o, u);
+    cppHelpers(o); cppExcHelpers(o, u);
     if (fns.length) { o.line(''); o.line('// ' + C('prototypes')); for (const f of fns) o.line(sig(f) + ';'); }
     o.line(''); o.line('int main() {');
     if (u.has('rand')) o.line('    srand(time(0));');
@@ -1681,10 +1795,10 @@ LANGS.java = cFamily({
     const inner = new g.Out(); inner.lvl = 1;
     const main = new g.Out(); main.lvl = 2;
     const recName = (f) => 'Risultato' + f.name[0].toUpperCase() + f.name.slice(1);
-    const records = prog.functions.slice(1).filter((f) => _CM.rets(f).length > 1);
+    const records = emittedFns(prog).filter((f) => _CM.rets(f).length > 1);
     GEN.cur = { f: prog.functions[0], c: null };
     g.block(main, prog.functions[0].body, g.buildScope(prog.functions[0]));
-    for (const f of prog.functions.slice(1)) {
+    for (const f of emittedFns(prog)) {
       GEN.cur = { f, c: null };
       const sc = g.buildScope(f);
       const rl = _CM.rets(f);
@@ -1848,7 +1962,7 @@ LANGS.csharp = cFamily({
     const inner = new g.Out(); inner.lvl = 1;
     const main = new g.Out(); main.lvl = 2;
     g.block(main, prog.functions[0].body, g.buildScope(prog.functions[0]));
-    for (const f of prog.functions.slice(1)) {
+    for (const f of emittedFns(prog)) {
       const sc = g.buildScope(f);
       inner.line('');
       const rl = _CM.rets(f);
@@ -1860,6 +1974,7 @@ LANGS.csharp = cFamily({
     }
     o.line('using System;'); o.line('');
     { const xs = excClassLines('csharp'); if (xs.length) { xs.forEach((l) => o.line(l)); o.line(''); } }
+    { const ck = chkLines('csharp'); if (ck.length) { o.line('static class Helpers {'); o.line('    // ' + C('checksComment')); ck.forEach((l) => o.line('    ' + l)); o.line('}'); o.line(''); } }
     o.line('class Program {');
     if (g.used.has('divide')) o.line(`    static double Divide(double a, double b) { if (b == 0) throw new DivideByZeroException("${C('divisionByZero')}"); return a / b; }`);
     if (g.used.has('rnd')) o.line('    static Random rnd = new Random();');
@@ -1995,7 +2110,7 @@ LANGS.javascript = cFamily({
     o.line('    if (newLine) { console.log(currentLine); currentLine = ""; }');
     o.line('}');
     const helpAt = o.lines.length;
-    for (const f of prog.functions.slice(1)) {
+    for (const f of emittedFns(prog)) {
       const sc = g.buildScope(f);
       o.line('');
       o.line(`function ${f.name}(${f.params.map((p) => p.name).join(', ')}) {`);
@@ -2090,7 +2205,7 @@ const CodeGen = {
   /* variables and types visible in a function (used by the editor's autocompletion) */
   scopeFor: (prog, f) => buildScope(prog, f),
   generate(prog, lang) {
-    try { setupGen(prog, lang); return LANGS[lang].generate(prog); } catch (e) { return `// ${C('cannotGenerate', { msg: e.message })}\n`; }
+    try { prog = withModuleClasses(prog, lang); setupGen(prog, lang); return LANGS[lang].generate(prog); } catch (e) { return `// ${C('cannotGenerate', { msg: e.message })}\n`; }
   },
   /* code and, for each line, the ids of the blocks it comes from (Start and End of the functions: start:id, end:id) */
   generateMapped(prog, lang) {

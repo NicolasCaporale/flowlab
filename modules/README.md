@@ -12,10 +12,12 @@ Anyone can write a module, even a student: it is enough to save a program with t
 | Data structures | [Queue](data_structures/Queue.fprg) | `Queue<T>`, `Node<T>` | Queue (FIFO) of items of type T, like java.util.Queue: the items leave in the order they entered. It is a linked list of Node<T> nodes. remove and peek on an empty queue throw NoSuchElement, as remove() and element() in Java. |
 | Sorting algorithms | [Sorting](sorting_algorithms/Sorting.fprg) | `bubbleSort()`, `selectionSort()`, `insertionSort()` | Functions to sort an array of integers in increasing order: bubbleSort(v, n), selectionSort(v, n) and insertionSort(v, n), where n is the number of items to sort. |
 | Searching algorithms | [Search](searching_algorithms/Search.fprg) | `linearSearch()`, `binarySearch()` | Functions to search for a value x in an array of integers: linearSearch(v, n, x) for any array and binarySearch(v, n, x) for a sorted array. They return the position of the value or -1 if it is not there. |
+| Strings | [Strings](strings/Strings.fprg) | `Substring()`, `IndexOf()`, `Contains()`, `StartsWith()`, `EndsWith()`, `ToUpper()`, `ToLower()`, `Trim()`, `Replace()`, `Split()`, `IsDigit()`, `IsLetter()` | Functions on strings, like the methods of String in Java: Substring(s, beginIndex, endIndex), IndexOf, Contains, StartsWith, EndsWith, ToUpper, ToLower, Trim, Replace, Split (an array of strings) and IsDigit, IsLetter for a character. Positions start from 0. In the generated code they become the functions of each language. |
 
 In the generated code the library modules that have an equivalent in the language use the classes
-already available (for example `java.util.ArrayList`, `list` in Python, `std::vector` in C++); the other
-modules become classes written in the code.
+already available (for example `java.util.ArrayList`, `list` in Python, `std::vector` in C++), and the
+functions of Strings become those of each language (`s.substring(a, b)` in Java, `s[a:b]` in Python); the other
+modules become classes or functions written in the code.
 
 Each subfolder is a topic: its name, with spaces written as `_`, is the one shown in FlowLab
 (`data_structures` becomes «Data structures»). The description of each module is the one written in

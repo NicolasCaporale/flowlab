@@ -2,7 +2,7 @@
 const M = require('../src/model.js'), C = require('../src/codegen.js'), { Interpreter } = require('../src/interp.js');
 const P = require('./oo_progs.js');
 const fs = require('fs'), cp = require('child_process'), path = require('path');
-const progs = { punto: P.punto(), forme: P.forme(), lista: P.lista(), vettore: P.vettore(), getter: P.getter(), tostring: P.tostring() };
+const progs = { punto: P.punto(), forme: P.forme(), lista: P.lista(), vettore: P.vettore(), getter: P.getter(), tostring: P.tostring(), moduli: P.moduli() };
 // funzioni generiche (programma a funzioni e a oggetti)
 const G = require('./gen_progs.js');
 Object.assign(progs, { gen_fun: G.genfun(), gen_oo: G.genoo(), arr_ret: G.arrret() });
@@ -49,6 +49,8 @@ for (const m of MODULES) {
   if (M.hasClasses(p)) { const mc = M.mainClass(p); for (const c of p.classes) if (c !== mc) c.module = { name: m.id, src: `lib:${m.topic}/${m.id}` }; }
   else for (const f of p.functions.slice(1)) f.module = { name: m.id, src: `lib:${m.topic}/${m.id}` };
   progs['nat_' + m.id] = p;
+  // module with only functions imported into a program with classes: functions outside the classes, called from the Main
+  if (!M.hasClasses(p)) { const q = m.make(); for (const f of q.functions.slice(1)) f.module = { name: m.id, src: `lib:${m.topic}/${m.id}` }; M.wrapInClass(q); progs['oo_' + m.id] = q; }
 }
 const dir = 'test/out/oo'; fs.mkdirSync(dir, { recursive: true });
 function interp(prog) {

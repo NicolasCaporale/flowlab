@@ -131,6 +131,9 @@ const isExcClass = (prog, c) => { const k = typeof c === 'string' ? classByName(
 const classOf = (prog, f) => classById(prog, f.cls);
 const mainClass = (prog) => classOf(prog, prog.functions[0]);
 const membersOf = (prog, c) => prog.functions.filter((f) => f.cls === c.id);
+/* Objects view: the functions of a module with only functions belong to no class, and can be called from every class */
+const isGlobalFunc = (prog, f) => !!f && !!f.module && !f.cls && hasClasses(prog);
+const globalFuncs = (prog) => (hasClasses(prog) ? prog.functions.filter((f) => f.module && !f.cls) : []);
 /* inheritance chain: the class, then the parent, the grandparent... (stops on cycles) */
 function chainOf(prog, c) {
   const out = [];
@@ -149,7 +152,7 @@ function defaultClassName(prog) {
 function wrapInClass(prog) {
   const c = makeClass(defaultClassName(prog));
   prog.classes = [c];
-  for (const f of prog.functions) Object.assign(f, { cls: c.id, visibility: 'public', static: true, ctor: false });
+  for (const f of prog.functions) if (!f.module) Object.assign(f, { cls: c.id, visibility: 'public', static: true, ctor: false });
   return c;
 }
 /* a single class with only public static methods: equivalent to the program with functions */
@@ -158,7 +161,7 @@ function isTrivialOO(prog) {
   if (prog.classes.length !== 1) return false;
   const c = prog.classes[0];
   if (c.parent || c.abstract || c.attributes.length || (c.tparams || []).length || c.module) return false;
-  return prog.functions.every((f) => f.cls === c.id && f.static && !f.ctor && (f.visibility || 'public') === 'public');
+  return prog.functions.every((f) => (f.module && !f.cls) || f.cls === c.id && f.static && !f.ctor && (f.visibility || 'public') === 'public');
 }
 /* as above and with the default name: it is saved in the standard format without losing anything */
 /* inherited abstract methods not defined yet: [{ f, owner }] (for a concrete class they must be zero) */
@@ -270,7 +273,8 @@ function parseFprg(text) {
       const savedTP = _typeParams;
       if (ftp.length) { f.tparams = ftp;  _typeParams = new Set([..._typeParams, ...ftp.map((t) => t.toLowerCase())]); f.type = normType(el.getAttribute('type'), true); }
       if (prog.classes) {
-        const owner = classByName(prog, el.getAttribute('flowlab-class'));
+        // the functions of a module with only functions stay outside the classes (also those saved inside the main class)
+        const owner = !f.module && classByName(prog, el.getAttribute('flowlab-class'));
         if (owner) f.cls = owner.id;
         const vis = (el.getAttribute('flowlab-visibility') || 'public').toLowerCase();
         f.visibility = VISIBILITY[vis] ? vis : 'public';
@@ -312,7 +316,7 @@ function parseFprg(text) {
   if (prog.classes) {
     // methods without a class: they go in the class of the Main (or in the first one)
     const home = classOf(prog, prog.functions[0]) || prog.classes[0];
-    for (const f of prog.functions) if (!classById(prog, f.cls)) Object.assign(f, { cls: home.id, static: f.static || f === prog.functions[0], ctor: false });
+    for (const f of prog.functions) if (!f.module && !classById(prog, f.cls)) Object.assign(f, { cls: home.id, static: f.static || f === prog.functions[0], ctor: false });
     Object.assign(prog.functions[0], { static: true, ctor: false, visibility: 'public' });
   }
   _classNames = new Map();
@@ -623,5 +627,5 @@ function isIncomplete(s) {
   }
 }
 
-const ModelLib = { FPRG_ROOT, KINDS, EXCEPTIONS, EXC_CLASSES, excClass, isExcClass, childArrays, makeCatch, VISIBILITY, VIS_IT, makeClass, isTypeParam, classTitle, modulesOf, isModuleFunc, moduleOfFunc, makeAttribute, hasClasses, classById, classByName, classOf, mainClass, membersOf, chainOf, isSubclass, defaultClassName, wrapInClass, isTrivialOO, isPlainOO, missingAbstract, unwrapClasses, typeList, extendedFeatures, rets, setRets, fgExpr, newId, makeStmt, makeFunction, newProgram, cloneStmt, reId, walk, findStmt, parseFprg, serializeFprg, isIncomplete, normType };
+const ModelLib = { isGlobalFunc, globalFuncs, FPRG_ROOT, KINDS, EXCEPTIONS, EXC_CLASSES, excClass, isExcClass, childArrays, makeCatch, VISIBILITY, VIS_IT, makeClass, isTypeParam, classTitle, modulesOf, isModuleFunc, moduleOfFunc, makeAttribute, hasClasses, classById, classByName, classOf, mainClass, membersOf, chainOf, isSubclass, defaultClassName, wrapInClass, isTrivialOO, isPlainOO, missingAbstract, unwrapClasses, typeList, extendedFeatures, rets, setRets, fgExpr, newId, makeStmt, makeFunction, newProgram, cloneStmt, reId, walk, findStmt, parseFprg, serializeFprg, isIncomplete, normType };
 if (typeof module !== 'undefined') module.exports = ModelLib;
