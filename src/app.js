@@ -3485,7 +3485,7 @@
     confirmBox(L('ui.unsavedChanges'), L('ui.theCurrentProgramHasUnsavedChanges'), L('ui.continue'), action);
   }
   function newProgram() {
-    guardDirty(() => { if (isRunning()) stopRun(); resetViews(); st.excPos = new Map(); st.prog = M.newProgram(); st.fi = 0; st.sel = null; st.uml = isOO(); st.usel = null; st.undo = []; st.redo = []; st.fileName = null; st.dirty = false; run.mainFrame = null; render(); renderVars(); });
+    guardDirty(() => { if (isRunning()) stopRun(); resetViews(); st.excPos = new Map(); st.prog = M.newProgram(); st.fi = 0; st.sel = null; st.uml = isOO(); st.usel = null; st.undo = []; st.redo = []; st.fileName = null; st.dirty = false; run.mainFrame = null; codeStart(); render(); renderVars(); });
   }
   function loadExample(id) {
     const ex = Examples.get(id); if (!ex) return;
@@ -4092,6 +4092,13 @@
     st.view = M.hasClasses(st.prog) && !M.isTrivialOO(st.prog) ? 'objects' : 'functions';
     store.set('view', st.view);
     st.fi = 0; st.uml = false; st.sel = null; st.usel = null;
+    codeStart();
+  }
+  // starting a program (new, opened from a file or from a web address, an example): the Code tab in Java
+  function codeStart() {
+    st.lang = 'java'; store.set('lang', 'java');
+    const ls = $('#langSel'); if (ls) ls.value = 'java';
+    if ($('#tabs')) setTab('code');
   }
   function init() {
     ArrayView.configure({ host: () => $('#floatLayer'), nextZ: () => ++zTop });
