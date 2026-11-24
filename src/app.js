@@ -1810,7 +1810,7 @@
   }
 
   /* ------------------------ Interaction with the drawing ---------------------- */
-  let drag = null, suppressClick = false, udrag = null;
+  let drag = null, suppressClick = false, udrag = null, mdrag = null;
   /* events of the sheet of a view (main or auxiliary) */
   function bindChart(v) {
     const chart = v.chart;
@@ -1885,6 +1885,13 @@
         // classes are moved by dragging them; a module (box or label) moves with all its classes
         if (e.button !== 0 || isRunning() || e.target.closest('.uadd') || e.target.closest('.umodtog')) return;
         const box = e.target.closest('.ubox'), mod = !box && e.target.closest('.umod');
+        // an attribute or a method (not the Main) of a class of the program: it is moved to another class or to another place
+        const mrow = box && !box.classList.contains('builtin') && e.target.closest('.urow');
+        const mcls = mrow && M.classById(st.prog, box.dataset.cls);
+        if (mrow && mcls && !mcls.module && !(mrow.dataset.kind === 'method' && mrow.dataset.fid === st.prog.functions[0].id)) {
+          mdrag = { v, cls: mcls, kind: mrow.dataset.kind, i: mrow.dataset.i != null ? +mrow.dataset.i : null, fid: mrow.dataset.fid || null, text: mrow.querySelector('.umem').textContent, x: e.clientX, y: e.clientY, on: false, ghost: null, at: null };
+          return;
+        }
         let cs;
         // predefined exception: its position is moved (it is not in the file)
         if (box && box.classList.contains('builtin')) cs = [Object.assign(st.excPos.get(box.dataset.cls.slice(4)) || {}, { builtin: true })];
@@ -1946,10 +1953,104 @@
     decorate();
     if (final) decorateCode(true);
   }
+  /* ---- class diagram: attributes and methods dragged to another class (or to another place of the same class) ---- */
+  /* where the member would go: { c, before } (before: index of the attribute or id of the method; null = at the end) and the line to show */
+  function memberDropAt(e, d) {
+    const el = document.elementFromPoint(e.clientX, e.clientY);
+    const box = el && el.closest && el.closest('.vchart .ubox');
+    if (!box || box.classList.contains('builtin')) return null;
+    const c = M.classById(st.prog, box.dataset.cls);
+    if (!c || c.module) return null;
+    // the rows of the same kind (the constructors and the Main stay at the top: a method goes after them)
+    const rows = [...box.querySelectorAll(`.urow[data-kind=${d.kind}]`)].filter((r) => d.kind !== 'method' || (!r.classList.contains('ctor') && !r.classList.contains('mainm')) || (d.ctor && r.classList.contains('ctor')));
+    let before = null, ref = null, after = false;
+    for (const r of rows) {
+      const b = r.getBoundingClientRect();
+      if (e.clientY < b.top + b.height / 2) { before = d.kind === 'attr' ? +r.dataset.i : r.dataset.fid; ref = r; break; }
+    }
+    if (!ref && rows.length) { ref = rows[rows.length - 1]; after = true; }
+    return { c, box, before, ref, after };
+  }
+  function memberDragMove(e) {
+    const d = mdrag;
+    if (!d.on && Math.hypot(e.clientX - d.x, e.clientY - d.y) > 5) {
+      d.on = true;
+      if (d.kind === 'method') { const f = st.prog.functions.find((x) => x.id === d.fid); d.ctor = !!(f && f.ctor); }
+      document.body.classList.add('mdragging');
+      d.ghost = h('div', { class: 'ghost' }, d.text); document.body.append(d.ghost);
+    }
+    if (!d.on) return;
+    d.ghost.style.left = e.clientX + 14 + 'px'; d.ghost.style.top = e.clientY + 10 + 'px';
+    $$('.vchart .ubox.udrop').forEach((b) => b.classList.remove('udrop'));
+    $$('.vchart .udropline').forEach((l) => l.remove());
+    const at = memberDropAt(e, d);
+    if (!at) return;
+    at.box.classList.add('udrop');
+    if (at.ref) {
+      // line between two rows, in the coordinates of the drawing
+      const r = at.ref.querySelector('.uhit'), y = +r.getAttribute('y') + (at.after ? +r.getAttribute('height') : 0);
+      const ln = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      ln.setAttribute('class', 'udropline'); ln.setAttribute('d', `M${+r.getAttribute('x') + 2} ${y}H${+r.getAttribute('x') + +r.getAttribute('width') - 2}`);
+      at.box.append(ln);
+    }
+  }
+  function memberDrop(e) {
+    const d = mdrag; mdrag = null;
+    if (!d.on) return;
+    document.body.classList.remove('mdragging'); d.ghost.remove();
+    $$('.vchart .ubox.udrop').forEach((b) => b.classList.remove('udrop'));
+    $$('.vchart .udropline').forEach((l) => l.remove());
+    suppressClick = true; setTimeout(() => { suppressClick = false; }, 50);
+    const at = memberDropAt(e, d);
+    if (!at) { render(); return; }
+    const from = d.cls, to = at.c, same = from === to;
+    const tps = (x) => new Set((x.tparams || []).map((t) => t.toLowerCase()));
+    // a Generic Type of the class it comes from, which the other class does not have
+    const usesOwnT = (types) => { const a = tps(from), b = tps(to); return types.some((t) => [...String(t).matchAll(/[A-Za-z_]\w*/g)].some((m) => a.has(m[0].toLowerCase()) && !b.has(m[0].toLowerCase()))); };
+    const no = (msg) => { toast(msg, 'warn'); render(); };
+    if (d.kind === 'attr') {
+      const a = from.attributes[d.i]; if (!a) return;
+      if (!same) {
+        if (to.attributes.some((x) => x.name.toLowerCase() === a.name.toLowerCase())) return no(L('ui.alreadyHasTheAttribute', { cls: to.name, name: a.name }));
+        if (usesOwnT([a.type])) return no(L('ui.usesTheGenericTypeOf', { name: a.name, cls: from.name }));
+      }
+      mutate(() => {
+        from.attributes.splice(d.i, 1);
+        let k = at.before == null ? to.attributes.length : at.before - (same && at.before > d.i ? 1 : 0);
+        to.attributes.splice(Math.max(0, Math.min(k, to.attributes.length)), 0, a);
+        st.usel = { cls: to.id, kind: 'attr', i: to.attributes.indexOf(a) };
+      });
+      if (!same) toast(L('ui.memberMovedTo', { what: a.name, cls: to.name }), 'ok');
+      return;
+    }
+    const f = st.prog.functions.find((x) => x.id === d.fid); if (!f || f === st.prog.functions[0]) return;
+    if (!same) {
+      if (f.ctor) return no(L('ui.aConstructorStaysInItsClass', { cls: from.name }));
+      const sig = (g) => g.name.toLowerCase() + '(' + g.params.map((p) => p.type.toLowerCase() + (p.array ? '[]' : '')).join(',') + ')';
+      if (M.membersOf(st.prog, to).some((g) => !g.ctor && sig(g) === sig(f))) return no(L('ui.alreadyHasTheMethod', { cls: to.name, name: f.name }));
+      if (f.abstract && !to.abstract) return no(L('ui.anAbstractMethodGoesOnlyIn', { name: f.name, cls: to.name }));
+      if (usesOwnT([...f.params.map((p) => p.type), ...M.rets(f).map((r) => r.type)])) return no(L('ui.usesTheGenericTypeOf', { name: f.name + '()', cls: from.name }));
+    }
+    mutate(() => {
+      const cur = func();
+      const fs = st.prog.functions;
+      fs.splice(fs.indexOf(f), 1);
+      f.cls = to.id;
+      let k;
+      if (at.before != null) k = fs.findIndex((g) => g.id === at.before);
+      else { const ms = M.membersOf(st.prog, to).filter((g) => g !== f); k = ms.length ? fs.indexOf(ms[ms.length - 1]) + 1 : fs.length; }
+      if (k < 1) k = k < 0 ? fs.length : 1; // the Main stays first
+      fs.splice(k, 0, f);
+      st.fi = Math.max(0, fs.indexOf(cur));
+      st.usel = { cls: to.id, kind: 'method', fid: f.id };
+    });
+    if (!same) toast(L('ui.memberMovedTo', { what: f.name + '()', cls: to.name }), 'ok');
+  }
   /* dragging (also from one view to another) */
   function bindDrag() {
     window.addEventListener('pointermove', (e) => {
       if (band) { bandMove(e); return; }
+      if (mdrag) { memberDragMove(e); return; }
       if (udrag) {
         const dx = (e.clientX - udrag.x) / st.zoom, dy = (e.clientY - udrag.y) / st.zoom;
         if (!udrag.on && Math.hypot(dx, dy) > 4) {
@@ -1991,6 +2092,7 @@
         band = null;
         return;
       }
+      if (mdrag) { memberDrop(e); return; }
       if (udrag) {
         const d = udrag; udrag = null;
         if (d.on) { cancelAnimationFrame(d.raf); document.body.classList.remove('udragging'); if (!d.items[0].c.builtin) st.dirty = true; suppressClick = true; setTimeout(() => { suppressClick = false; }, 50); render(); }
