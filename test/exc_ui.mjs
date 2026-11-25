@@ -21,15 +21,18 @@ ok('rami Catch e Finally nel diagramma: ' + await page.locator('#chart .shape[da
 await page.click('#runBtn'); await wait(700);
 ok('esecuzione: ' + await out(), (await out()).includes('indice non valido | conversione non valida | finally 1') && (await out()).includes('esterno: interna | ok 14'));
 // passo passo: il cursore passa sulle intestazioni dei Catch
-const seen = new Set(), labels = [];
+const seen = new Set(), labels = [], paths = {};
 await page.click('#stepBtn'); await wait(40);
 for (let i = 0; i < 120 && (await page.evaluate(() => FlowLab.run.state)) === 'paused'; i++) {
   const id = await page.evaluate(() => FlowLab.run.curId); if (id) seen.add(String(id).replace(/^s\d+:/, '').replace(/:s\d+$/, ''));
   const lab = await page.evaluate(() => { const l = document.querySelector('#chart .exc-lab'); return l && document.querySelector('#chart .trail-path.exc') ? l.textContent : null; });
   if (lab) labels.push(lab);
+  // towards a Catch the path goes up to the exception arrow of the Try and follows it: right, up, right, down
+  if (lab && /IndexOutOfRange/.test(lab) && !paths.idx) paths.idx = await page.evaluate(() => [...document.querySelector('#chart .trail-path.exc').getAttribute('d').matchAll(/[ML]([\d.]+) ([\d.]+)/g)].map((m) => [+m[1], +m[2]]));
   await page.click('#stepBtn'); await wait(15);
 }
 ok('freccia rossa dell\'eccezione: ' + labels.join(' | '), labels.some((l) => /Exception da media\(\)/.test(l)) && labels.some((l) => /DivisionByZero → Finally, poi prosegue/.test(l)) && labels.some((l) => /IndexOutOfRange/.test(l)));
+{ const q = paths.idx || []; ok('percorso verso il Catch lungo la freccia del Try: ' + JSON.stringify(q), q.length === 5 && q[1][0] > q[0][0] && q[2][1] < q[1][1] && q[3][0] > q[2][0] && q[4][1] > q[3][1]); }
 ok('passo passo su Catch e Finally: ' + [...seen].filter((x) => /catch|finally/.test(x)).join(', '), seen.has('catch') && seen.has('finally'));
 ok('errori: ' + errs.length, errs.length === 0);
 

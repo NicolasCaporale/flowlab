@@ -2388,7 +2388,7 @@
     const ov = $('svg .exc-over', V.chart); if (ov) ov.innerHTML = '';
     if (!t.from || isUml() || func().id !== t.frame.func.id) return;
     let pts = [];
-    if (t.exc) pts = excPath(t, g); // exception: dashed red arrow from the block it comes from to the Catch (or to the Finally)
+    if (t.exc) pts = excPath(t, g); // exception: dashed red arrow from the block it comes from, up the exception arrow of the Try, to the Catch (or to the Finally)
     else {
       const path = findPath(t.from, t.to, t.branch);
       if (!path) return;
@@ -2451,6 +2451,13 @@
     over.setAttribute('class', 'exc-over'); over.innerHTML = '';
     over.append(ring, lab);
     const sy = a.y + a.height / 2, hy = b.y + b.height / 2;
+    // Catch: from the block it goes right to the lane next to the blocks of the Try, up to the exception arrow that
+    // leaves the Try and along it down to the Catch
+    const xe = (st.edges || []).find((e) => e.tag === 'X' && e.to === t.to && e.lane != null);
+    if (xe && a.x + a.width < xe.lane && sy > xe.pts[0][1]) {
+      const my = xe.pts[0][1];
+      return [[a.x + a.width, sy], [xe.lane, sy], [xe.lane, my], ...xe.pts.slice(1)];
+    }
     if (b.x > a.x + a.width) {
       // Catch on the right: lane just to the left of its column
       const lane = b.x - 14;

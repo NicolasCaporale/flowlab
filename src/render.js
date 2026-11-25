@@ -418,6 +418,8 @@ class Renderer {
             this.line([[kx, m], [kx, y + ctop]], true, 'exc');
             this.shape(KID, 'catch', cat, 'exchead', kx, y + ctop, k.w, TH, k.t, L('chart.catchIfAnExceptionOrOf', { type: k.c.type, variable: k.c.variable, variable2: k.c.variable }));
             this.edge(s.id, KID, [[cx + tw / 2, m], [kx, m], [kx, y + ctop]], 'X');
+            // lane between the blocks of the Try and the Catches: there the path of an exception goes up to this arrow
+            this.edges[this.edges.length - 1].lane = cx + Math.max(tw / 2, B.R) + GX / 2;
             const tC = k.S.draw(kx, y + ctop + TH, { node: KID, pts: [[kx, y + ctop + TH]] });
             this.line([[kx, y + ctop + TH + k.S.h], [kx, j], [cx, j]]);
             this.edge(tC.node, J, cat2(tC.pts, [[kx, j], [cx, j]]), tC.tag);
