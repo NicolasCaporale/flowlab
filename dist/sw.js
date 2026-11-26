@@ -1,6 +1,6 @@
 /* FlowLab — service worker: it works also without a network.
    The page is asked first to the network (so there is always the latest version) and, if missing, to the saved copy. */
-const CACHE = 'flowlab-c58cf58e7473';
+const CACHE = 'flowlab-b72ada2b1cca';
 const CORE = ['./FlowLab.html', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 const FONTS = /^https:\/\/fonts\.(googleapis|gstatic)\.com\//;
 
@@ -23,8 +23,8 @@ self.addEventListener('fetch', (e) => {
     return;
   }
   if (url.origin !== location.origin || !url.pathname.startsWith(new URL('./', location).pathname)) return;
-  // FlowLab files: first the network, then the saved copy
-  e.respondWith(fetch(req).then((res) => {
+  // FlowLab files: first the network (bypassing stale HTTP disk cache), then the saved copy
+  e.respondWith(fetch(req, { cache: 'no-store' }).then((res) => {
     if (res.ok) { const copy = res.clone(); caches.open(CACHE).then((c) => c.put(req, copy)); }
     return res;
   }).catch(() => caches.match(req, { ignoreSearch: true }).then((hit) => hit || (req.mode === 'navigate' ? caches.match('./FlowLab.html') : Response.error()))));

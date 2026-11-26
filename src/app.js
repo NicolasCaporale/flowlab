@@ -3931,6 +3931,7 @@
       { label: L('ui.copyTheLinkToThisProgram'), key: 'Ctrl+Shift+L', do: copyShareLink },
       '-',
       { label: L('ui.importAModule'), key: 'Ctrl+I', do: moduleDialog },
+      { label: L('ui.pluginsMenu'), do: () => { if (typeof Plugins !== 'undefined') Plugins.openDialog(); } },
       '-',
       { label: L('ui.exportDiagramAsSvg'), key: 'Ctrl+Shift+G', do: exportSvgFile },
       { label: L('ui.exportDiagramAsPng'), key: 'Ctrl+Shift+E', do: exportPng },
@@ -3975,7 +3976,14 @@
   function setupPwa() {
     if (location.protocol === 'file:' || window.self !== window.top) return;
     if (!document.querySelector('link[rel=manifest]')) document.head.append(h('link', { rel: 'manifest', href: 'manifest.webmanifest' }));
-    if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+    if ('serviceWorker' in navigator) {
+      if (location.hostname === 'localhost' || location.hostname === '127.0.0.1' || location.hostname === '[::1]') {
+        navigator.serviceWorker.getRegistrations().then((regs) => regs.forEach((r) => r.unregister())).catch(() => {});
+        if ('caches' in window) caches.keys().then((ks) => ks.forEach((k) => caches.delete(k))).catch(() => {});
+      } else {
+        navigator.serviceWorker.register('sw.js').then((r) => r.update()).catch(() => {});
+      }
+    }
     // Chrome offers the installation: it is used from the File menu
     addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installEvt = e; });
     addEventListener('appinstalled', () => { installEvt = null; toast(L('ui.flowlabIsInstalledYouWillFind'), 'ok'); });
@@ -4203,6 +4211,7 @@
     $('#fileBtn').addEventListener('click', (e) => fileMenu(e.currentTarget));
     $('#exBtn').addEventListener('click', (e) => examplesMenu(e.currentTarget));
     $('#modBtn').addEventListener('click', moduleDialog);
+    if ($('#pluginBtn')) $('#pluginBtn').addEventListener('click', () => { if (typeof Plugins !== 'undefined') Plugins.openDialog(); });
     $('#modToggle').addEventListener('click', toggleAllModules);
     $('#openBtn').addEventListener('click', openFile);
     $('#saveBtn').addEventListener('click', saveFile);
@@ -4323,6 +4332,7 @@
     I18n.translateDom(document.body); // fixed texts of the page in the chosen language
     MAIN.chart = $('#chart'); MAIN.wrap = $('#canvasWrap');
     bindUi(); bindChart(MAIN); bindDrag(); bindKeys(); setupPwa(); bindViews();
+    if (typeof Plugins !== 'undefined') Plugins.init({ openModal, h, toast, infoBox, confirmBox });
     const saved = store.get('autosave', null);
     let ok = false;
     if (saved && saved.xml) {

@@ -1,9 +1,28 @@
-import re, pathlib
+import re, pathlib, json, base64
 src = pathlib.Path('src')
-js_files = ['i18n.js','expr.js','model.js','interp.js','codegen.js','render.js','uml.js','pdf.js','examples.js','arrayview.js','app.js']
-js = '\n'.join((src/f).read_text() for f in js_files)
+plug_dir = pathlib.Path('modules') / 'plugin'
+plug_files = ['pierangelo.js', 'benchmark.js', 'autograder.js', 'complexity.js', 'linter.js', 'canvas.js']
+js_parts = [(src/f).read_text() for f in ['i18n.js','expr.js','model.js','interp.js','codegen.js','render.js','uml.js','pdf.js','examples.js','arrayview.js','plugins.js']]
+js_parts += [(plug_dir/f).read_text() for f in plug_files if (plug_dir/f).is_file()]
+js_parts.append((src/'app.js').read_text())
+js = '\n'.join(js_parts)
+# project Gemini API key (read from local 'secret' file if present)
+def read_secret():
+    for name in ('secret', '.secret', 'secret.txt'):
+        p = pathlib.Path(name)
+        if p.is_file():
+            for line in p.read_text(encoding='utf-8', errors='ignore').splitlines():
+                s = line.strip()
+                if not s or s.startswith('#') or s.startswith('//') or s.startswith('/*') or s.startswith('*'):
+                    continue
+                s = re.sub(r'^(?:window\.)?(?:export\s+|const\s+|let\s+|var\s+)?(?:FLOWLAB_SECRET|GEMINI_API_KEY|GOOGLE_API_KEY|API_KEY|KEY|SECRET)\s*[:=]\s*', '', s, flags=re.I).strip()
+                s = s.rstrip(';').strip().strip('\'"`').strip()
+                if s and not s.upper().startswith('INSERISCI') and not s.upper().startswith('YOUR_') and s != '...':
+                    return s
+    return ''
+host_key = read_secret()
+pa_icon = 'data:image/png;base64,' + base64.b64encode((src/'pwa'/'pierangelo.png').read_bytes()).decode('ascii')
 # module library (modules/<topic>/<Name>.fprg) built into the page: used when GitHub cannot be reached
-import json
 mod_root = pathlib.Path('modules')
 title = lambda t: (lambda x: x[:1].upper() + x[1:])(re.sub(r'[_-]+', ' ', t).strip())
 lib = [{'topic': t.name, 'topicTitle': title(t.name), 'id': f.stem, 'text': f.read_text()}
@@ -16,10 +35,10 @@ js = 'const EXAMPLES = ' + json.dumps(exs, ensure_ascii=False).replace('</', '<\
 # languages (languages/<code>.json) built into the page: they work offline
 langs = {f.stem: json.loads(f.read_text()) for f in sorted(pathlib.Path('languages').glob('*.json'))}
 js = 'const LANGUAGES = ' + json.dumps(langs, ensure_ascii=False).replace('</', '<\\/') + ';\n' + js
-js = 'const ModuleLibrary = ' + json.dumps(lib, ensure_ascii=False).replace('</', '<\\/') + ';\n' + js
+js = 'const HOST_GEMINI_KEY = ' + json.dumps(host_key, ensure_ascii=False) + ';\nconst PIERANGELO_ICON = ' + json.dumps(pa_icon, ensure_ascii=False) + ';\nconst ModuleLibrary = ' + json.dumps(lib, ensure_ascii=False).replace('</', '<\\/') + ';\n' + js
 assert '</script' not in js
 css = (src/'style.css').read_text()
-body = (src/'body.html').read_text()
+body = (src/'body.html').read_text().replace('__PIERANGELO_ICON__', pa_icon)
 fonts = '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;600&display=swap">'
 title = '<title>FlowLab</title>'
 inner = f'{title}\n<meta name="description" content="Flowchart editor and runner compatible with .fprg files">\n{fonts}\n<style>\n{css}\n</style>\n{body}\n<script>\n{js}\n</script>\n'

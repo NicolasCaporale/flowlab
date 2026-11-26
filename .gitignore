@@ -4,3 +4,6 @@ test/sbx/
 test/*.png
 *.class
 __pycache__/
+.DS_Store
+.secret
+secret.txt

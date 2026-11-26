@@ -32,6 +32,7 @@
     <span class="grow"></span>
     <button class="tb" id="exBtn" type="button" aria-haspopup="menu" title="Example programs" data-t-title="ui.examplePrograms"><svg viewBox="0 0 24 24"><path d="M4 5h7v6H4zM13 5h7v6h-7zM4 13h7v6H4zM13 13h7v6h-7z"></path></svg><span class="lbl" data-t="page.examples">Examples</span></button>
     <button class="tb" id="modBtn" type="button" title="Import a module: ready-made classes and functions to reuse (Ctrl+I)" data-t-title="page.importAModuleReadyMadeClasses"><svg viewBox="0 0 24 24"><path d="M9 3h6v3a2 2 0 1 0 4 0V5h2v6h-3a2 2 0 1 0 0 4h3v6h-6v-3a2 2 0 1 0-4 0v3H5v-6h1a2 2 0 1 0 0-4H5V5h4z"></path></svg><span class="lbl" data-t="page.importModule">Import module</span></button>
+    <button class="tb" id="pluginBtn" type="button" title="Plugins: manage and configure FlowLab plugins" data-t-title="page.pluginsTitle"><svg viewBox="0 0 24 24"><path d="M9 3v4M15 3v4M7 7h10a2 2 0 0 1 2 2v3a7 7 0 0 1-14 0V9a2 2 0 0 1 2-2zM12 19v3"></path></svg><span class="lbl" data-t="page.plugins">Plugin</span></button>
     <button class="tb icon" id="helpBtn" type="button" title="Quick guide (F1)" aria-label="Quick guide" data-t-title="page.quickGuideF1" data-t-aria-label="ui.quickGuide"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.3-1 .9-1 1.6V14M12 17.5v.01"></path></svg></button>
     <button class="tb icon" id="themeBtn" type="button" title="Light/dark theme" aria-label="Change theme" data-t-title="page.lightDarkTheme" data-t-aria-label="page.changeTheme"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"></circle><path d="M12 4a8 8 0 0 0 0 16z" fill="currentColor"></path></svg></button>
   </header>
@@ -84,5 +85,42 @@
   <input type="file" id="txtInput" accept=".txt,.csv,text/plain" multiple="" hidden="">
   <div id="floatLayer"></div>
   <div id="pop" hidden=""></div>
+  <div id="pluginDock" class="plug-dock" aria-label="Active plugins" data-t-aria-label="pa.activePluginsAria" hidden=""></div>
+  <div id="pierangeloRoot" class="pa-root">
+    <section id="pierangeloPanel" class="pa-panel" role="dialog" aria-label="Pierangelo — AI Assistant" data-t-aria-label="pa.panelAria" hidden="">
+      <header class="pa-head">
+        <div class="pa-avatar" aria-hidden="true">
+          <img src="__PIERANGELO_ICON__" alt="" draggable="false">
+        </div>
+        <div class="pa-title">
+          <strong>Pierangelo</strong>
+          <span id="paSub" class="pa-sub" data-t="pa.subOffline">FlowLab AI Tutor</span>
+        </div>
+        <button type="button" class="iconbtn" id="paClearBtn" title="New conversation" aria-label="Clear chat" data-t-title="pa.clearTitle" data-t-aria-label="pa.clearAria">
+          <svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M6 6l1 14a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-14"></path></svg>
+        </button>
+        <button type="button" class="iconbtn" id="paCloseBtn" title="Close Pierangelo (Esc)" aria-label="Close" data-t-title="pa.closeTitle" data-t-aria-label="pa.closeAria">
+          <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"></path></svg>
+        </button>
+      </header>
+      <div class="pa-chips" aria-label="Quick questions" data-t-aria-label="pa.chipsAria">
+        <button type="button" class="pa-chip" data-chip="selected" data-t="pa.chipSelected">Selected block</button>
+        <button type="button" class="pa-chip" data-chip="hint" data-t="pa.chipHint">Give me a hint</button>
+        <button type="button" class="pa-chip" data-chip="error" data-t="pa.chipError">Help with error</button>
+        <button type="button" class="pa-chip" data-chip="guide" data-t="pa.chipGuide">Platform guide</button>
+      </div>
+      <div id="paMsgs" class="pa-msgs" role="log" aria-live="polite"></div>
+      <form id="paForm" class="pa-form" autocomplete="off">
+        <textarea id="paInput" rows="1" placeholder="Ask Pierangelo (Enter to send)…" aria-label="Message for Pierangelo" data-t-placeholder="pa.inputPlaceholder" data-t-aria-label="pa.inputAria"></textarea>
+        <button type="submit" id="paSend" class="pa-send" title="Send message" aria-label="Send" data-t-title="pa.sendTitle" data-t-aria-label="page.send">
+          <svg viewBox="0 0 24 24"><path d="M21 3L3 10.5l7.5 3L13.5 21 21 3zM10.5 13.5L21 3"></path></svg>
+        </button>
+      </form>
+    </section>
+    <button type="button" id="pierangeloFab" class="pa-fab" title="Ask Pierangelo — AI Tutor" aria-label="Open Pierangelo, AI assistant" aria-expanded="false" data-t-title="pa.fabTitle" data-t-aria-label="pa.fabAria">
+      <img class="pa-fab-img" src="__PIERANGELO_ICON__" alt="" draggable="false">
+      <span class="pa-fab-badge" aria-hidden="true">AI</span>
+    </button>
+  </div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 </div>

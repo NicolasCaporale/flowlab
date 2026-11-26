@@ -10,12 +10,17 @@ const en = langs.en;
 if (!en) { console.error('languages/en.json is missing'); process.exit(1); }
 // ids used in the code
 const used = new Set(), usedCode = new Set();
-for (const f of fs.readdirSync(path.join(root, 'src')).filter((x) => x.endsWith('.js') && x !== 'i18n.js')) {
-  const s = read('src/' + f);
-  for (const m of s.matchAll(/\bL\('([a-z]+\.[A-Za-z0-9]+)'/g)) used.add(m[1]);
-  if (f === 'codegen.js') {
-    for (const m of s.matchAll(/\bC\('([A-Za-z0-9.]*[A-Za-z0-9])'/g)) usedCode.add(m[1]);
-    for (const m of s.matchAll(/\bPS\('([A-Za-z0-9.]*[A-Za-z0-9])'/g)) usedCode.add('pseudo.' + m[1]);
+const jsDirs = ['src', 'modules/plugin'];
+for (const dir of jsDirs) {
+  const fullDir = path.join(root, dir);
+  if (!fs.existsSync(fullDir)) continue;
+  for (const f of fs.readdirSync(fullDir).filter((x) => x.endsWith('.js') && x !== 'i18n.js')) {
+    const s = read(dir + '/' + f);
+    for (const m of s.matchAll(/\bL\('([a-z]+\.[A-Za-z0-9]+)'/g)) used.add(m[1]);
+    if (f === 'codegen.js') {
+      for (const m of s.matchAll(/\bC\('([A-Za-z0-9.]*[A-Za-z0-9])'/g)) usedCode.add(m[1]);
+      for (const m of s.matchAll(/\bPS\('([A-Za-z0-9.]*[A-Za-z0-9])'/g)) usedCode.add('pseudo.' + m[1]);
+    }
   }
 }
 for (const m of read('src/body.html').matchAll(/data-t(?:-[a-z-]+)?="([a-z]+\.[A-Za-z0-9]+)"/g)) used.add(m[1]);
